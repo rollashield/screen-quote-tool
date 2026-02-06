@@ -1456,24 +1456,18 @@
                 }
 
                 const imageData = await imageResponse.json();
-                generatedVisualization = imageData.data[0].url;
 
-                // Convert URL to base64 for storage
-                const response = await fetch(generatedVisualization);
-                const blob = await response.blob();
-                const reader = new FileReader();
-                reader.onloadend = function() {
-                    generatedVisualization = reader.result;
+                // Worker returns base64 data directly
+                const base64Image = imageData.data[0].b64_json;
+                generatedVisualization = `data:image/png;base64,${base64Image}`;
 
-                    // Show results
-                    document.getElementById('beforeImage').src = currentVisualizationImage;
-                    document.getElementById('afterImage').src = generatedVisualization;
-                    document.getElementById('visualizationResult').style.display = 'block';
+                // Show results
+                document.getElementById('beforeImage').src = currentVisualizationImage;
+                document.getElementById('afterImage').src = generatedVisualization;
+                document.getElementById('visualizationResult').style.display = 'block';
 
-                    statusEl.className = 'ai-status success';
-                    statusEl.textContent = '✅ Visualization generated successfully!';
-                };
-                reader.readAsDataURL(blob);
+                statusEl.className = 'ai-status success';
+                statusEl.textContent = '✅ Visualization generated successfully!';
 
             } catch (error) {
                 console.error('AI visualization error:', error);
