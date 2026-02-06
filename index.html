@@ -284,6 +284,74 @@
             transform: translateY(-2px);
         }
 
+        .photo-thumbnail {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 2px solid #ddd;
+            cursor: pointer;
+        }
+
+        .photo-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-thumbnail .remove-photo {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .photo-thumbnail .remove-photo:hover {
+            background: rgba(220, 53, 69, 1);
+        }
+
+        .photo-modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .photo-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .photo-modal .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
         .quote-summary {
             margin-top: 20px;
             padding: 15px;
@@ -558,6 +626,16 @@
                         <textarea id="projectAddress"></textarea>
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Site Photos</label>
+                        <input type="file" id="photoUpload" accept="image/*" capture="environment" multiple style="display: none;">
+                        <button type="button" class="button secondary-button" onclick="document.getElementById('photoUpload').click()">
+                            📷 Add Photos
+                        </button>
+                        <div id="photoPreview" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 10px;"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Screen Configuration -->
@@ -738,6 +816,9 @@
         let screensInOrder = [];
         let editingScreenIndex = null;
 
+        // Photo Storage
+        let quotePhotos = [];
+
         // Microsoft Authentication Configuration
         const msalConfig = {
             auth: {
@@ -901,6 +982,9 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadSavedQuotes();
 
+            // Photo upload handler
+            document.getElementById('photoUpload').addEventListener('change', handlePhotoUpload);
+
             // Update operator options when track type changes
             document.getElementById('trackType').addEventListener('change', function() {
                 const trackType = this.value;
@@ -967,6 +1051,126 @@
                     document.getElementById('comparisonMotor').value = '';
                 }
             });
+        });
+
+        // Photo Upload Functions
+        function handlePhotoUpload(event) {
+            const files = Array.from(event.target.files);
+
+            files.forEach(file => {
+                if (file && file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+
+                    reader.onload = function(e) {
+                        // Compress image before storing
+                        compressImage(e.target.result, (compressedDataUrl) => {
+                            quotePhotos.push({
+                                dataUrl: compressedDataUrl,
+                                filename: file.name,
+                                timestamp: new Date().toISOString()
+                            });
+                            displayPhotoPreview();
+                        });
+                    };
+
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // Clear the input so the same file can be selected again
+            event.target.value = '';
+        }
+
+        function compressImage(dataUrl, callback) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // Max dimensions for compression
+                const maxWidth = 1200;
+                const maxHeight = 1200;
+
+                let width = img.width;
+                let height = img.height;
+
+                // Calculate new dimensions maintaining aspect ratio
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = (height * maxWidth) / width;
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = (width * maxHeight) / height;
+                        height = maxHeight;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                // Draw and compress
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert to JPEG with 0.8 quality for better compression
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                callback(compressedDataUrl);
+            };
+            img.src = dataUrl;
+        }
+
+        function displayPhotoPreview() {
+            const previewContainer = document.getElementById('photoPreview');
+            previewContainer.innerHTML = '';
+
+            quotePhotos.forEach((photo, index) => {
+                const thumbDiv = document.createElement('div');
+                thumbDiv.className = 'photo-thumbnail';
+                thumbDiv.innerHTML = `
+                    <img src="${photo.dataUrl}" alt="Site photo ${index + 1}" onclick="openPhotoModal('${photo.dataUrl}')">
+                    <button class="remove-photo" onclick="removePhoto(${index})" title="Remove photo">×</button>
+                `;
+                previewContainer.appendChild(thumbDiv);
+            });
+        }
+
+        function removePhoto(index) {
+            quotePhotos.splice(index, 1);
+            displayPhotoPreview();
+        }
+
+        function openPhotoModal(dataUrl) {
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('photoModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'photoModal';
+                modal.className = 'photo-modal';
+                modal.innerHTML = `
+                    <span class="close-modal" onclick="closePhotoModal()">&times;</span>
+                    <img id="modalImage" src="">
+                `;
+                document.body.appendChild(modal);
+            }
+
+            document.getElementById('modalImage').src = dataUrl;
+            modal.style.display = 'flex';
+        }
+
+        function closePhotoModal() {
+            const modal = document.getElementById('photoModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Close modal when clicking outside the image
+        document.addEventListener('click', function(event) {
+            const modal = document.getElementById('photoModal');
+            if (modal && event.target === modal) {
+                closePhotoModal();
+            }
         });
 
         function parseFraction(fractionStr) {
@@ -1437,6 +1641,22 @@
                 `;
             }
 
+            // Add photos if any
+            if (quotePhotos.length > 0) {
+                customerHTML += `
+                    <div class="summary-row" style="display: block; margin-top: 15px;">
+                        <strong>Site Photos (${quotePhotos.length}):</strong>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-top: 8px;">
+                            ${quotePhotos.map(photo => `
+                                <img src="${photo.dataUrl}" alt="Site photo"
+                                     style="width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; cursor: pointer;"
+                                     onclick="openPhotoModal('${photo.dataUrl}')">
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             customerHTML += `
                 <div class="summary-row total">
                     <strong>Total Price:</strong>
@@ -1746,6 +1966,8 @@
             document.getElementById('comparisonMotor').value = '';
             document.getElementById('discountLabel').value = '';
             document.getElementById('discountPercent').value = '0';
+            quotePhotos = [];
+            displayPhotoPreview();
             updateAccessories();
             editingScreenIndex = null;
         }
@@ -2445,6 +2667,22 @@
                 `;
             }
 
+            // Add photos if any
+            if (quotePhotos.length > 0) {
+                customerHTML += `
+                    <div class="summary-row" style="display: block; margin-top: 15px;">
+                        <strong>Site Photos (${quotePhotos.length}):</strong>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-top: 8px;">
+                            ${quotePhotos.map(photo => `
+                                <img src="${photo.dataUrl}" alt="Site photo"
+                                     style="width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; cursor: pointer;"
+                                     onclick="openPhotoModal('${photo.dataUrl}')">
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
             summaryContent.innerHTML = customerHTML;
 
             // Internal information
@@ -2731,11 +2969,12 @@
                         const quoteData = JSON.parse(fields.QuoteData);
                         const date = new Date(fields.QuoteDate).toLocaleDateString();
 
+                        const photoCount = quoteData.photos ? quoteData.photos.length : 0;
                         html += `
                             <div class="quote-card" onclick='loadCloudQuote(${JSON.stringify(quoteData).replace(/'/g, "\\'")})'>
                                 <h4>${fields.CustomerName} <span style="color: #28a745; font-size: 0.75rem;">☁️ Cloud</span></h4>
                                 <p><strong>Date:</strong> ${date}</p>
-                                <p><strong>Screens:</strong> ${fields.ScreenCount}</p>
+                                <p><strong>Screens:</strong> ${fields.ScreenCount}${photoCount > 0 ? ` | <strong>Photos:</strong> ${photoCount} 📷` : ''}</p>
                                 <p><strong>Total:</strong> ${formatCurrency(fields.TotalPrice)}</p>
                             </div>
                         `;
@@ -2750,11 +2989,12 @@
             if (localQuotes && localQuotes.length > 0) {
                 localQuotes.forEach((quote, index) => {
                     const date = new Date(quote.timestamp).toLocaleDateString();
+                    const photoCount = quote.photos ? quote.photos.length : 0;
                     html += `
                         <div class="quote-card" onclick="loadLocalQuoteByIndex(${index})">
                             <h4>${quote.customerName} <span style="color: #6c757d; font-size: 0.75rem;">💾 Local</span></h4>
                             <p><strong>Date:</strong> ${date}</p>
-                            <p><strong>Screens:</strong> ${quote.screens ? quote.screens.length : 0}</p>
+                            <p><strong>Screens:</strong> ${quote.screens ? quote.screens.length : 0}${photoCount > 0 ? ` | <strong>Photos:</strong> ${photoCount} 📷` : ''}</p>
                             <p><strong>Total:</strong> ${formatCurrency(quote.totalPrice || 0)}</p>
                         </div>
                     `;
@@ -2779,6 +3019,10 @@
             // Load screens
             screensInOrder = quoteData.screens || [];
             renderScreensList();
+
+            // Load photos
+            quotePhotos = quoteData.photos || [];
+            displayPhotoPreview();
 
             if (screensInOrder.length > 0) {
                 document.getElementById('screensInOrder').classList.remove('hidden');
@@ -2833,7 +3077,8 @@
                 screens: screensInOrder,
                 totalPrice: parseFloat(document.querySelector('.summary-row.total strong:last-child').textContent.replace(/[$,]/g, '')),
                 discountPercent: parseFloat(document.getElementById('discountPercent').value) || 0,
-                discountLabel: document.getElementById('discountLabel').value
+                discountLabel: document.getElementById('discountLabel').value,
+                photos: quotePhotos
             };
 
             if (isAuthenticated) {
