@@ -485,6 +485,69 @@
             }
         }
 
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            margin-top: 15px;
+        }
+
+        .canvas-container canvas {
+            max-width: 100%;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: crosshair;
+        }
+
+        .corner-point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #0056A3;
+            border: 3px solid white;
+            border-radius: 50%;
+            cursor: move;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+
+        .corner-point:hover {
+            background: #003D7A;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .corner-label {
+            position: absolute;
+            background: rgba(0, 86, 163, 0.9);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .overlay-controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .overlay-controls label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .overlay-controls input[type="range"] {
+            width: 150px;
+        }
+
         .quote-summary {
             margin-top: 20px;
             padding: 15px;
@@ -1316,9 +1379,18 @@
             }
         });
 
-        // AI Visualization Functions
+        // Canvas Visualization Functions
         let currentVisualizationImage = null;
-        let generatedVisualization = null;
+        let visualizationCanvas = null;
+        let visualizationCtx = null;
+        let loadedImage = null;
+        let corners = [
+            {x: 0.2, y: 0.2}, // top-left (percentage of canvas)
+            {x: 0.8, y: 0.2}, // top-right
+            {x: 0.8, y: 0.8}, // bottom-right
+            {x: 0.2, y: 0.8}  // bottom-left
+        ];
+        let draggingCorner = null;
 
         function openSettings() {
             const modal = document.getElementById('settingsModal');
@@ -1337,11 +1409,15 @@
         function startAIVisualization() {
             // Reset state
             currentVisualizationImage = null;
-            generatedVisualization = null;
-            document.getElementById('aiPreviewContainer').style.display = 'none';
-            document.getElementById('visualizationResult').style.display = 'none';
-            document.getElementById('aiProcessingStatus').className = 'ai-status';
-            document.getElementById('aiProcessingStatus').textContent = '';
+            document.getElementById('canvasEditorContainer').style.display = 'none';
+
+            // Reset corners to default positions
+            corners = [
+                {x: 0.2, y: 0.2},
+                {x: 0.8, y: 0.2},
+                {x: 0.8, y: 0.8},
+                {x: 0.2, y: 0.8}
+            ];
 
             // Open modal
             document.getElementById('visualizationModal').style.display = 'flex';
@@ -1351,7 +1427,7 @@
             document.getElementById('visualizationModal').style.display = 'none';
         }
 
-        // Handle photo selection for AI
+        // Handle photo selection for canvas visualization
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('aiPhotoUpload')?.addEventListener('change', function(event) {
                 const file = event.target.files[0];
@@ -1359,9 +1435,7 @@
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         currentVisualizationImage = e.target.result;
-                        document.getElementById('aiPreviewImage').src = currentVisualizationImage;
-                        document.getElementById('aiPreviewContainer').style.display = 'block';
-                        document.getElementById('visualizationResult').style.display = 'none';
+                        loadImageToCanvas(e.target.result);
                     };
                     reader.readAsDataURL(file);
                 }
@@ -1369,144 +1443,197 @@
             });
         });
 
-        async function generateVisualization() {
-            if (!currentVisualizationImage) {
-                alert('Please select a photo first');
-                return;
-            }
+        function loadImageToCanvas(imageSrc) {
+            const img = new Image();
+            img.onload = function() {
+                loadedImage = img;
 
-            // Get quote details
-            const trackType = document.getElementById('trackType').selectedOptions[0]?.text || 'rolling screen';
-            const fabricColor = document.getElementById('fabricColor').selectedOptions[0]?.text || 'standard fabric';
+                // Setup canvas
+                visualizationCanvas = document.getElementById('visualizationCanvas');
+                visualizationCtx = visualizationCanvas.getContext('2d');
 
-            const statusEl = document.getElementById('aiProcessingStatus');
-            statusEl.className = 'ai-status processing';
-            statusEl.textContent = '⏳ Generating AI visualization... This may take 30-60 seconds.';
+                // Set canvas size to match image aspect ratio
+                const maxWidth = 800;
+                const scale = Math.min(maxWidth / img.width, 1);
+                visualizationCanvas.width = img.width * scale;
+                visualizationCanvas.height = img.height * scale;
 
-            try {
-                console.log('Starting AI visualization via proxy...');
+                // Initialize corner positions based on image dimensions
+                const margin = 0.15;
+                corners = [
+                    {x: margin, y: margin},
+                    {x: 1 - margin, y: margin},
+                    {x: 1 - margin, y: 1 - margin},
+                    {x: margin, y: 1 - margin}
+                ];
 
-                // First, analyze the image and get description
-                const analysisResponse = await fetch(AI_PROXY_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        endpoint: 'chat/completions',
-                        data: {
-                            model: 'gpt-4o',
-                            messages: [
-                                {
-                                    role: 'user',
-                                    content: [
-                                        {
-                                            type: 'text',
-                                            text: `Analyze this photo of a door/window opening. Describe the opening, its surroundings, lighting, and perspective in detail. This will be used to generate a realistic visualization of a ${trackType} with ${fabricColor} installed in this opening.`
-                                        },
-                                        {
-                                            type: 'image_url',
-                                            image_url: {
-                                                url: currentVisualizationImage
-                                            }
-                                        }
-                                    ]
-                                }
-                            ],
-                            max_tokens: 500
-                        }
-                    })
-                });
+                // Setup corner drag handlers
+                setupCornerDragging();
 
-                if (!analysisResponse.ok) {
-                    const errorData = await analysisResponse.json().catch(() => ({}));
-                    const errorMessage = errorData.error?.message || analysisResponse.statusText;
-                    throw new Error(`Analysis failed (${analysisResponse.status}): ${errorMessage}`);
-                }
+                // Draw initial visualization
+                updateScreenOverlay();
 
-                const analysisData = await analysisResponse.json();
-                const sceneDescription = analysisData.choices[0].message.content;
-
-                statusEl.textContent = '⏳ Creating visualization based on scene analysis...';
-
-                // Generate the visualization using DALL-E
-                const prompt = `A photorealistic image showing ${sceneDescription}, but now with a ${trackType} with ${fabricColor} installed in the opening. The screen should look professionally installed, matching the architectural style. The screen should have a subtle texture of ${fabricColor} fabric and be clearly visible as a retractable screen system. Maintain the same lighting, perspective, and surroundings from the original photo. The result should look like a professional "after installation" photo.`;
-
-                const imageResponse = await fetch(AI_PROXY_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        endpoint: 'images/generations',
-                        data: {
-                            model: 'dall-e-3',
-                            prompt: prompt,
-                            n: 1,
-                            size: '1024x1024',
-                            quality: 'standard'
-                        }
-                    })
-                });
-
-                if (!imageResponse.ok) {
-                    const errorData = await imageResponse.json().catch(() => ({}));
-                    const errorMessage = errorData.error?.message || imageResponse.statusText;
-                    throw new Error(`Image generation failed (${imageResponse.status}): ${errorMessage}`);
-                }
-
-                const imageData = await imageResponse.json();
-
-                // Worker returns base64 data directly
-                const base64Image = imageData.data[0].b64_json;
-                generatedVisualization = `data:image/png;base64,${base64Image}`;
-
-                // Show results
-                document.getElementById('beforeImage').src = currentVisualizationImage;
-                document.getElementById('afterImage').src = generatedVisualization;
-                document.getElementById('visualizationResult').style.display = 'block';
-
-                statusEl.className = 'ai-status success';
-                statusEl.textContent = '✅ Visualization generated successfully!';
-
-            } catch (error) {
-                console.error('AI visualization error:', error);
-                console.error('Error details:', error.stack);
-                statusEl.className = 'ai-status error';
-
-                let errorMsg = error.message;
-                if (error.message === 'Failed to fetch') {
-                    errorMsg = 'Network error. Check browser console (F12) for details. Worker URL: ' + AI_PROXY_URL;
-                }
-
-                statusEl.textContent = `❌ Error: ${errorMsg}`;
-            }
+                // Show canvas editor
+                document.getElementById('canvasEditorContainer').style.display = 'block';
+            };
+            img.src = imageSrc;
         }
 
-        function saveVisualization() {
-            if (!currentVisualizationImage || !generatedVisualization) {
+        function setupCornerDragging() {
+            const canvas = visualizationCanvas;
+            const wrapper = document.getElementById('canvasWrapper');
+
+            for (let i = 0; i < 4; i++) {
+                const cornerEl = document.getElementById(`corner${i}`);
+
+                cornerEl.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    draggingCorner = i;
+                });
+
+                cornerEl.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    draggingCorner = i;
+                });
+            }
+
+            window.addEventListener('mousemove', handleCornerDrag);
+            window.addEventListener('touchmove', handleCornerDrag);
+            window.addEventListener('mouseup', () => draggingCorner = null);
+            window.addEventListener('touchend', () => draggingCorner = null);
+
+            updateCornerPositions();
+        }
+
+        function handleCornerDrag(e) {
+            if (draggingCorner === null) return;
+
+            const canvas = visualizationCanvas;
+            const rect = canvas.getBoundingClientRect();
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            const x = (clientX - rect.left) / rect.width;
+            const y = (clientY - rect.top) / rect.height;
+
+            corners[draggingCorner] = {
+                x: Math.max(0, Math.min(1, x)),
+                y: Math.max(0, Math.min(1, y))
+            };
+
+            updateCornerPositions();
+            updateScreenOverlay();
+        }
+
+        function updateCornerPositions() {
+            const canvas = visualizationCanvas;
+            const rect = canvas.getBoundingClientRect();
+
+            corners.forEach((corner, i) => {
+                const cornerEl = document.getElementById(`corner${i}`);
+                cornerEl.style.left = (corner.x * rect.width) + 'px';
+                cornerEl.style.top = (corner.y * rect.height) + 'px';
+            });
+        }
+
+        function updateScreenOverlay() {
+            if (!visualizationCanvas || !loadedImage) return;
+
+            const ctx = visualizationCtx;
+            const canvas = visualizationCanvas;
+
+            // Clear and redraw image
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(loadedImage, 0, 0, canvas.width, canvas.height);
+
+            // Get fabric color
+            const fabricSelect = document.getElementById('fabricColor');
+            const fabricValue = fabricSelect?.value || '';
+            let screenColor = 'rgba(50, 50, 50, 0.7)'; // default dark
+
+            // Map fabric colors to rgba
+            if (fabricValue.includes('charcoal') || fabricValue.includes('95')) {
+                screenColor = 'rgba(40, 40, 40, 0.85)';
+            } else if (fabricValue.includes('90')) {
+                screenColor = 'rgba(50, 50, 50, 0.75)';
+            } else if (fabricValue.includes('80')) {
+                screenColor = 'rgba(60, 60, 60, 0.65)';
+            }
+
+            // Get opacity
+            const opacity = document.getElementById('screenOpacity').value / 100;
+            document.getElementById('opacityValue').textContent = document.getElementById('screenOpacity').value + '%';
+
+            // Draw screen overlay (quad)
+            ctx.save();
+            ctx.beginPath();
+            corners.forEach((corner, i) => {
+                const x = corner.x * canvas.width;
+                const y = corner.y * canvas.height;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.closePath();
+
+            // Apply screen color with opacity
+            const colorMatch = screenColor.match(/rgba?\(([^)]+)\)/);
+            if (colorMatch) {
+                const [r, g, b] = colorMatch[1].split(',').map(v => parseInt(v.trim()));
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+            } else {
+                ctx.fillStyle = screenColor.replace(/[\d.]+\)$/, opacity + ')');
+            }
+            ctx.fill();
+
+            // Add subtle texture
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+            for (let i = 0; i < canvas.height; i += 2) {
+                ctx.fillRect(0, i, canvas.width, 1);
+            }
+
+            // Draw housing box if enabled
+            if (document.getElementById('showHousing').checked) {
+                const top = Math.min(corners[0].y, corners[1].y);
+                const left = Math.min(corners[0].x, corners[3].x);
+                const right = Math.max(corners[1].x, corners[2].x);
+                const width = (right - left) * canvas.width;
+                const housingHeight = width * 0.08;
+
+                const housingY = (top * canvas.height) - housingHeight;
+                const housingX = left * canvas.width;
+
+                ctx.fillStyle = 'rgba(200, 200, 200, 0.9)';
+                ctx.fillRect(housingX, housingY, width, housingHeight);
+
+                ctx.strokeStyle = 'rgba(100, 100, 100, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(housingX, housingY, width, housingHeight);
+            }
+
+            ctx.restore();
+            updateCornerPositions();
+        }
+
+        function saveCanvasVisualization() {
+            if (!visualizationCanvas) {
                 alert('No visualization to save');
                 return;
             }
 
-            // Add both images to quote photos
-            quotePhotos.push({
-                dataUrl: currentVisualizationImage,
-                filename: 'original-' + Date.now() + '.jpg',
-                timestamp: new Date().toISOString(),
-                type: 'original'
-            });
+            // Save the canvas as image
+            const visualizationDataUrl = visualizationCanvas.toDataURL('image/jpeg', 0.9);
 
             quotePhotos.push({
-                dataUrl: generatedVisualization,
-                filename: 'visualization-' + Date.now() + '.jpg',
+                dataUrl: visualizationDataUrl,
+                filename: 'screen-visualization-' + Date.now() + '.jpg',
                 timestamp: new Date().toISOString(),
-                type: 'ai-visualization'
+                type: 'visualization'
             });
 
             displayPhotoPreview();
             closeVisualizationModal();
-            alert('✅ Both images saved to quote!');
+            alert('✅ Visualization saved to quote!');
         }
 
         function parseFraction(fractionStr) {
@@ -3479,40 +3606,44 @@
         </div>
     </div>
 
-    <!-- AI Visualization Modal -->
+    <!-- Screen Visualization Modal -->
     <div id="visualizationModal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 800px;">
-            <h3>✨ AI Screen Visualization</h3>
-            <p style="color: #666; margin-bottom: 15px;">Upload a photo of the opening where the screen will be installed.</p>
+        <div class="modal-content" style="max-width: 900px;">
+            <h3>✨ Screen Visualization</h3>
+            <p style="color: #666; margin-bottom: 15px;">Take a photo and position the screen corners where it will be installed.</p>
 
             <input type="file" id="aiPhotoUpload" accept="image/*" capture="environment" style="display: none;">
             <button class="btn-secondary" onclick="document.getElementById('aiPhotoUpload').click()">
                 📷 Take/Select Photo
             </button>
 
-            <div id="aiPreviewContainer" style="margin-top: 15px; display: none;">
-                <img id="aiPreviewImage" style="max-width: 100%; border-radius: 4px; border: 2px solid #ddd;">
-                <button class="btn-primary" onclick="generateVisualization()" style="margin-top: 10px; width: 100%;">
-                    Generate AI Visualization
-                </button>
-            </div>
+            <div id="canvasEditorContainer" style="display: none;">
+                <p style="color: #666; margin-top: 15px; font-size: 0.9rem;">
+                    <strong>Drag the blue corner points</strong> to position the screen where it will be installed.
+                </p>
 
-            <div id="aiProcessingStatus" class="ai-status"></div>
-
-            <div id="visualizationResult" style="display: none; margin-top: 20px;">
-                <h4>Before & After:</h4>
-                <div class="visualization-preview">
-                    <div>
-                        <img id="beforeImage" alt="Before">
-                        <div class="label">Original</div>
-                    </div>
-                    <div>
-                        <img id="afterImage" alt="After">
-                        <div class="label">With Screen</div>
-                    </div>
+                <div class="canvas-container" id="canvasWrapper">
+                    <canvas id="visualizationCanvas"></canvas>
+                    <div class="corner-point" id="corner0" data-corner="0"></div>
+                    <div class="corner-point" id="corner1" data-corner="1"></div>
+                    <div class="corner-point" id="corner2" data-corner="2"></div>
+                    <div class="corner-point" id="corner3" data-corner="3"></div>
                 </div>
-                <button class="btn-success" onclick="saveVisualization()" style="margin-top: 15px; width: 100%;">
-                    💾 Save Both Images to Quote
+
+                <div class="overlay-controls">
+                    <label>
+                        <span>Opacity:</span>
+                        <input type="range" id="screenOpacity" min="30" max="95" value="70" oninput="updateScreenOverlay()">
+                        <span id="opacityValue">70%</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showHousing" checked onchange="updateScreenOverlay()">
+                        <span>Show Housing Box</span>
+                    </label>
+                </div>
+
+                <button class="btn-success" onclick="saveCanvasVisualization()" style="margin-top: 15px; width: 100%;">
+                    💾 Save Visualization to Quote
                 </button>
             </div>
 
