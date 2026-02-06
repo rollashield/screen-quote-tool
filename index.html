@@ -1477,8 +1477,15 @@
 
             } catch (error) {
                 console.error('AI visualization error:', error);
+                console.error('Error details:', error.stack);
                 statusEl.className = 'ai-status error';
-                statusEl.textContent = `❌ Error: ${error.message}. Please check your API key and try again.`;
+
+                let errorMsg = error.message;
+                if (error.message === 'Failed to fetch') {
+                    errorMsg = 'Network error. Check browser console (F12) for details. Worker URL: ' + AI_PROXY_URL;
+                }
+
+                statusEl.textContent = `❌ Error: ${errorMsg}`;
             }
         }
 
