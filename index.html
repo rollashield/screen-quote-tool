@@ -959,8 +959,8 @@
         // Photo Storage
         let quotePhotos = [];
 
-        // OpenAI API Configuration
-        const OPENAI_API_KEY = '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';
+        // OpenAI API Configuration via Cloudflare Worker Proxy
+        const AI_PROXY_URL = 'https://rollashield-ai-proxy.derek-44b.workers.dev';
 
         // Microsoft Authentication Configuration
         const msalConfig = {
@@ -1384,36 +1384,37 @@
             statusEl.textContent = '⏳ Generating AI visualization... This may take 30-60 seconds.';
 
             try {
-                console.log('Starting AI visualization...');
-                console.log('API Key (first 10 chars):', OPENAI_API_KEY.substring(0, 10));
+                console.log('Starting AI visualization via proxy...');
 
                 // First, analyze the image and get description
-                const analysisResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                const analysisResponse = await fetch(AI_PROXY_URL, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        model: 'gpt-4o',
-                        messages: [
-                            {
-                                role: 'user',
-                                content: [
-                                    {
-                                        type: 'text',
-                                        text: `Analyze this photo of a door/window opening. Describe the opening, its surroundings, lighting, and perspective in detail. This will be used to generate a realistic visualization of a ${trackType} with ${fabricColor} installed in this opening.`
-                                    },
-                                    {
-                                        type: 'image_url',
-                                        image_url: {
-                                            url: currentVisualizationImage
+                        endpoint: 'chat/completions',
+                        data: {
+                            model: 'gpt-4o',
+                            messages: [
+                                {
+                                    role: 'user',
+                                    content: [
+                                        {
+                                            type: 'text',
+                                            text: `Analyze this photo of a door/window opening. Describe the opening, its surroundings, lighting, and perspective in detail. This will be used to generate a realistic visualization of a ${trackType} with ${fabricColor} installed in this opening.`
+                                        },
+                                        {
+                                            type: 'image_url',
+                                            image_url: {
+                                                url: currentVisualizationImage
+                                            }
                                         }
-                                    }
-                                ]
-                            }
-                        ],
-                        max_tokens: 500
+                                    ]
+                                }
+                            ],
+                            max_tokens: 500
+                        }
                     })
                 });
 
@@ -1431,18 +1432,20 @@
                 // Generate the visualization using DALL-E
                 const prompt = `A photorealistic image showing ${sceneDescription}, but now with a ${trackType} with ${fabricColor} installed in the opening. The screen should look professionally installed, matching the architectural style. The screen should have a subtle texture of ${fabricColor} fabric and be clearly visible as a retractable screen system. Maintain the same lighting, perspective, and surroundings from the original photo. The result should look like a professional "after installation" photo.`;
 
-                const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
+                const imageResponse = await fetch(AI_PROXY_URL, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        model: 'dall-e-3',
-                        prompt: prompt,
-                        n: 1,
-                        size: '1024x1024',
-                        quality: 'standard'
+                        endpoint: 'images/generations',
+                        data: {
+                            model: 'dall-e-3',
+                            prompt: prompt,
+                            n: 1,
+                            size: '1024x1024',
+                            quality: 'standard'
+                        }
                     })
                 });
 
