@@ -352,6 +352,139 @@
             cursor: pointer;
         }
 
+        .ai-visualize-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: 10px;
+        }
+
+        .ai-visualize-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .ai-visualize-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .settings-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        .settings-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            color: #0056A3;
+        }
+
+        .modal-content input[type="text"],
+        .modal-content input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            margin-top: 8px;
+        }
+
+        .modal-content label {
+            display: block;
+            margin-top: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        .ai-status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .ai-status.processing {
+            background: #fff3cd;
+            color: #856404;
+            display: block;
+        }
+
+        .ai-status.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+
+        .ai-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+
+        .visualization-preview {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .visualization-preview img {
+            width: 100%;
+            border-radius: 4px;
+            border: 2px solid #ddd;
+        }
+
+        .visualization-preview .label {
+            text-align: center;
+            font-weight: 600;
+            margin-top: 5px;
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 768px) {
+            .visualization-preview {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .quote-summary {
             margin-top: 20px;
             padding: 15px;
@@ -599,6 +732,7 @@
                     <span id="syncStatus" class="sync-status offline">Offline</span>
                     <button class="auth-button" onclick="signOut()" style="background: rgba(255,255,255,0.2); color: white;">Sign Out</button>
                 </div>
+                <button class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
             </div>
         </div>
 
@@ -628,11 +762,17 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Site Photos</label>
-                        <input type="file" id="photoUpload" accept="image/*" capture="environment" multiple style="display: none;">
-                        <button type="button" class="button secondary-button" onclick="document.getElementById('photoUpload').click()">
-                            📷 Add Photos
-                        </button>
+                        <label>Site Photos & Visualization</label>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <input type="file" id="photoUpload" accept="image/*" capture="environment" multiple style="display: none;">
+                            <button type="button" class="btn-secondary" onclick="document.getElementById('photoUpload').click()">
+                                📷 Add Photos
+                            </button>
+                            <button type="button" class="ai-visualize-btn" onclick="startAIVisualization()" id="aiVisualizeBtn">
+                                ✨ Visualize Screen with AI
+                            </button>
+                        </div>
+                        <div id="aiStatus" class="ai-status"></div>
                         <div id="photoPreview" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 10px;"></div>
                     </div>
                 </div>
@@ -818,6 +958,9 @@
 
         // Photo Storage
         let quotePhotos = [];
+
+        // OpenAI API Configuration
+        const OPENAI_API_KEY = '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';
 
         // Microsoft Authentication Configuration
         const msalConfig = {
@@ -1172,6 +1315,188 @@
                 closePhotoModal();
             }
         });
+
+        // AI Visualization Functions
+        let currentVisualizationImage = null;
+        let generatedVisualization = null;
+
+        function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.style.display = 'flex';
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        function saveSettings() {
+            alert('✅ Settings saved!');
+            closeSettings();
+        }
+
+        function startAIVisualization() {
+            // Reset state
+            currentVisualizationImage = null;
+            generatedVisualization = null;
+            document.getElementById('aiPreviewContainer').style.display = 'none';
+            document.getElementById('visualizationResult').style.display = 'none';
+            document.getElementById('aiProcessingStatus').className = 'ai-status';
+            document.getElementById('aiProcessingStatus').textContent = '';
+
+            // Open modal
+            document.getElementById('visualizationModal').style.display = 'flex';
+        }
+
+        function closeVisualizationModal() {
+            document.getElementById('visualizationModal').style.display = 'none';
+        }
+
+        // Handle photo selection for AI
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('aiPhotoUpload')?.addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        currentVisualizationImage = e.target.result;
+                        document.getElementById('aiPreviewImage').src = currentVisualizationImage;
+                        document.getElementById('aiPreviewContainer').style.display = 'block';
+                        document.getElementById('visualizationResult').style.display = 'none';
+                    };
+                    reader.readAsDataURL(file);
+                }
+                event.target.value = '';
+            });
+        });
+
+        async function generateVisualization() {
+            if (!currentVisualizationImage) {
+                alert('Please select a photo first');
+                return;
+            }
+
+            // Get quote details
+            const trackType = document.getElementById('trackType').selectedOptions[0]?.text || 'rolling screen';
+            const fabricColor = document.getElementById('fabricColor').selectedOptions[0]?.text || 'standard fabric';
+
+            const statusEl = document.getElementById('aiProcessingStatus');
+            statusEl.className = 'ai-status processing';
+            statusEl.textContent = '⏳ Generating AI visualization... This may take 30-60 seconds.';
+
+            try {
+                // First, analyze the image and get description
+                const analysisResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o',
+                        messages: [
+                            {
+                                role: 'user',
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: `Analyze this photo of a door/window opening. Describe the opening, its surroundings, lighting, and perspective in detail. This will be used to generate a realistic visualization of a ${trackType} with ${fabricColor} installed in this opening.`
+                                    },
+                                    {
+                                        type: 'image_url',
+                                        image_url: {
+                                            url: currentVisualizationImage
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens: 500
+                    })
+                });
+
+                if (!analysisResponse.ok) {
+                    throw new Error(`Analysis failed: ${analysisResponse.status} ${analysisResponse.statusText}`);
+                }
+
+                const analysisData = await analysisResponse.json();
+                const sceneDescription = analysisData.choices[0].message.content;
+
+                statusEl.textContent = '⏳ Creating visualization based on scene analysis...';
+
+                // Generate the visualization using DALL-E
+                const prompt = `A photorealistic image showing ${sceneDescription}, but now with a ${trackType} with ${fabricColor} installed in the opening. The screen should look professionally installed, matching the architectural style. The screen should have a subtle texture of ${fabricColor} fabric and be clearly visible as a retractable screen system. Maintain the same lighting, perspective, and surroundings from the original photo. The result should look like a professional "after installation" photo.`;
+
+                const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: 'dall-e-3',
+                        prompt: prompt,
+                        n: 1,
+                        size: '1024x1024',
+                        quality: 'standard'
+                    })
+                });
+
+                if (!imageResponse.ok) {
+                    throw new Error(`Image generation failed: ${imageResponse.status} ${imageResponse.statusText}`);
+                }
+
+                const imageData = await imageResponse.json();
+                generatedVisualization = imageData.data[0].url;
+
+                // Convert URL to base64 for storage
+                const response = await fetch(generatedVisualization);
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    generatedVisualization = reader.result;
+
+                    // Show results
+                    document.getElementById('beforeImage').src = currentVisualizationImage;
+                    document.getElementById('afterImage').src = generatedVisualization;
+                    document.getElementById('visualizationResult').style.display = 'block';
+
+                    statusEl.className = 'ai-status success';
+                    statusEl.textContent = '✅ Visualization generated successfully!';
+                };
+                reader.readAsDataURL(blob);
+
+            } catch (error) {
+                console.error('AI visualization error:', error);
+                statusEl.className = 'ai-status error';
+                statusEl.textContent = `❌ Error: ${error.message}. Please check your API key and try again.`;
+            }
+        }
+
+        function saveVisualization() {
+            if (!currentVisualizationImage || !generatedVisualization) {
+                alert('No visualization to save');
+                return;
+            }
+
+            // Add both images to quote photos
+            quotePhotos.push({
+                dataUrl: currentVisualizationImage,
+                filename: 'original-' + Date.now() + '.jpg',
+                timestamp: new Date().toISOString(),
+                type: 'original'
+            });
+
+            quotePhotos.push({
+                dataUrl: generatedVisualization,
+                filename: 'visualization-' + Date.now() + '.jpg',
+                timestamp: new Date().toISOString(),
+                type: 'ai-visualization'
+            });
+
+            displayPhotoPreview();
+            closeVisualizationModal();
+            alert('✅ Both images saved to quote!');
+        }
 
         function parseFraction(fractionStr) {
             if (!fractionStr || fractionStr.trim() === '') return 0;
@@ -3124,5 +3449,66 @@
             });
         }
     </script>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>⚙️ Settings</h3>
+            <p style="color: #666;">
+                <strong>AI Visualization:</strong> Enabled<br>
+                <small>Uses OpenAI DALL-E 3 to generate realistic screen visualizations.</small>
+            </p>
+            <p style="color: #666; margin-top: 15px;">
+                <strong>Cost per visualization:</strong> ~$0.04-0.08<br>
+                <small>Charged to Roll-A-Shield OpenAI account.</small>
+            </p>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeSettings()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Visualization Modal -->
+    <div id="visualizationModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3>✨ AI Screen Visualization</h3>
+            <p style="color: #666; margin-bottom: 15px;">Upload a photo of the opening where the screen will be installed.</p>
+
+            <input type="file" id="aiPhotoUpload" accept="image/*" capture="environment" style="display: none;">
+            <button class="btn-secondary" onclick="document.getElementById('aiPhotoUpload').click()">
+                📷 Take/Select Photo
+            </button>
+
+            <div id="aiPreviewContainer" style="margin-top: 15px; display: none;">
+                <img id="aiPreviewImage" style="max-width: 100%; border-radius: 4px; border: 2px solid #ddd;">
+                <button class="btn-primary" onclick="generateVisualization()" style="margin-top: 10px; width: 100%;">
+                    Generate AI Visualization
+                </button>
+            </div>
+
+            <div id="aiProcessingStatus" class="ai-status"></div>
+
+            <div id="visualizationResult" style="display: none; margin-top: 20px;">
+                <h4>Before & After:</h4>
+                <div class="visualization-preview">
+                    <div>
+                        <img id="beforeImage" alt="Before">
+                        <div class="label">Original</div>
+                    </div>
+                    <div>
+                        <img id="afterImage" alt="After">
+                        <div class="label">With Screen</div>
+                    </div>
+                </div>
+                <button class="btn-success" onclick="saveVisualization()" style="margin-top: 15px; width: 100%;">
+                    💾 Save Both Images to Quote
+                </button>
+            </div>
+
+            <div class="modal-buttons" style="margin-top: 20px;">
+                <button class="btn-secondary" onclick="closeVisualizationModal()">Close</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
