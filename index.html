@@ -1384,6 +1384,9 @@
             statusEl.textContent = '⏳ Generating AI visualization... This may take 30-60 seconds.';
 
             try {
+                console.log('Starting AI visualization...');
+                console.log('API Key (first 10 chars):', OPENAI_API_KEY.substring(0, 10));
+
                 // First, analyze the image and get description
                 const analysisResponse = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
@@ -1415,7 +1418,9 @@
                 });
 
                 if (!analysisResponse.ok) {
-                    throw new Error(`Analysis failed: ${analysisResponse.status} ${analysisResponse.statusText}`);
+                    const errorData = await analysisResponse.json().catch(() => ({}));
+                    const errorMessage = errorData.error?.message || analysisResponse.statusText;
+                    throw new Error(`Analysis failed (${analysisResponse.status}): ${errorMessage}`);
                 }
 
                 const analysisData = await analysisResponse.json();
@@ -1442,7 +1447,9 @@
                 });
 
                 if (!imageResponse.ok) {
-                    throw new Error(`Image generation failed: ${imageResponse.status} ${imageResponse.statusText}`);
+                    const errorData = await imageResponse.json().catch(() => ({}));
+                    const errorMessage = errorData.error?.message || imageResponse.statusText;
+                    throw new Error(`Image generation failed (${imageResponse.status}): ${errorMessage}`);
                 }
 
                 const imageData = await imageResponse.json();
