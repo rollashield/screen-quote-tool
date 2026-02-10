@@ -481,7 +481,7 @@
 
                 <!-- Toggle button for optional fields -->
                 <button type="button" id="toggleOptionalFields" style="background: none; border: none; color: #0056A3; cursor: pointer; padding: 5px 0; font-size: 0.9rem; text-decoration: underline; margin-bottom: 10px;">
-                    + Show Additional Fields (Company Name, Apt/Suite, Nearest Intersection)
+                    + Show Addnl Fields
                 </button>
 
                 <!-- Optional fields (initially hidden) -->
@@ -902,10 +902,10 @@
 
                 if (isHidden) {
                     optionalFields.style.display = 'block';
-                    this.textContent = '− Hide Additional Fields';
+                    this.textContent = '− Hide Addnl Fields';
                 } else {
                     optionalFields.style.display = 'none';
-                    this.textContent = '+ Show Additional Fields (Company Name, Apt/Suite, Nearest Intersection)';
+                    this.textContent = '+ Show Addnl Fields';
                 }
             });
 
@@ -1666,7 +1666,7 @@
             // Show optional fields if any have values
             if (quote.companyName || quote.aptSuite || quote.nearestIntersection) {
                 document.getElementById('optionalCustomerFields').style.display = 'block';
-                document.getElementById('toggleOptionalFields').textContent = '− Hide Additional Fields';
+                document.getElementById('toggleOptionalFields').textContent = '− Hide Addnl Fields';
             }
 
             // Handle new format (with trackType/operatorType) and old format (with screenType)
