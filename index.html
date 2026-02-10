@@ -551,6 +551,19 @@
                             <option value="T18FVT056-Sable">Sable</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="frameColor">Frame Color *</label>
+                        <select id="frameColor" required>
+                            <option value="">-- Select Frame Color --</option>
+                            <option value="white">White</option>
+                            <option value="mocha">Mocha</option>
+                            <option value="taupe">Taupe</option>
+                            <option value="brown">Brown</option>
+                            <option value="bronze">Bronze</option>
+                            <option value="black">Black</option>
+                            <option value="grey">Grey</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="form-row">
@@ -1342,6 +1355,10 @@
                     <span>${fabricColor}</span>
                 </div>
                 <div class="summary-row">
+                    <strong>Frame Color:</strong>
+                    <span>${quote.frameColorName || 'Not specified'}</span>
+                </div>
+                <div class="summary-row">
                     <strong>Dimensions:</strong>
                     <span>${quote.actualWidthDisplay} W x ${quote.actualHeightDisplay} H</span>
                 </div>
@@ -1483,6 +1500,8 @@
                 operatorTypeName: document.getElementById('operatorType').selectedOptions[0].text,
                 fabricColor: document.getElementById('fabricColor').value,
                 fabricColorName: document.getElementById('fabricColor').selectedOptions[0].text,
+                frameColor: document.getElementById('frameColor').value,
+                frameColorName: document.getElementById('frameColor').selectedOptions[0].text,
                 widthInches: document.getElementById('widthInches').value,
                 widthFraction: document.getElementById('widthFraction').value,
                 heightInches: document.getElementById('heightInches').value,
@@ -1579,6 +1598,7 @@
             }
 
             document.getElementById('fabricColor').value = quote.fabricColor;
+            document.getElementById('frameColor').value = quote.frameColor || '';
 
             // Handle new format (inches + fractions) and old formats
             if (quote.widthInches !== undefined && quote.heightInches !== undefined) {
@@ -1692,6 +1712,7 @@
             document.getElementById('operatorType').value = '';
             document.getElementById('operatorType').disabled = true;
             document.getElementById('fabricColor').value = '';
+            document.getElementById('frameColor').value = '';
             document.getElementById('widthInches').value = '';
             document.getElementById('widthFraction').value = '';
             document.getElementById('heightInches').value = '';
@@ -1954,6 +1975,7 @@
             document.getElementById('operatorType').value = '';
             document.getElementById('operatorType').disabled = true;
             document.getElementById('fabricColor').value = '';
+            document.getElementById('frameColor').value = '';
             document.getElementById('widthInches').value = '';
             document.getElementById('widthFraction').value = '';
             document.getElementById('heightInches').value = '';
@@ -1999,7 +2021,8 @@
                             <strong>Track:</strong> ${clientTrackName} |
                             <strong>Motor:</strong> ${clientMotorName}<br>
                             <strong>Size:</strong> ${screen.actualWidthDisplay} W x ${screen.actualHeightDisplay} H |
-                            <strong>Fabric:</strong> ${screen.fabricColorName}<br>
+                            <strong>Fabric:</strong> ${screen.fabricColorName} |
+                            <strong>Frame:</strong> ${screen.frameColorName || 'Not specified'}<br>
                             ${screen.noTracks ? '<strong>Configuration:</strong> No Tracks<br>' : ''}
                             <strong>Accessories:</strong> ${accessoriesText}<br>
                             ${screen.includeInstallation ? '<strong>Installation:</strong> Included<br>' : ''}
@@ -2315,6 +2338,10 @@
                         <div class="summary-row">
                             <span>Fabric:</span>
                             <span>${screen.fabricColorName}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Frame:</span>
+                            <span>${screen.frameColorName || 'Not specified'}</span>
                         </div>
                         <div class="summary-row">
                             <span>Dimensions:</span>
