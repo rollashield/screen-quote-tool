@@ -770,6 +770,15 @@
             saveMeasurements();
             displayScreenList();
 
+            // Collapse the form and deselect current screen
+            document.getElementById('measurementForm').classList.remove('active');
+            currentScreenIndex = null;
+
+            // Remove active state from all cards
+            document.querySelectorAll('.screen-card').forEach(card => {
+                card.classList.remove('active');
+            });
+
             alert('Measurements saved successfully!');
         }
 
@@ -785,84 +794,160 @@
             generateProductionEmail();
         });
 
-        function generateProductionEmail() {
+        async function generateProductionEmail() {
             const productionComments = document.getElementById('productionComments').value;
 
-            let emailBody = `ROLL-A-SHIELD PRODUCTION ORDER\n`;
-            emailBody += `================================\n\n`;
+            // Build HTML email body
+            let htmlBody = `
+                <div style="font-family: 'Courier New', monospace; max-width: 800px; margin: 0 auto;">
+                    <h1 style="color: #0056A3; border-bottom: 3px solid #0056A3; padding-bottom: 10px;">ROLL-A-SHIELD PRODUCTION ORDER</h1>
 
-            emailBody += `CUSTOMER INFORMATION:\n`;
-            emailBody += `Customer Name: ${orderData.customerName}\n`;
-            if (orderData.companyName) emailBody += `Company: ${orderData.companyName}\n`;
-            emailBody += `Email: ${orderData.customerEmail || 'N/A'}\n`;
-            emailBody += `Phone: ${orderData.customerPhone || 'N/A'}\n`;
+                    <h2 style="color: #0056A3; margin-top: 30px;">CUSTOMER INFORMATION</h2>
+                    <p><strong>Customer Name:</strong> ${orderData.customerName}</p>
+                    ${orderData.companyName ? `<p><strong>Company:</strong> ${orderData.companyName}</p>` : ''}
+                    <p><strong>Email:</strong> ${orderData.customerEmail || 'N/A'}</p>
+                    <p><strong>Phone:</strong> ${orderData.customerPhone || 'N/A'}</p>
+            `;
 
             if (orderData.streetAddress) {
-                emailBody += `\nPROJECT ADDRESS:\n`;
-                emailBody += `${orderData.streetAddress}\n`;
-                if (orderData.aptSuite) emailBody += `${orderData.aptSuite}\n`;
-                emailBody += `${orderData.city}, ${orderData.state} ${orderData.zipCode}\n`;
-                if (orderData.nearestIntersection) emailBody += `Nearest Intersection: ${orderData.nearestIntersection}\n`;
+                htmlBody += `
+                    <h2 style="color: #0056A3; margin-top: 30px;">PROJECT ADDRESS</h2>
+                    <p>${orderData.streetAddress}</p>
+                    ${orderData.aptSuite ? `<p>${orderData.aptSuite}</p>` : ''}
+                    <p>${orderData.city}, ${orderData.state} ${orderData.zipCode}</p>
+                    ${orderData.nearestIntersection ? `<p><strong>Nearest Intersection:</strong> ${orderData.nearestIntersection}</p>` : ''}
+                `;
             }
 
-            emailBody += `\n\n`;
+            // Also build plain text version
+            let textBody = `ROLL-A-SHIELD PRODUCTION ORDER\n`;
+            textBody += `================================\n\n`;
+
+            textBody += `CUSTOMER INFORMATION:\n`;
+            textBody += `Customer Name: ${orderData.customerName}\n`;
+            if (orderData.companyName) textBody += `Company: ${orderData.companyName}\n`;
+            textBody += `Email: ${orderData.customerEmail || 'N/A'}\n`;
+            textBody += `Phone: ${orderData.customerPhone || 'N/A'}\n`;
+
+            if (orderData.streetAddress) {
+                textBody += `\nPROJECT ADDRESS:\n`;
+                textBody += `${orderData.streetAddress}\n`;
+                if (orderData.aptSuite) textBody += `${orderData.aptSuite}\n`;
+                textBody += `${orderData.city}, ${orderData.state} ${orderData.zipCode}\n`;
+                if (orderData.nearestIntersection) textBody += `Nearest Intersection: ${orderData.nearestIntersection}\n`;
+            }
+
+            textBody += `\n\n`;
 
             orderData.screens.forEach((screen, index) => {
                 const meas = finalMeasurements[index];
 
-                emailBody += `\n========================================\n`;
-                emailBody += `SCREEN ${index + 1}\n`;
-                emailBody += `========================================\n\n`;
+                // HTML version
+                htmlBody += `
+                    <div style="border: 2px solid #0056A3; padding: 20px; margin: 20px 0; background: #f9f9f9;">
+                        <h2 style="color: #0056A3; margin-top: 0;">SCREEN ${index + 1}</h2>
 
-                emailBody += `SCREEN SPECIFICATIONS:\n`;
-                emailBody += `Track System: ${screen.trackTypeName}\n`;
-                emailBody += `Operator: ${screen.operatorTypeName}\n`;
-                emailBody += `Fabric Color: ${screen.fabricColorName}\n`;
-                emailBody += `Frame Color: ${screen.frameColorName}\n\n`;
+                        <h3 style="color: #333;">SCREEN SPECIFICATIONS</h3>
+                        <p><strong>Track System:</strong> ${screen.trackTypeName}</p>
+                        <p><strong>Operator:</strong> ${screen.operatorTypeName}</p>
+                        <p><strong>Fabric Color:</strong> ${screen.fabricColorName}</p>
+                        <p><strong>Frame Color:</strong> ${screen.frameColorName}</p>
 
-                emailBody += `FINAL MEASUREMENTS:\n`;
-                emailBody += `Width (Top): ${meas.widthTop}"\n`;
-                emailBody += `Width (Middle): ${meas.widthMiddle}"\n`;
-                emailBody += `Width (Bottom): ${meas.widthBottom}" ${meas.selectedWidth === meas.widthBottom ? '← SELECTED (Narrowest)' : ''}\n`;
-                emailBody += `>>> PRODUCTION WIDTH: ${meas.selectedWidth}"\n\n`;
+                        <h3 style="color: #333; margin-top: 20px;">FINAL MEASUREMENTS</h3>
+                        <p><strong>Width (Top):</strong> ${meas.widthTop}"</p>
+                        <p><strong>Width (Middle):</strong> ${meas.widthMiddle}"</p>
+                        <p><strong>Width (Bottom):</strong> ${meas.widthBottom}"</p>
+                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> PRODUCTION WIDTH: ${meas.selectedWidth}"</p>
 
-                emailBody += `Height (Left): ${meas.heightLeft}"\n`;
-                emailBody += `Height (Middle): ${meas.heightMiddle}"\n`;
-                emailBody += `Height (Right): ${meas.heightRight}" ${meas.selectedHeight === meas.heightRight ? '← SELECTED (Tallest)' : ''}\n`;
-                emailBody += `>>> PRODUCTION HEIGHT: ${meas.selectedHeight}"\n\n`;
+                        <p style="margin-top: 15px;"><strong>Height (Left):</strong> ${meas.heightLeft}"</p>
+                        <p><strong>Height (Middle):</strong> ${meas.heightMiddle}"</p>
+                        <p><strong>Height (Right):</strong> ${meas.heightRight}"</p>
+                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> PRODUCTION HEIGHT: ${meas.selectedHeight}"</p>
 
-                emailBody += `INSTALLATION DETAILS:\n`;
-                emailBody += `Operator Side: ${meas.operatorSide.toUpperCase()}\n`;
-                emailBody += `Mount Type: ${meas.mountType}\n`;
-                emailBody += `Hem Bar Brush: ${meas.hemBarBrush}\n`;
-                emailBody += `Surface Material: ${meas.surfaceMaterial}\n\n`;
+                        <h3 style="color: #333; margin-top: 20px;">INSTALLATION DETAILS</h3>
+                        <p><strong>Operator Side:</strong> ${meas.operatorSide.toUpperCase()}</p>
+                        <p><strong>Mount Type:</strong> ${meas.mountType}</p>
+                        <p><strong>Hem Bar Brush:</strong> ${meas.hemBarBrush}</p>
+                        <p><strong>Surface Material:</strong> ${meas.surfaceMaterial}</p>
+                `;
+
+                // Text version
+                textBody += `\n========================================\n`;
+                textBody += `SCREEN ${index + 1}\n`;
+                textBody += `========================================\n\n`;
+
+                textBody += `SCREEN SPECIFICATIONS:\n`;
+                textBody += `Track System: ${screen.trackTypeName}\n`;
+                textBody += `Operator: ${screen.operatorTypeName}\n`;
+                textBody += `Fabric Color: ${screen.fabricColorName}\n`;
+                textBody += `Frame Color: ${screen.frameColorName}\n\n`;
+
+                textBody += `FINAL MEASUREMENTS:\n`;
+                textBody += `Width (Top): ${meas.widthTop}"\n`;
+                textBody += `Width (Middle): ${meas.widthMiddle}"\n`;
+                textBody += `Width (Bottom): ${meas.widthBottom}"\n`;
+                textBody += `>>> PRODUCTION WIDTH: ${meas.selectedWidth}"\n\n`;
+
+                textBody += `Height (Left): ${meas.heightLeft}"\n`;
+                textBody += `Height (Middle): ${meas.heightMiddle}"\n`;
+                textBody += `Height (Right): ${meas.heightRight}"\n`;
+                textBody += `>>> PRODUCTION HEIGHT: ${meas.selectedHeight}"\n\n`;
+
+                textBody += `INSTALLATION DETAILS:\n`;
+                textBody += `Operator Side: ${meas.operatorSide.toUpperCase()}\n`;
+                textBody += `Mount Type: ${meas.mountType}\n`;
+                textBody += `Hem Bar Brush: ${meas.hemBarBrush}\n`;
+                textBody += `Surface Material: ${meas.surfaceMaterial}\n\n`;
 
                 if (screen.operatorType === 'gear') {
-                    emailBody += `GEAR OPERATION:\n`;
-                    emailBody += `Crank Length: ${meas.crankLength}"\n`;
-                    emailBody += `Crank Location: ${meas.crankLocation}\n\n`;
+                    htmlBody += `
+                        <h3 style="color: #333; margin-top: 20px;">GEAR OPERATION</h3>
+                        <p><strong>Crank Length:</strong> ${meas.crankLength}"</p>
+                        <p><strong>Crank Location:</strong> ${meas.crankLocation}</p>
+                    `;
+                    textBody += `GEAR OPERATION:\n`;
+                    textBody += `Crank Length: ${meas.crankLength}"\n`;
+                    textBody += `Crank Location: ${meas.crankLocation}\n\n`;
                 }
 
                 if (screen.operatorType !== 'gear') {
-                    emailBody += `MOTOR OPERATION:\n`;
-                    emailBody += `Cord Exit: ${meas.cordExit}\n\n`;
+                    htmlBody += `
+                        <h3 style="color: #333; margin-top: 20px;">MOTOR OPERATION</h3>
+                        <p><strong>Cord Exit:</strong> ${meas.cordExit}</p>
+                    `;
+                    textBody += `MOTOR OPERATION:\n`;
+                    textBody += `Cord Exit: ${meas.cordExit}\n\n`;
                 }
 
                 if (screen.trackType === 'cable') {
-                    emailBody += `CABLE SCREEN OPTIONS:\n`;
-                    emailBody += `Floor Mount: ${meas.floorMount ? 'YES' : 'NO'}\n`;
-                    emailBody += `Magnetic Locks: ${meas.magneticLocks ? 'YES' : 'NO'}\n\n`;
+                    htmlBody += `
+                        <h3 style="color: #333; margin-top: 20px;">CABLE SCREEN OPTIONS</h3>
+                        <p><strong>Floor Mount:</strong> ${meas.floorMount ? 'YES' : 'NO'}</p>
+                        <p><strong>Magnetic Locks:</strong> ${meas.magneticLocks ? 'YES' : 'NO'}</p>
+                    `;
+                    textBody += `CABLE SCREEN OPTIONS:\n`;
+                    textBody += `Floor Mount: ${meas.floorMount ? 'YES' : 'NO'}\n`;
+                    textBody += `Magnetic Locks: ${meas.magneticLocks ? 'YES' : 'NO'}\n\n`;
                 }
 
                 if (screen.operatorType === 'gaposa-rts' || screen.operatorType === 'somfy-rts') {
-                    emailBody += `RTS MOTOR:\n`;
-                    emailBody += `Distance from Power: ${meas.distanceFromPower}"\n\n`;
+                    htmlBody += `
+                        <h3 style="color: #333; margin-top: 20px;">RTS MOTOR</h3>
+                        <p><strong>Distance from Power:</strong> ${meas.distanceFromPower}"</p>
+                    `;
+                    textBody += `RTS MOTOR:\n`;
+                    textBody += `Distance from Power: ${meas.distanceFromPower}"\n\n`;
                 }
 
                 if (screen.operatorType === 'gaposa-solar') {
-                    emailBody += `SOLAR MOTOR:\n`;
-                    emailBody += `10ft Extension Cord: ${meas.extensionCord ? 'YES' : 'NO'}\n`;
-                    emailBody += `Sunlight Exposure: ${meas.sunlightExposure}\n\n`;
+                    htmlBody += `
+                        <h3 style="color: #333; margin-top: 20px;">SOLAR MOTOR</h3>
+                        <p><strong>10ft Extension Cord:</strong> ${meas.extensionCord ? 'YES' : 'NO'}</p>
+                        <p><strong>Sunlight Exposure:</strong> ${meas.sunlightExposure}</p>
+                    `;
+                    textBody += `SOLAR MOTOR:\n`;
+                    textBody += `10ft Extension Cord: ${meas.extensionCord ? 'YES' : 'NO'}\n`;
+                    textBody += `Sunlight Exposure: ${meas.sunlightExposure}\n\n`;
                 }
 
                 const flags = [];
@@ -872,29 +957,74 @@
                 if (meas.complicatedInstall) flags.push('Complicated Installation');
 
                 if (flags.length > 0) {
-                    emailBody += `INSTALLATION FLAGS:\n`;
-                    flags.forEach(flag => emailBody += `⚠ ${flag}\n`);
-                    emailBody += `\n`;
+                    htmlBody += `
+                        <h3 style="color: #dc3545; margin-top: 20px;">⚠ INSTALLATION FLAGS</h3>
+                        <ul style="color: #dc3545;">
+                    `;
+                    flags.forEach(flag => {
+                        htmlBody += `<li>${flag}</li>`;
+                        textBody += `⚠ ${flag}\n`;
+                    });
+                    htmlBody += `</ul>`;
+                    textBody += `\n`;
                 }
 
                 if (meas.screenComments) {
-                    emailBody += `SCREEN NOTES:\n${meas.screenComments}\n\n`;
+                    htmlBody += `
+                        <h3 style="color: #333; margin-top: 20px;">SCREEN NOTES</h3>
+                        <p style="background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107;">${meas.screenComments}</p>
+                    `;
+                    textBody += `SCREEN NOTES:\n${meas.screenComments}\n\n`;
                 }
+
+                htmlBody += `</div>`;
             });
 
             if (productionComments) {
-                emailBody += `\n========================================\n`;
-                emailBody += `GENERAL PRODUCTION COMMENTS:\n`;
-                emailBody += `${productionComments}\n`;
+                htmlBody += `
+                    <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 20px; margin: 20px 0;">
+                        <h2 style="color: #856404; margin-top: 0;">GENERAL PRODUCTION COMMENTS</h2>
+                        <p>${productionComments}</p>
+                    </div>
+                `;
+                textBody += `\n========================================\n`;
+                textBody += `GENERAL PRODUCTION COMMENTS:\n`;
+                textBody += `${productionComments}\n`;
             }
 
-            // Create mailto link
+            htmlBody += `</div>`;
+
+            // Send email via Resend API
             const subject = `Production Order - ${orderData.customerName}`;
-            const mailtoLink = `mailto:production@rollashield.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
 
-            window.location.href = mailtoLink;
+            try {
+                const response = await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer re_NDCEdtkX_AHv2WXvieWZZWf9KXZGK6cra',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        from: 'Roll-A-Shield Production <onboarding@resend.dev>',
+                        to: ['derek@rollashield.com'],
+                        subject: subject,
+                        html: htmlBody,
+                        text: textBody
+                    })
+                });
 
-            alert('Email template opened! Please review and send.');
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert('✅ Production order email sent successfully to derek@rollashield.com!');
+                } else {
+                    console.error('Resend API error:', result);
+                    alert('❌ Failed to send email: ' + (result.message || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error sending email:', error);
+                alert('❌ Failed to send email. Please check your internet connection and try again.');
+            }
         }
     </script>
 </body>
