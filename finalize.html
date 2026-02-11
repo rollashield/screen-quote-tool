@@ -522,7 +522,7 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Hem Bar Brush Size *</label>
+                            <label>Hem Bar Brush Size * <span id="brushSlopeWarning" style="color: red; font-weight: bold; font-size: 0.85em; display: none;">Increased Automatically Due to Slope</span></label>
                             <select id="hemBarBrush" required>
                                 <option value="0.5" ${!saved.hemBarBrush || saved.hemBarBrush === '0.5' ? 'selected' : ''}>0.5"</option>
                                 <option value="1" ${saved.hemBarBrush === '1' ? 'selected' : ''}>1"</option>
@@ -692,6 +692,25 @@
             document.getElementById('checkHeightLeft').classList.toggle('selected', left === max && left !== -Infinity);
             document.getElementById('checkHeightMiddle').classList.toggle('selected', middle === max && middle !== -Infinity);
             document.getElementById('checkHeightRight').classList.toggle('selected', right === max && right !== -Infinity);
+
+            // Auto-adjust brush size based on height slope
+            const values = [left, middle, right].filter(v => v !== -Infinity);
+            const brushSelect = document.getElementById('hemBarBrush');
+            const warning = document.getElementById('brushSlopeWarning');
+            if (values.length >= 2 && brushSelect && warning) {
+                const heightMax = Math.max(...values);
+                const heightMin = Math.min(...values);
+                const diff = heightMax - heightMin;
+                if (diff > 1) {
+                    brushSelect.value = '1.5';
+                    warning.style.display = 'inline';
+                } else if (diff > 0.5) {
+                    brushSelect.value = '1';
+                    warning.style.display = 'inline';
+                } else {
+                    warning.style.display = 'none';
+                }
+            }
         }
 
         function saveCurrentScreen() {

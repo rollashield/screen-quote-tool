@@ -1830,14 +1830,14 @@
                             <h2 style="margin: 0 0 15px 0; font-size: 20px;">Pricing</h2>
                             <div style="display: flex; justify-content: space-between; margin: 10px 0;">
                                 <span>Materials Subtotal:</span>
-                                <span style="font-weight: bold;">$${orderData.totalMaterialsPrice.toFixed(2)}</span>
+                                <span style="font-weight: bold;">$${orderData.orderTotalMaterialsPrice.toFixed(2)}</span>
                             </div>
             `;
 
-            if (orderData.discountPercentage > 0) {
+            if (orderData.discountPercent > 0) {
                 htmlBody += `
                     <div style="display: flex; justify-content: space-between; margin: 10px 0; color: #90EE90;">
-                        <span>${orderData.discountLabel || 'Discount'} (${orderData.discountPercentage}%):</span>
+                        <span>${orderData.discountLabel || 'Discount'} (${orderData.discountPercent}%):</span>
                         <span style="font-weight: bold;">-$${orderData.discountAmount.toFixed(2)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin: 10px 0;">
@@ -1850,11 +1850,11 @@
             htmlBody += `
                             <div style="display: flex; justify-content: space-between; margin: 10px 0;">
                                 <span>Installation:</span>
-                                <span style="font-weight: bold;">$${orderData.totalInstallationPrice.toFixed(2)}</span>
+                                <span style="font-weight: bold;">$${orderData.orderTotalInstallationPrice.toFixed(2)}</span>
                             </div>
                             <div style="border-top: 2px solid white; margin-top: 15px; padding-top: 15px; display: flex; justify-content: space-between; font-size: 24px;">
                                 <span>Grand Total:</span>
-                                <span style="font-weight: bold;">$${orderData.totalPrice.toFixed(2)}</span>
+                                <span style="font-weight: bold;">$${orderData.orderTotalPrice.toFixed(2)}</span>
                             </div>
                         </div>
 
@@ -1885,13 +1885,13 @@
             });
 
             textBody += `PRICING\n`;
-            textBody += `Materials Subtotal: $${orderData.totalMaterialsPrice.toFixed(2)}\n`;
-            if (orderData.discountPercentage > 0) {
-                textBody += `${orderData.discountLabel || 'Discount'} (${orderData.discountPercentage}%): -$${orderData.discountAmount.toFixed(2)}\n`;
+            textBody += `Materials Subtotal: $${orderData.orderTotalMaterialsPrice.toFixed(2)}\n`;
+            if (orderData.discountPercent > 0) {
+                textBody += `${orderData.discountLabel || 'Discount'} (${orderData.discountPercent}%): -$${orderData.discountAmount.toFixed(2)}\n`;
                 textBody += `Discounted Materials: $${orderData.discountedMaterialsPrice.toFixed(2)}\n`;
             }
-            textBody += `Installation: $${orderData.totalInstallationPrice.toFixed(2)}\n`;
-            textBody += `GRAND TOTAL: $${orderData.totalPrice.toFixed(2)}\n\n`;
+            textBody += `Installation: $${orderData.orderTotalInstallationPrice.toFixed(2)}\n`;
+            textBody += `GRAND TOTAL: $${orderData.orderTotalPrice.toFixed(2)}\n\n`;
             textBody += `This quote is valid for 30 days.\n\nBest regards,\nRoll-A-Shield Team`;
 
             // Send via Cloudflare Worker
