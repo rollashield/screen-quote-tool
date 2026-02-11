@@ -336,6 +336,9 @@
     </div>
 
     <script>
+        // Configuration
+        const WORKER_URL = 'https://rollashield-quote-worker.derek-44b.workers.dev';
+
         // Load order data from localStorage
         let orderData = null;
         let finalMeasurements = {};
@@ -994,14 +997,19 @@
 
             htmlBody += `</div>`;
 
-            // Send email via Resend API
+            // Send email via Cloudflare Worker
             const subject = `Production Order - ${orderData.customerName}`;
+            const completeButton = document.getElementById('completeButton');
+            
+            if (completeButton) {
+                completeButton.disabled = true;
+                completeButton.textContent = 'Sending Email...';
+            }
 
             try {
-                const response = await fetch('https://api.resend.com/emails', {
+                const response = await fetch(`${WORKER_URL}/api/send-email`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': 'Bearer re_NDCEdtkX_AHv2WXvieWZZWf9KXZGK6cra',
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -1015,15 +1023,20 @@
 
                 const result = await response.json();
 
-                if (response.ok) {
-                    alert('✅ Production order email sent successfully to derek@rollashield.com!');
+                if (response.ok && result.success) {
+                    alert(`✅ Production order email sent successfully to derek@rollashield.com!\n\nEmail ID: ${result.emailId}`);
                 } else {
-                    console.error('Resend API error:', result);
-                    alert('❌ Failed to send email: ' + (result.message || 'Unknown error'));
+                    console.error('Email API error:', result);
+                    alert('❌ Failed to send email: ' + (result.error || 'Unknown error'));
                 }
             } catch (error) {
                 console.error('Error sending email:', error);
-                alert('❌ Failed to send email. Please check your internet connection and try again.');
+                alert('❌ Failed to send email. Please check your internet connection and try again.\n\nError: ' + error.message);
+            } finally {
+                if (completeButton) {
+                    completeButton.disabled = false;
+                    completeButton.textContent = 'Generate Production Email';
+                }
             }
         }
     </script>

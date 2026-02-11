@@ -757,6 +757,9 @@
     </div>
 
     <script>
+        // Configuration
+        const WORKER_URL = 'https://rollashield-quote-worker.derek-44b.workers.dev';
+
         // Pricing Data
         const SUNAIR_DISCOUNT = 0.20;
         const CUSTOMER_MARKUP = 1.8;
@@ -1891,12 +1894,17 @@
             textBody += `GRAND TOTAL: $${orderData.totalPrice.toFixed(2)}\n\n`;
             textBody += `This quote is valid for 30 days.\n\nBest regards,\nRoll-A-Shield Team`;
 
-            // Send via Resend
+            // Send via Cloudflare Worker
+            const emailButton = document.querySelector('button[onclick="emailQuote()"]');
+            if (emailButton) {
+                emailButton.disabled = true;
+                emailButton.textContent = 'Sending...';
+            }
+
             try {
-                const response = await fetch('https://api.resend.com/emails', {
+                const response = await fetch(`${WORKER_URL}/api/send-email`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': 'Bearer re_NDCEdtkX_AHv2WXvieWZZWf9KXZGK6cra',
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -1911,15 +1919,20 @@
 
                 const result = await response.json();
 
-                if (response.ok) {
-                    alert(`✅ Quote sent successfully to ${customerEmail}!`);
+                if (response.ok && result.success) {
+                    alert(`✅ Quote sent successfully to ${customerEmail}!\n\nEmail ID: ${result.emailId}`);
                 } else {
-                    console.error('Resend API error:', result);
-                    alert('❌ Failed to send email: ' + (result.message || 'Unknown error'));
+                    console.error('Email API error:', result);
+                    alert('❌ Failed to send email: ' + (result.error || 'Unknown error'));
                 }
             } catch (error) {
                 console.error('Error sending email:', error);
-                alert('❌ Failed to send email. Please check your internet connection and try again.');
+                alert('❌ Failed to send email. Please check your internet connection and try again.\n\nError: ' + error.message);
+            } finally {
+                if (emailButton) {
+                    emailButton.disabled = false;
+                    emailButton.textContent = 'Email Quote';
+                }
             }
         }
 
