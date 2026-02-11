@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finalize Project Details - Roll-A-Shield</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 15px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0056A3 0%, #003D7A 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.6rem;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }
+
+        .nav-buttons {
+            padding: 15px 20px;
+            background: #f0f4f8;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .nav-buttons button {
+            background: #0056A3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 10px;
+        }
+
+        .nav-buttons button:hover {
+            background: #003D7A;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .project-info {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .project-info h3 {
+            color: #0056A3;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .screen-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .screen-card {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .screen-card:hover {
+            border-color: #0056A3;
+            box-shadow: 0 2px 8px rgba(0, 86, 163, 0.2);
+        }
+
+        .screen-card.active {
+            border-color: #0056A3;
+            background: #f0f7ff;
+        }
+
+        .screen-card.completed {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+
+        .screen-card h4 {
+            color: #0056A3;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .screen-card .status {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .screen-card.completed .status {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .measurement-form {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 20px;
+            display: none;
+        }
+
+        .measurement-form.active {
+            display: block;
+        }
+
+        .form-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .form-section h3 {
+            color: #0056A3;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            border-bottom: 2px solid #0056A3;
+            padding-bottom: 8px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+            font-size: 0.85rem;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 8px 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #0056A3;
+        }
+
+        .measurement-group {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .measurement-input {
+            flex: 1;
+        }
+
+        .checkmark-indicator {
+            color: #28a745;
+            font-size: 1.2rem;
+            font-weight: bold;
+            visibility: hidden;
+            margin-left: 5px;
+        }
+
+        .checkmark-indicator.selected {
+            visibility: visible;
+        }
+
+        .quote-reference {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        .quote-reference strong {
+            color: #856404;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .save-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+
+        .save-button:hover {
+            background: #218838;
+        }
+
+        .complete-button {
+            background: #0056A3;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-top: 30px;
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .complete-button:hover {
+            background: #003D7A;
+        }
+
+        .complete-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Finalize Project Details</h1>
+            <p>Final Measurements & Production Details</p>
+        </div>
+
+        <div class="nav-buttons">
+            <button onclick="window.location.href='index.html'">← Back to Quote</button>
+        </div>
+
+        <div class="content">
+            <!-- Project Info -->
+            <div class="project-info" id="projectInfo">
+                <h3>Project Information</h3>
+                <div id="projectDetails">Loading...</div>
+            </div>
+
+            <!-- Screen Selection -->
+            <h2 style="color: #0056A3; margin-bottom: 15px;">Select Screen to Finalize:</h2>
+            <div class="screen-list" id="screenList">
+                <!-- Screen cards will be populated here -->
+            </div>
+
+            <!-- Measurement Form -->
+            <div class="measurement-form" id="measurementForm">
+                <!-- Form will be populated dynamically -->
+            </div>
+
+            <!-- Production Comments -->
+            <div class="form-section">
+                <h3>Production Comments</h3>
+                <textarea id="productionComments" rows="4" style="width: 100%;" placeholder="Any additional notes for the production team..."></textarea>
+            </div>
+
+            <!-- Complete Button -->
+            <button class="complete-button" id="completeButton" disabled>Generate Production Email</button>
+        </div>
+    </div>
+
+    <script>
+        // Load order data from localStorage
+        let orderData = null;
+        let finalMeasurements = {};
+        let currentScreenIndex = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadOrderData();
+            loadSavedMeasurements();
+            displayProjectInfo();
+            displayScreenList();
+        });
+
+        function loadOrderData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('orderId');
+
+            if (!orderId) {
+                alert('No order ID provided. Returning to quote page.');
+                window.location.href = 'index.html';
+                return;
+            }
+
+            // For now, we'll load from a temporary storage key
+            // In the future, this would load from a database
+            const tempOrder = localStorage.getItem('tempOrderForFinalize');
+            if (tempOrder) {
+                orderData = JSON.parse(tempOrder);
+            } else {
+                alert('Order not found. Returning to quote page.');
+                window.location.href = 'index.html';
+            }
+        }
+
+        function loadSavedMeasurements() {
+            const saved = localStorage.getItem('finalMeasurements_' + orderData.id);
+            if (saved) {
+                finalMeasurements = JSON.parse(saved);
+            }
+        }
+
+        function saveMeasurements() {
+            localStorage.setItem('finalMeasurements_' + orderData.id, JSON.stringify(finalMeasurements));
+            checkAllScreensComplete();
+        }
+
+        function displayProjectInfo() {
+            const details = document.getElementById('projectDetails');
+            details.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    <div><strong>Customer:</strong> ${orderData.customerName}</div>
+                    ${orderData.companyName ? `<div><strong>Company:</strong> ${orderData.companyName}</div>` : ''}
+                    <div><strong>Phone:</strong> ${orderData.customerPhone || 'N/A'}</div>
+                    <div><strong>Email:</strong> ${orderData.customerEmail || 'N/A'}</div>
+                    <div><strong>Total Screens:</strong> ${orderData.screens.length}</div>
+                </div>
+            `;
+        }
+
+        function displayScreenList() {
+            const screenList = document.getElementById('screenList');
+            screenList.innerHTML = '';
+
+            orderData.screens.forEach((screen, index) => {
+                const isComplete = finalMeasurements[index] && finalMeasurements[index].complete;
+                const card = document.createElement('div');
+                card.className = 'screen-card' + (isComplete ? ' completed' : '');
+                card.onclick = () => selectScreen(index);
+
+                card.innerHTML = `
+                    <h4>Screen ${index + 1}</h4>
+                    <div style="font-size: 0.85rem; color: #666;">
+                        ${screen.trackTypeName}<br>
+                        ${screen.operatorTypeName}<br>
+                        ${screen.actualWidthDisplay} x ${screen.actualHeightDisplay}
+                    </div>
+                    <div class="status">
+                        ${isComplete ? '✓ Measurements Complete' : '○ Pending Measurements'}
+                    </div>
+                `;
+
+                screenList.appendChild(card);
+            });
+        }
+
+        function selectScreen(index) {
+            currentScreenIndex = index;
+            displayMeasurementForm(index);
+
+            // Update active state on cards
+            document.querySelectorAll('.screen-card').forEach((card, i) => {
+                card.classList.toggle('active', i === index);
+            });
+        }
+
+        function displayMeasurementForm(index) {
+            const form = document.getElementById('measurementForm');
+            const screen = orderData.screens[index];
+            const saved = finalMeasurements[index] || {};
+
+            form.innerHTML = `
+                <h2 style="color: #0056A3; margin-bottom: 15px;">Screen ${index + 1} - Final Measurements</h2>
+
+                <!-- Quote Reference -->
+                <div class="quote-reference">
+                    <strong>Original Quote Dimensions:</strong> ${screen.actualWidthDisplay} W x ${screen.actualHeightDisplay} H
+                </div>
+
+                <!-- Width Measurements -->
+                <div class="form-section">
+                    <h3>Width Measurements (System will use narrowest)</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Top Width *</label>
+                            <div class="measurement-group">
+                                <input type="number" id="widthTop" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.widthTop || ''}" required>
+                                <span class="checkmark-indicator" id="checkWidthTop">✓</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Middle Width *</label>
+                            <div class="measurement-group">
+                                <input type="number" id="widthMiddle" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.widthMiddle || ''}" required>
+                                <span class="checkmark-indicator" id="checkWidthMiddle">✓</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Bottom Width *</label>
+                            <div class="measurement-group">
+                                <input type="number" id="widthBottom" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.widthBottom || ''}" required>
+                                <span class="checkmark-indicator" id="checkWidthBottom">✓</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Height Measurements -->
+                <div class="form-section">
+                    <h3>Height Measurements (System will use tallest)</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Left Height *</label>
+                            <div class="measurement-group">
+                                <input type="number" id="heightLeft" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.heightLeft || ''}" required>
+                                <span class="checkmark-indicator" id="checkHeightLeft">✓</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Middle Height *</label>
+                            <div class="measurement-group">
+                                <input type="number" id="heightMiddle" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.heightMiddle || ''}" required>
+                                <span class="checkmark-indicator" id="checkHeightMiddle">✓</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Right Height *</label>
+                            <div class="measurement-group">
+                                <input type="number" id="heightRight" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.heightRight || ''}" required>
+                                <span class="checkmark-indicator" id="checkHeightRight">✓</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basic Details -->
+                <div class="form-section">
+                    <h3>Installation Details</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Operator Side *</label>
+                            <select id="operatorSide" required>
+                                <option value="">-- Select Side --</option>
+                                <option value="left" ${saved.operatorSide === 'left' ? 'selected' : ''}>Left</option>
+                                <option value="right" ${saved.operatorSide === 'right' ? 'selected' : ''}>Right</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Mount Type *</label>
+                            <select id="mountType" required>
+                                <option value="wall" ${!saved.mountType || saved.mountType === 'wall' ? 'selected' : ''}>Wall Mount</option>
+                                <option value="ceiling" ${saved.mountType === 'ceiling' ? 'selected' : ''}>Ceiling Mount</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Hem Bar Brush Size *</label>
+                            <select id="hemBarBrush" required>
+                                <option value="0.5" ${!saved.hemBarBrush || saved.hemBarBrush === '0.5' ? 'selected' : ''}>0.5"</option>
+                                <option value="1" ${saved.hemBarBrush === '1' ? 'selected' : ''}>1"</option>
+                                <option value="1.5" ${saved.hemBarBrush === '1.5' ? 'selected' : ''}>1.5"</option>
+                                <option value="pvc" ${saved.hemBarBrush === 'pvc' ? 'selected' : ''}>PVC Gasket</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Surface Material *</label>
+                            <select id="surfaceMaterial" required>
+                                <option value="">-- Select Material --</option>
+                                <option value="brick" ${saved.surfaceMaterial === 'brick' ? 'selected' : ''}>Brick</option>
+                                <option value="block" ${saved.surfaceMaterial === 'block' ? 'selected' : ''}>Block</option>
+                                <option value="concrete" ${saved.surfaceMaterial === 'concrete' ? 'selected' : ''}>Concrete</option>
+                                <option value="stone" ${saved.surfaceMaterial === 'stone' ? 'selected' : ''}>Stone</option>
+                                <option value="stucco" ${saved.surfaceMaterial === 'stucco' ? 'selected' : ''}>Stucco</option>
+                                <option value="wood" ${saved.surfaceMaterial === 'wood' ? 'selected' : ''}>Wood/Siding</option>
+                                <option value="steel" ${saved.surfaceMaterial === 'steel' ? 'selected' : ''}>Steel</option>
+                                <option value="aluminum" ${saved.surfaceMaterial === 'aluminum' ? 'selected' : ''}>Aluminum</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conditional Fields for Gear Operation -->
+                <div class="form-section ${screen.operatorType === 'gear' ? '' : 'hidden'}" id="gearFields">
+                    <h3>Gear Operation Details</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Length of Crank *</label>
+                            <select id="crankLength">
+                                <option value="57" ${!saved.crankLength || saved.crankLength === '57' ? 'selected' : ''}>57"</option>
+                                <option value="65" ${saved.crankLength === '65' ? 'selected' : ''}>65"</option>
+                                <option value="77" ${saved.crankLength === '77' ? 'selected' : ''}>77"</option>
+                                <option value="95" ${saved.crankLength === '95' ? 'selected' : ''}>95"</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Location of Crank *</label>
+                            <select id="crankLocation">
+                                <option value="exterior" ${!saved.crankLocation || saved.crankLocation === 'exterior' ? 'selected' : ''}>Exterior</option>
+                                <option value="interior" ${saved.crankLocation === 'interior' ? 'selected' : ''}>Interior</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conditional Fields for Motor Operation -->
+                <div class="form-section ${screen.operatorType !== 'gear' ? '' : 'hidden'}" id="motorFields">
+                    <h3>Motor Operation Details</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Cord Exit *</label>
+                            <select id="cordExit">
+                                <option value="topRear" ${!saved.cordExit || saved.cordExit === 'topRear' ? 'selected' : ''}>Top Rear</option>
+                                <option value="backTop" ${saved.cordExit === 'backTop' ? 'selected' : ''}>Back Top</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conditional Fields for Cable Screen -->
+                <div class="form-section ${screen.trackType === 'cable' ? '' : 'hidden'}" id="cableFields">
+                    <h3>Cable Screen Options</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="floorMount" ${saved.floorMount ? 'checked' : ''}>
+                        <label for="floorMount">Floor Mount</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="magneticLocks" ${saved.magneticLocks ? 'checked' : ''}>
+                        <label for="magneticLocks">Magnetic Locks</label>
+                    </div>
+                </div>
+
+                <!-- Conditional Fields for RTS Motor -->
+                <div class="form-section ${screen.operatorType === 'gaposa-rts' || screen.operatorType === 'somfy-rts' ? '' : 'hidden'}" id="rtsFields">
+                    <h3>RTS Motor Details</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Distance from Power (inches) *</label>
+                            <input type="number" id="distanceFromPower" placeholder="Inches" value="${saved.distanceFromPower || ''}" step="1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conditional Fields for Solar Motor -->
+                <div class="form-section ${screen.operatorType === 'gaposa-solar' ? '' : 'hidden'}" id="solarFields">
+                    <h3>Solar Motor Details</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="extensionCord" ${saved.extensionCord ? 'checked' : ''}>
+                        <label for="extensionCord">10ft Extension Cord</label>
+                    </div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Sunlight Exposure *</label>
+                        <select id="sunlightExposure">
+                            <option value="">-- Select Exposure --</option>
+                            <option value="extendedDirect" ${saved.sunlightExposure === 'extendedDirect' ? 'selected' : ''}>Extended Direct</option>
+                            <option value="temporaryDirect" ${saved.sunlightExposure === 'temporaryDirect' ? 'selected' : ''}>Temporary Direct</option>
+                            <option value="indirect" ${saved.sunlightExposure === 'indirect' ? 'selected' : ''}>Indirect</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Installation Flags -->
+                <div class="form-section">
+                    <h3>Installation Flags</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="tracksRecess" ${saved.tracksRecess ? 'checked' : ''}>
+                        <label for="tracksRecess">Tracks Recess-Mounted</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="lowHeadspace" ${saved.lowHeadspace ? 'checked' : ''}>
+                        <label for="lowHeadspace">&lt;6" Headspace</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="restrictedHoriz" ${saved.restrictedHoriz ? 'checked' : ''}>
+                        <label for="restrictedHoriz">Restricted Horizontal Space</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="complicatedInstall" ${saved.complicatedInstall ? 'checked' : ''}>
+                        <label for="complicatedInstall">Complicated Installation</label>
+                    </div>
+                </div>
+
+                <!-- Comments -->
+                <div class="form-section">
+                    <h3>Screen-Specific Comments</h3>
+                    <textarea id="screenComments" rows="3" style="width: 100%;" placeholder="Any notes specific to this screen...">${saved.screenComments || ''}</textarea>
+                </div>
+
+                <button class="save-button" onclick="saveCurrentScreen()">Save Measurements for Screen ${index + 1}</button>
+            `;
+
+            form.classList.add('active');
+
+            // Add event listeners for auto-selection
+            updateWidthSelection();
+            updateHeightSelection();
+
+            document.getElementById('widthTop').addEventListener('input', updateWidthSelection);
+            document.getElementById('widthMiddle').addEventListener('input', updateWidthSelection);
+            document.getElementById('widthBottom').addEventListener('input', updateWidthSelection);
+            document.getElementById('heightLeft').addEventListener('input', updateHeightSelection);
+            document.getElementById('heightMiddle').addEventListener('input', updateHeightSelection);
+            document.getElementById('heightRight').addEventListener('input', updateHeightSelection);
+        }
+
+        function updateWidthSelection() {
+            const top = parseFloat(document.getElementById('widthTop').value) || Infinity;
+            const middle = parseFloat(document.getElementById('widthMiddle').value) || Infinity;
+            const bottom = parseFloat(document.getElementById('widthBottom').value) || Infinity;
+
+            const min = Math.min(top, middle, bottom);
+
+            document.getElementById('checkWidthTop').classList.toggle('selected', top === min && top !== Infinity);
+            document.getElementById('checkWidthMiddle').classList.toggle('selected', middle === min && middle !== Infinity);
+            document.getElementById('checkWidthBottom').classList.toggle('selected', bottom === min && bottom !== Infinity);
+        }
+
+        function updateHeightSelection() {
+            const left = parseFloat(document.getElementById('heightLeft').value) || -Infinity;
+            const middle = parseFloat(document.getElementById('heightMiddle').value) || -Infinity;
+            const right = parseFloat(document.getElementById('heightRight').value) || -Infinity;
+
+            const max = Math.max(left, middle, right);
+
+            document.getElementById('checkHeightLeft').classList.toggle('selected', left === max && left !== -Infinity);
+            document.getElementById('checkHeightMiddle').classList.toggle('selected', middle === max && middle !== -Infinity);
+            document.getElementById('checkHeightRight').classList.toggle('selected', right === max && right !== -Infinity);
+        }
+
+        function saveCurrentScreen() {
+            if (currentScreenIndex === null) return;
+
+            const screen = orderData.screens[currentScreenIndex];
+
+            // Gather all measurements
+            const measurements = {
+                widthTop: parseFloat(document.getElementById('widthTop').value),
+                widthMiddle: parseFloat(document.getElementById('widthMiddle').value),
+                widthBottom: parseFloat(document.getElementById('widthBottom').value),
+                heightLeft: parseFloat(document.getElementById('heightLeft').value),
+                heightMiddle: parseFloat(document.getElementById('heightMiddle').value),
+                heightRight: parseFloat(document.getElementById('heightRight').value),
+                selectedWidth: Math.min(
+                    parseFloat(document.getElementById('widthTop').value) || Infinity,
+                    parseFloat(document.getElementById('widthMiddle').value) || Infinity,
+                    parseFloat(document.getElementById('widthBottom').value) || Infinity
+                ),
+                selectedHeight: Math.max(
+                    parseFloat(document.getElementById('heightLeft').value) || -Infinity,
+                    parseFloat(document.getElementById('heightMiddle').value) || -Infinity,
+                    parseFloat(document.getElementById('heightRight').value) || -Infinity
+                ),
+                operatorSide: document.getElementById('operatorSide').value,
+                mountType: document.getElementById('mountType').value,
+                hemBarBrush: document.getElementById('hemBarBrush').value,
+                surfaceMaterial: document.getElementById('surfaceMaterial').value,
+                screenComments: document.getElementById('screenComments').value,
+                complete: false
+            };
+
+            // Conditional fields - Gear
+            if (screen.operatorType === 'gear') {
+                measurements.crankLength = document.getElementById('crankLength').value;
+                measurements.crankLocation = document.getElementById('crankLocation').value;
+            }
+
+            // Conditional fields - Motor
+            if (screen.operatorType !== 'gear') {
+                measurements.cordExit = document.getElementById('cordExit').value;
+            }
+
+            // Conditional fields - Cable
+            if (screen.trackType === 'cable') {
+                measurements.floorMount = document.getElementById('floorMount').checked;
+                measurements.magneticLocks = document.getElementById('magneticLocks').checked;
+            }
+
+            // Conditional fields - RTS
+            if (screen.operatorType === 'gaposa-rts' || screen.operatorType === 'somfy-rts') {
+                measurements.distanceFromPower = document.getElementById('distanceFromPower').value;
+            }
+
+            // Conditional fields - Solar
+            if (screen.operatorType === 'gaposa-solar') {
+                measurements.extensionCord = document.getElementById('extensionCord').checked;
+                measurements.sunlightExposure = document.getElementById('sunlightExposure').value;
+            }
+
+            // Installation flags
+            measurements.tracksRecess = document.getElementById('tracksRecess').checked;
+            measurements.lowHeadspace = document.getElementById('lowHeadspace').checked;
+            measurements.restrictedHoriz = document.getElementById('restrictedHoriz').checked;
+            measurements.complicatedInstall = document.getElementById('complicatedInstall').checked;
+
+            // Validate required fields
+            if (!measurements.widthTop || !measurements.widthMiddle || !measurements.widthBottom ||
+                !measurements.heightLeft || !measurements.heightMiddle || !measurements.heightRight ||
+                !measurements.operatorSide || !measurements.surfaceMaterial) {
+                alert('Please fill in all required fields.');
+                return;
+            }
+
+            measurements.complete = true;
+
+            finalMeasurements[currentScreenIndex] = measurements;
+            saveMeasurements();
+            displayScreenList();
+
+            alert('Measurements saved successfully!');
+        }
+
+        function checkAllScreensComplete() {
+            const allComplete = orderData.screens.every((screen, index) =>
+                finalMeasurements[index] && finalMeasurements[index].complete
+            );
+
+            document.getElementById('completeButton').disabled = !allComplete;
+        }
+
+        document.getElementById('completeButton').addEventListener('click', function() {
+            generateProductionEmail();
+        });
+
+        function generateProductionEmail() {
+            const productionComments = document.getElementById('productionComments').value;
+
+            let emailBody = `ROLL-A-SHIELD PRODUCTION ORDER\n`;
+            emailBody += `================================\n\n`;
+
+            emailBody += `CUSTOMER INFORMATION:\n`;
+            emailBody += `Customer Name: ${orderData.customerName}\n`;
+            if (orderData.companyName) emailBody += `Company: ${orderData.companyName}\n`;
+            emailBody += `Email: ${orderData.customerEmail || 'N/A'}\n`;
+            emailBody += `Phone: ${orderData.customerPhone || 'N/A'}\n`;
+
+            if (orderData.streetAddress) {
+                emailBody += `\nPROJECT ADDRESS:\n`;
+                emailBody += `${orderData.streetAddress}\n`;
+                if (orderData.aptSuite) emailBody += `${orderData.aptSuite}\n`;
+                emailBody += `${orderData.city}, ${orderData.state} ${orderData.zipCode}\n`;
+                if (orderData.nearestIntersection) emailBody += `Nearest Intersection: ${orderData.nearestIntersection}\n`;
+            }
+
+            emailBody += `\n\n`;
+
+            orderData.screens.forEach((screen, index) => {
+                const meas = finalMeasurements[index];
+
+                emailBody += `\n========================================\n`;
+                emailBody += `SCREEN ${index + 1}\n`;
+                emailBody += `========================================\n\n`;
+
+                emailBody += `SCREEN SPECIFICATIONS:\n`;
+                emailBody += `Track System: ${screen.trackTypeName}\n`;
+                emailBody += `Operator: ${screen.operatorTypeName}\n`;
+                emailBody += `Fabric Color: ${screen.fabricColorName}\n`;
+                emailBody += `Frame Color: ${screen.frameColorName}\n\n`;
+
+                emailBody += `FINAL MEASUREMENTS:\n`;
+                emailBody += `Width (Top): ${meas.widthTop}"\n`;
+                emailBody += `Width (Middle): ${meas.widthMiddle}"\n`;
+                emailBody += `Width (Bottom): ${meas.widthBottom}" ${meas.selectedWidth === meas.widthBottom ? '← SELECTED (Narrowest)' : ''}\n`;
+                emailBody += `>>> PRODUCTION WIDTH: ${meas.selectedWidth}"\n\n`;
+
+                emailBody += `Height (Left): ${meas.heightLeft}"\n`;
+                emailBody += `Height (Middle): ${meas.heightMiddle}"\n`;
+                emailBody += `Height (Right): ${meas.heightRight}" ${meas.selectedHeight === meas.heightRight ? '← SELECTED (Tallest)' : ''}\n`;
+                emailBody += `>>> PRODUCTION HEIGHT: ${meas.selectedHeight}"\n\n`;
+
+                emailBody += `INSTALLATION DETAILS:\n`;
+                emailBody += `Operator Side: ${meas.operatorSide.toUpperCase()}\n`;
+                emailBody += `Mount Type: ${meas.mountType}\n`;
+                emailBody += `Hem Bar Brush: ${meas.hemBarBrush}\n`;
+                emailBody += `Surface Material: ${meas.surfaceMaterial}\n\n`;
+
+                if (screen.operatorType === 'gear') {
+                    emailBody += `GEAR OPERATION:\n`;
+                    emailBody += `Crank Length: ${meas.crankLength}"\n`;
+                    emailBody += `Crank Location: ${meas.crankLocation}\n\n`;
+                }
+
+                if (screen.operatorType !== 'gear') {
+                    emailBody += `MOTOR OPERATION:\n`;
+                    emailBody += `Cord Exit: ${meas.cordExit}\n\n`;
+                }
+
+                if (screen.trackType === 'cable') {
+                    emailBody += `CABLE SCREEN OPTIONS:\n`;
+                    emailBody += `Floor Mount: ${meas.floorMount ? 'YES' : 'NO'}\n`;
+                    emailBody += `Magnetic Locks: ${meas.magneticLocks ? 'YES' : 'NO'}\n\n`;
+                }
+
+                if (screen.operatorType === 'gaposa-rts' || screen.operatorType === 'somfy-rts') {
+                    emailBody += `RTS MOTOR:\n`;
+                    emailBody += `Distance from Power: ${meas.distanceFromPower}"\n\n`;
+                }
+
+                if (screen.operatorType === 'gaposa-solar') {
+                    emailBody += `SOLAR MOTOR:\n`;
+                    emailBody += `10ft Extension Cord: ${meas.extensionCord ? 'YES' : 'NO'}\n`;
+                    emailBody += `Sunlight Exposure: ${meas.sunlightExposure}\n\n`;
+                }
+
+                const flags = [];
+                if (meas.tracksRecess) flags.push('Tracks Recess-Mounted');
+                if (meas.lowHeadspace) flags.push('<6" Headspace');
+                if (meas.restrictedHoriz) flags.push('Restricted Horizontal Space');
+                if (meas.complicatedInstall) flags.push('Complicated Installation');
+
+                if (flags.length > 0) {
+                    emailBody += `INSTALLATION FLAGS:\n`;
+                    flags.forEach(flag => emailBody += `⚠ ${flag}\n`);
+                    emailBody += `\n`;
+                }
+
+                if (meas.screenComments) {
+                    emailBody += `SCREEN NOTES:\n${meas.screenComments}\n\n`;
+                }
+            });
+
+            if (productionComments) {
+                emailBody += `\n========================================\n`;
+                emailBody += `GENERAL PRODUCTION COMMENTS:\n`;
+                emailBody += `${productionComments}\n`;
+            }
+
+            // Create mailto link
+            const subject = `Production Order - ${orderData.customerName}`;
+            const mailtoLink = `mailto:production@rollashield.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+
+            window.location.href = mailtoLink;
+
+            alert('Email template opened! Please review and send.');
+        }
+    </script>
+</body>
+</html>

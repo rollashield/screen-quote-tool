@@ -744,6 +744,7 @@
                     <button class="btn-success" onclick="saveQuote()">Save Quote</button>
                     <button class="btn-secondary" onclick="generatePDF()">Download PDF</button>
                     <button class="btn-secondary" onclick="emailQuote()">Email Quote</button>
+                    <button class="btn-primary" onclick="finalizeProjectDetails()" style="background: #28a745; margin-top: 10px; width: 100%; font-weight: 600;">🎯 Finalize Project Details</button>
                 </div>
             </div>
 
@@ -1753,6 +1754,20 @@
             }, 1000);
         }
 
+        function finalizeProjectDetails() {
+            // Check if order has been calculated
+            if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
+                alert('Please calculate an order quote first before finalizing project details.');
+                return;
+            }
+
+            // Store order data temporarily for the finalize page
+            localStorage.setItem('tempOrderForFinalize', JSON.stringify(window.currentOrderData));
+
+            // Navigate to finalize page
+            window.location.href = `finalize.html?orderId=${window.currentOrderData.id || Date.now()}`;
+        }
+
         function emailQuote() {
             const customerEmail = document.getElementById('customerEmail').value;
             const customerName = document.getElementById('customerName').value;
@@ -2334,6 +2349,9 @@
         }
 
         function displayOrderQuoteSummary(orderData) {
+            // Store order data globally for finalize page access
+            window.currentOrderData = orderData;
+
             const summaryContent = document.getElementById('summaryContent');
             const internalInfo = document.getElementById('internalInfo');
             const quoteSummary = document.getElementById('quoteSummary');
