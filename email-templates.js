@@ -51,8 +51,8 @@ async function emailQuote() {
         htmlBody += `
             <div style="border-top: 1px solid #ddd; padding-top: 15px; margin-top: 15px;">
                 <h3 style="color: #333;">Screen ${index + 1}</h3>
-                <p><strong>Track System:</strong> ${screen.trackTypeName}</p>
-                <p><strong>Operator:</strong> ${screen.operatorTypeName}</p>
+                <p><strong>Track System:</strong> ${getClientFacingTrackName(screen.trackTypeName)}</p>
+                <p><strong>Operator:</strong> ${getClientFacingOperatorName(screen.operatorType, screen.operatorTypeName)}</p>
                 <p><strong>Fabric Color:</strong> ${screen.fabricColorName}</p>
                 <p><strong>Frame Color:</strong> ${screen.frameColorName || 'Not specified'}</p>
                 <p><strong>Dimensions:</strong> ${screen.actualWidthDisplay} W x ${screen.actualHeightDisplay} H</p>
@@ -114,8 +114,8 @@ async function emailQuote() {
 
     orderData.screens.forEach((screen, index) => {
         textBody += `Screen ${index + 1}:\n`;
-        textBody += `  Track: ${screen.trackTypeName}\n`;
-        textBody += `  Operator: ${screen.operatorTypeName}\n`;
+        textBody += `  Track: ${getClientFacingTrackName(screen.trackTypeName)}\n`;
+        textBody += `  Operator: ${getClientFacingOperatorName(screen.operatorType, screen.operatorTypeName)}\n`;
         textBody += `  Fabric: ${screen.fabricColorName}\n`;
         textBody += `  Frame: ${screen.frameColorName || 'Not specified'}\n`;
         textBody += `  Size: ${screen.actualWidthDisplay} W x ${screen.actualHeightDisplay} H\n\n`;

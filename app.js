@@ -1043,6 +1043,8 @@ function calculateScreenData() {
     const trackTypeName = document.getElementById('trackType').selectedOptions[0].text;
     const operatorTypeName = document.getElementById('operatorType').selectedOptions[0].text;
     const fabricColorName = document.getElementById('fabricColor').selectedOptions[0].text;
+    const frameColor = document.getElementById('frameColor').value;
+    const frameColorName = document.getElementById('frameColor').selectedOptions[0].text;
 
     // Calculate pricing
     const screenType = `${trackType}-${operatorType}`;
@@ -1194,6 +1196,8 @@ function calculateScreenData() {
         operatorTypeName,
         fabricColor,
         fabricColorName,
+        frameColor,
+        frameColorName,
         width,
         height,
         actualWidthDisplay,
@@ -1469,6 +1473,7 @@ function calculateOrderQuote() {
 
     // Display order quote summary
     displayOrderQuoteSummary({
+        id: Date.now(),
         customerName,
         screens: enableComparison && comparisonMotor ? comparisonScreens : screensInOrder,
         orderTotalCost,
