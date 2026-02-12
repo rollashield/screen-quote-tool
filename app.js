@@ -715,9 +715,8 @@ function displayQuoteSummary(quote) {
     quoteSummary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function saveQuote() {
-    const customerName = document.getElementById('customerName').value;
-    if (!customerName) {
+async function saveQuote() {
+    if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
         alert('Please calculate a quote first');
         return;
     }
@@ -728,178 +727,190 @@ function saveQuote() {
         return;
     }
 
-    // Get current quote data
+    // Build the quote payload from currentOrderData
+    const orderData = window.currentOrderData;
     const quoteData = {
-        id: Date.now(),
-        date: new Date().toISOString(),
-        customerName: document.getElementById('customerName').value,
-        companyName: document.getElementById('companyName').value,
-        customerEmail: document.getElementById('customerEmail').value,
-        customerPhone: document.getElementById('customerPhone').value,
-        streetAddress: document.getElementById('streetAddress').value,
-        aptSuite: document.getElementById('aptSuite').value,
-        nearestIntersection: document.getElementById('nearestIntersection').value,
-        city: document.getElementById('city').value,
-        state: document.getElementById('state').value,
-        zipCode: document.getElementById('zipCode').value,
-        trackType: document.getElementById('trackType').value,
-        trackTypeName: document.getElementById('trackType').selectedOptions[0].text,
-        operatorType: document.getElementById('operatorType').value,
-        operatorTypeName: document.getElementById('operatorType').selectedOptions[0].text,
-        fabricColor: document.getElementById('fabricColor').value,
-        fabricColorName: document.getElementById('fabricColor').selectedOptions[0].text,
-        frameColor: document.getElementById('frameColor').value,
-        frameColorName: document.getElementById('frameColor').selectedOptions[0].text,
-        widthInches: document.getElementById('widthInches').value,
-        widthFraction: document.getElementById('widthFraction').value,
-        heightInches: document.getElementById('heightInches').value,
-        heightFraction: document.getElementById('heightFraction').value,
-        noTracks: document.getElementById('noTracks').checked,
-        includeInstallation: document.getElementById('includeInstallation').checked,
-        accessories: Array.from(document.querySelectorAll('.accessory-item input[type="checkbox"]:checked'))
-            .map(cb => ({id: cb.id, name: cb.nextElementSibling.textContent})),
-        summaryHTML: document.getElementById('summaryContent').innerHTML,
-        internalHTML: document.getElementById('internalInfo').innerHTML
+        id: orderData.id.toString(),
+        customerName: orderData.customerName,
+        companyName: orderData.companyName || '',
+        customerEmail: orderData.customerEmail || '',
+        customerPhone: orderData.customerPhone || '',
+        streetAddress: orderData.streetAddress || '',
+        aptSuite: orderData.aptSuite || '',
+        nearestIntersection: orderData.nearestIntersection || '',
+        city: orderData.city || '',
+        state: orderData.state || '',
+        zipCode: orderData.zipCode || '',
+        screens: orderData.screens,
+        orderTotalPrice: orderData.orderTotalPrice,
+        orderTotalMaterialsPrice: orderData.orderTotalMaterialsPrice,
+        orderTotalInstallationPrice: orderData.orderTotalInstallationPrice,
+        orderTotalInstallationCost: orderData.orderTotalInstallationCost,
+        orderTotalCost: orderData.orderTotalCost,
+        totalProfit: orderData.totalProfit,
+        marginPercent: orderData.marginPercent,
+        hasCableScreen: orderData.hasCableScreen,
+        totalScreenCosts: orderData.totalScreenCosts,
+        totalMotorCosts: orderData.totalMotorCosts,
+        totalAccessoriesCosts: orderData.totalAccessoriesCosts,
+        totalCableSurcharge: orderData.totalCableSurcharge,
+        discountPercent: orderData.discountPercent,
+        discountLabel: orderData.discountLabel,
+        discountAmount: orderData.discountAmount,
+        discountedMaterialsPrice: orderData.discountedMaterialsPrice,
+        enableComparison: orderData.enableComparison,
+        comparisonMotor: orderData.comparisonMotor,
+        comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
+        comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
+        comparisonTotalPrice: orderData.comparisonTotalPrice
     };
 
-    // Save to localStorage
-    let savedQuotes = JSON.parse(localStorage.getItem('screenQuotes') || '[]');
-    savedQuotes.unshift(quoteData);
-    localStorage.setItem('screenQuotes', JSON.stringify(savedQuotes));
+    try {
+        const response = await fetch(`${WORKER_URL}/api/save-quote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(quoteData)
+        });
 
-    alert('Quote saved successfully!');
-    loadSavedQuotes();
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            alert('Quote saved successfully!');
+            loadSavedQuotes();
+        } else {
+            alert('Failed to save quote: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error saving quote:', error);
+        alert('Failed to save quote. Please check your internet connection.\n\nError: ' + error.message);
+    }
 }
 
-function loadSavedQuotes() {
-    const savedQuotes = JSON.parse(localStorage.getItem('screenQuotes') || '[]');
+async function loadSavedQuotes() {
     const savedQuotesList = document.getElementById('savedQuotesList');
+    savedQuotesList.innerHTML = '<p style="color: #666;">Loading quotes...</p>';
 
-    if (savedQuotes.length === 0) {
-        savedQuotesList.innerHTML = '<p style="color: #666;">No saved quotes yet.</p>';
-        return;
-    }
+    try {
+        const response = await fetch(`${WORKER_URL}/api/quotes`);
+        const result = await response.json();
 
-    let html = '';
-    savedQuotes.forEach(quote => {
-        const date = new Date(quote.date).toLocaleDateString();
-        const displayTrack = quote.trackTypeName || 'N/A';
-        const displayOperator = quote.operatorTypeName || 'N/A';
-
-        let displaySize;
-        if (quote.widthInches !== undefined) {
-            const totalWidth = parseFloat(quote.widthInches) + parseFraction(quote.widthFraction || '');
-            const totalHeight = parseFloat(quote.heightInches) + parseFraction(quote.heightFraction || '');
-            displaySize = `${inchesToFeetAndInches(totalWidth)} x ${inchesToFeetAndInches(totalHeight)}`;
-        } else if (quote.widthFeet !== undefined) {
-            // Legacy format
-            displaySize = `${quote.widthFeet}' ${quote.widthInches}" x ${quote.heightFeet}' ${quote.heightInches}"`;
-        } else {
-            displaySize = 'N/A';
+        if (!response.ok || !result.success) {
+            savedQuotesList.innerHTML = '<p style="color: #c00;">Failed to load quotes.</p>';
+            return;
         }
 
-        html += `
-            <div class="quote-card">
-                <h4>${quote.customerName}</h4>
-                <p><strong>Date:</strong> ${date}</p>
-                <p><strong>Track:</strong> ${displayTrack}</p>
-                <p><strong>Operator:</strong> ${displayOperator}</p>
-                <p><strong>Size:</strong> ${displaySize}</p>
-                <div class="quote-card-actions">
-                    <button class="btn-primary" onclick="loadQuote(${quote.id})">Load</button>
-                    <button class="btn-secondary" onclick="deleteQuote(${quote.id})">Delete</button>
+        const quotes = result.quotes;
+
+        if (!quotes || quotes.length === 0) {
+            savedQuotesList.innerHTML = '<p style="color: #666;">No saved quotes yet.</p>';
+            return;
+        }
+
+        let html = '';
+        quotes.forEach(quote => {
+            const date = new Date(quote.created_at).toLocaleDateString();
+            const screenCount = quote.screen_count || 0;
+            const totalPrice = quote.total_price ? formatCurrency(quote.total_price) : 'N/A';
+
+            html += `
+                <div class="quote-card">
+                    <h4>${quote.customer_name}</h4>
+                    <p><strong>Date:</strong> ${date}</p>
+                    <p><strong>Screens:</strong> ${screenCount}</p>
+                    <p><strong>Total:</strong> ${totalPrice}</p>
+                    <div class="quote-card-actions">
+                        <button class="btn-primary" onclick="loadQuote('${quote.id}')">Load</button>
+                        <button class="btn-secondary" onclick="deleteQuote('${quote.id}')">Delete</button>
+                    </div>
                 </div>
-            </div>
-        `;
-    });
-
-    savedQuotesList.innerHTML = html;
-}
-
-function loadQuote(quoteId) {
-    const savedQuotes = JSON.parse(localStorage.getItem('screenQuotes') || '[]');
-    const quote = savedQuotes.find(q => q.id === quoteId);
-
-    if (!quote) return;
-
-    // Populate form
-    document.getElementById('customerName').value = quote.customerName;
-    document.getElementById('companyName').value = quote.companyName || '';
-    document.getElementById('customerEmail').value = quote.customerEmail || '';
-    document.getElementById('customerPhone').value = quote.customerPhone || '';
-    document.getElementById('streetAddress').value = quote.streetAddress || '';
-    document.getElementById('aptSuite').value = quote.aptSuite || '';
-    document.getElementById('nearestIntersection').value = quote.nearestIntersection || '';
-    document.getElementById('city').value = quote.city || '';
-    document.getElementById('state').value = quote.state || '';
-    document.getElementById('zipCode').value = quote.zipCode || '';
-
-    // Show optional fields if any have values
-    if (quote.companyName || quote.aptSuite || quote.nearestIntersection) {
-        document.getElementById('optionalCustomerFields').style.display = 'block';
-        document.getElementById('toggleOptionalFields').textContent = '− Hide Addnl Fields';
-    }
-
-    // Handle new format (with trackType/operatorType) and old format (with screenType)
-    if (quote.trackType && quote.operatorType) {
-        document.getElementById('trackType').value = quote.trackType;
-        // Trigger change event to populate operator options
-        document.getElementById('trackType').dispatchEvent(new Event('change'));
-        setTimeout(() => {
-            document.getElementById('operatorType').value = quote.operatorType;
-            document.getElementById('operatorType').dispatchEvent(new Event('change'));
-        }, 50);
-    }
-
-    document.getElementById('fabricColor').value = quote.fabricColor;
-    document.getElementById('frameColor').value = quote.frameColor || '';
-
-    // Handle new format (inches + fractions) and old formats
-    if (quote.widthInches !== undefined && quote.heightInches !== undefined) {
-        document.getElementById('widthInches').value = quote.widthInches;
-        document.getElementById('widthFraction').value = quote.widthFraction || '';
-        document.getElementById('heightInches').value = quote.heightInches;
-        document.getElementById('heightFraction').value = quote.heightFraction || '';
-        updatePricingDimensions();
-    } else if (quote.widthFeet !== undefined) {
-        // Legacy format with feet/inches - convert to total inches
-        const totalWidth = (parseFloat(quote.widthFeet) * 12) + parseFloat(quote.widthInches || 0);
-        const totalHeight = (parseFloat(quote.heightFeet) * 12) + parseFloat(quote.heightInches || 0);
-        document.getElementById('widthInches').value = Math.floor(totalWidth);
-        document.getElementById('widthFraction').value = '';
-        document.getElementById('heightInches').value = Math.floor(totalHeight);
-        document.getElementById('heightFraction').value = '';
-        updatePricingDimensions();
-    }
-
-    document.getElementById('noTracks').checked = quote.noTracks;
-    document.getElementById('includeInstallation').checked = quote.includeInstallation;
-
-    // Check saved accessories
-    setTimeout(() => {
-        quote.accessories.forEach(acc => {
-            const checkbox = document.getElementById(acc.id);
-            if (checkbox) checkbox.checked = true;
+            `;
         });
-    }, 150);
 
-    // Display summary
-    document.getElementById('summaryContent').innerHTML = quote.summaryHTML;
-    document.getElementById('internalInfo').innerHTML = quote.internalHTML;
-    document.getElementById('quoteSummary').classList.remove('hidden');
-
-    // Scroll to top
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+        savedQuotesList.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading quotes:', error);
+        savedQuotesList.innerHTML = '<p style="color: #c00;">Failed to load quotes. Check your connection.</p>';
+    }
 }
 
-function deleteQuote(quoteId) {
+async function loadQuote(quoteId) {
+    try {
+        const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}`);
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            alert('Failed to load quote: ' + (result.error || 'Quote not found'));
+            return;
+        }
+
+        const quote = result.quote;
+
+        // Populate customer fields
+        document.getElementById('customerName').value = quote.customerName || '';
+        document.getElementById('companyName').value = quote.companyName || '';
+        document.getElementById('customerEmail').value = quote.customerEmail || '';
+        document.getElementById('customerPhone').value = quote.customerPhone || '';
+        document.getElementById('streetAddress').value = quote.streetAddress || '';
+        document.getElementById('aptSuite').value = quote.aptSuite || '';
+        document.getElementById('nearestIntersection').value = quote.nearestIntersection || '';
+        document.getElementById('city').value = quote.city || '';
+        document.getElementById('state').value = quote.state || '';
+        document.getElementById('zipCode').value = quote.zipCode || '';
+
+        // Show optional fields if any have values
+        if (quote.companyName || quote.aptSuite || quote.nearestIntersection) {
+            document.getElementById('optionalCustomerFields').style.display = 'block';
+            document.getElementById('toggleOptionalFields').textContent = '− Hide Addnl Fields';
+        }
+
+        // Restore screens into the order
+        if (quote.screens && quote.screens.length > 0) {
+            screensInOrder = quote.screens;
+            renderScreensList();
+            document.getElementById('screensInOrder').classList.remove('hidden');
+
+            // Restore discount settings
+            document.getElementById('discountPercent').value = quote.discountPercent || 0;
+            document.getElementById('discountLabel').value = quote.discountLabel || '';
+
+            // Restore comparison settings
+            if (quote.enableComparison) {
+                document.getElementById('enableComparison').checked = true;
+                document.getElementById('comparisonOptions').style.display = 'grid';
+            }
+
+            // Set currentOrderData and display the order summary
+            window.currentOrderData = quote;
+            displayOrderQuoteSummary(quote);
+        }
+
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+        console.error('Error loading quote:', error);
+        alert('Failed to load quote. Please check your internet connection.\n\nError: ' + error.message);
+    }
+}
+
+async function deleteQuote(quoteId) {
     if (!confirm('Are you sure you want to delete this quote?')) return;
 
-    let savedQuotes = JSON.parse(localStorage.getItem('screenQuotes') || '[]');
-    savedQuotes = savedQuotes.filter(q => q.id !== quoteId);
-    localStorage.setItem('screenQuotes', JSON.stringify(savedQuotes));
+    try {
+        const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}`, {
+            method: 'DELETE'
+        });
 
-    loadSavedQuotes();
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            loadSavedQuotes();
+        } else {
+            alert('Failed to delete quote: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error deleting quote:', error);
+        alert('Failed to delete quote. Please check your internet connection.\n\nError: ' + error.message);
+    }
 }
 
 function generatePDF() {
@@ -924,18 +935,70 @@ function generatePDF() {
     }, 1000);
 }
 
-function finalizeProjectDetails() {
+async function finalizeProjectDetails() {
     // Check if order has been calculated
     if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
         alert('Please calculate an order quote first before finalizing project details.');
         return;
     }
 
-    // Store order data temporarily for the finalize page
-    localStorage.setItem('tempOrderForFinalize', JSON.stringify(window.currentOrderData));
+    const orderData = window.currentOrderData;
+    const orderId = orderData.id || Date.now();
 
-    // Navigate to finalize page
-    window.location.href = `finalize.html?orderId=${window.currentOrderData.id || Date.now()}`;
+    // Save the quote to D1 before navigating
+    try {
+        const response = await fetch(`${WORKER_URL}/api/save-quote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: orderId.toString(),
+                customerName: orderData.customerName,
+                companyName: orderData.companyName || '',
+                customerEmail: orderData.customerEmail || '',
+                customerPhone: orderData.customerPhone || '',
+                streetAddress: orderData.streetAddress || '',
+                aptSuite: orderData.aptSuite || '',
+                nearestIntersection: orderData.nearestIntersection || '',
+                city: orderData.city || '',
+                state: orderData.state || '',
+                zipCode: orderData.zipCode || '',
+                screens: orderData.screens,
+                orderTotalPrice: orderData.orderTotalPrice,
+                orderTotalMaterialsPrice: orderData.orderTotalMaterialsPrice,
+                orderTotalInstallationPrice: orderData.orderTotalInstallationPrice,
+                orderTotalInstallationCost: orderData.orderTotalInstallationCost,
+                orderTotalCost: orderData.orderTotalCost,
+                totalProfit: orderData.totalProfit,
+                marginPercent: orderData.marginPercent,
+                hasCableScreen: orderData.hasCableScreen,
+                totalScreenCosts: orderData.totalScreenCosts,
+                totalMotorCosts: orderData.totalMotorCosts,
+                totalAccessoriesCosts: orderData.totalAccessoriesCosts,
+                totalCableSurcharge: orderData.totalCableSurcharge,
+                discountPercent: orderData.discountPercent,
+                discountLabel: orderData.discountLabel,
+                discountAmount: orderData.discountAmount,
+                discountedMaterialsPrice: orderData.discountedMaterialsPrice,
+                enableComparison: orderData.enableComparison,
+                comparisonMotor: orderData.comparisonMotor,
+                comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
+                comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
+                comparisonTotalPrice: orderData.comparisonTotalPrice
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            // Navigate to finalize page with orderId
+            window.location.href = `finalize.html?orderId=${orderId}`;
+        } else {
+            alert('Failed to save quote before finalizing: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error saving quote for finalize:', error);
+        alert('Failed to save quote. Please check your internet connection.\n\nError: ' + error.message);
+    }
 }
 
 
@@ -1471,10 +1534,30 @@ function calculateOrderQuote() {
         comparisonTotalPrice = comparisonDiscountedMaterialsPrice + orderTotalInstallationPrice;
     }
 
+    // Get customer contact/address fields for DB storage
+    const companyName = document.getElementById('companyName').value;
+    const customerEmail = document.getElementById('customerEmail').value;
+    const customerPhone = document.getElementById('customerPhone').value;
+    const streetAddress = document.getElementById('streetAddress').value;
+    const aptSuite = document.getElementById('aptSuite').value;
+    const nearestIntersection = document.getElementById('nearestIntersection').value;
+    const city = document.getElementById('city').value;
+    const state = document.getElementById('state').value;
+    const zipCode = document.getElementById('zipCode').value;
+
     // Display order quote summary
     displayOrderQuoteSummary({
         id: Date.now(),
         customerName,
+        companyName,
+        customerEmail,
+        customerPhone,
+        streetAddress,
+        aptSuite,
+        nearestIntersection,
+        city,
+        state,
+        zipCode,
         screens: enableComparison && comparisonMotor ? comparisonScreens : screensInOrder,
         orderTotalCost,
         orderTotalMaterialsPrice,

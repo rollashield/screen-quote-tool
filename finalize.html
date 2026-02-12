@@ -247,19 +247,20 @@
         // Configuration
         const WORKER_URL = 'https://rollashield-quote-worker.derek-44b.workers.dev';
 
-        // Load order data from localStorage
+        // Load order data from D1 cloud database
         let orderData = null;
         let finalMeasurements = {};
         let currentScreenIndex = null;
 
-        document.addEventListener('DOMContentLoaded', function() {
-            loadOrderData();
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadOrderData();
+            if (!orderData) return; // loadOrderData handles redirect
             loadSavedMeasurements();
             displayProjectInfo();
             displayScreenList();
         });
 
-        function loadOrderData() {
+        async function loadOrderData() {
             const urlParams = new URLSearchParams(window.location.search);
             const orderId = urlParams.get('orderId');
 
@@ -269,26 +270,50 @@
                 return;
             }
 
-            // For now, we'll load from a temporary storage key
-            // In the future, this would load from a database
-            const tempOrder = localStorage.getItem('tempOrderForFinalize');
-            if (tempOrder) {
-                orderData = JSON.parse(tempOrder);
-            } else {
-                alert('Order not found. Returning to quote page.');
+            try {
+                const response = await fetch(`${WORKER_URL}/api/quote/${orderId}`);
+                const result = await response.json();
+
+                if (response.ok && result.success && result.quote) {
+                    orderData = result.quote;
+                } else {
+                    alert('Order not found. Returning to quote page.');
+                    window.location.href = 'index.html';
+                }
+            } catch (error) {
+                console.error('Error loading order data:', error);
+                alert('Failed to load order data. Please check your internet connection.\n\nError: ' + error.message);
                 window.location.href = 'index.html';
             }
         }
 
         function loadSavedMeasurements() {
-            const saved = localStorage.getItem('finalMeasurements_' + orderData.id);
-            if (saved) {
-                finalMeasurements = JSON.parse(saved);
+            // Measurements are stored within the order data from D1
+            if (orderData && orderData.measurements) {
+                finalMeasurements = orderData.measurements;
             }
         }
 
-        function saveMeasurements() {
-            localStorage.setItem('finalMeasurements_' + orderData.id, JSON.stringify(finalMeasurements));
+        async function saveMeasurements() {
+            // Embed measurements into the order data and save back to D1
+            orderData.measurements = finalMeasurements;
+
+            try {
+                const response = await fetch(`${WORKER_URL}/api/save-quote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    console.error('Failed to save measurements:', result.error);
+                }
+            } catch (error) {
+                console.error('Error saving measurements:', error);
+            }
+
             checkAllScreensComplete();
         }
 

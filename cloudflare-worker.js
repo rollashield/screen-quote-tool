@@ -8,7 +8,7 @@ export default {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+          'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
         }
       });
@@ -35,6 +35,12 @@ export default {
     if (url.pathname.startsWith('/api/quote/') && request.method === 'GET') {
       const quoteId = url.pathname.split('/')[3];
       return await handleGetQuote(quoteId, env);
+    }
+
+    // Route: Delete specific quote
+    if (url.pathname.startsWith('/api/quote/') && request.method === 'DELETE') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleDeleteQuote(quoteId, env);
     }
 
     return new Response('Not Found', { status: 404 });
@@ -138,7 +144,7 @@ async function handleSaveQuote(request, env) {
       quoteData.city || null,
       quoteData.state || null,
       quoteData.zipCode || null,
-      quoteData.totalPrice || 0,
+      quoteData.orderTotalPrice || quoteData.totalPrice || 0,
       quoteData.screens?.length || 0,
       JSON.stringify(quoteData),
       timestamp,
@@ -225,6 +231,35 @@ async function handleGetQuote(quoteId, env) {
   }
 }
 
+// Delete specific quote
+async function handleDeleteQuote(quoteId, env) {
+  try {
+    if (!quoteId) {
+      return jsonResponse({ error: 'Quote ID is required' }, 400);
+    }
+
+    const result = await env.DB.prepare(`
+      DELETE FROM quotes WHERE id = ?
+    `).bind(quoteId).run();
+
+    if (result.meta.changes === 0) {
+      return jsonResponse({ error: 'Quote not found' }, 404);
+    }
+
+    return jsonResponse({
+      success: true,
+      message: 'Quote deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error in handleDeleteQuote:', error);
+    return jsonResponse({
+      success: false,
+      error: error.message
+    }, 500);
+  }
+}
+
 // Helper function for JSON responses with CORS
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -232,7 +267,7 @@ function jsonResponse(data, status = 200) {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     }
   });
