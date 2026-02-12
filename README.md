@@ -1,65 +1,122 @@
 # Roll-A-Shield Screen Quote Tool
 
-Professional quoting application for custom rolling screen installations.
+A web application for generating custom rolling screen quotes with email integration and production order management.
 
-## 🌐 Live Application
+## Features
 
-**Access the tool here:** https://[your-username].github.io/screen-quote-tool/
+### Quote Generation (index.html)
+- Multi-screen order support
+- Real-time pricing calculations
+- Discount management
+- Customer information collection
+- PDF export functionality
+- Email quotes to customers
+- Local quote storage
 
-## 📋 Features
+### Project Finalization (finalize.html)
+- Final measurement collection (3-point width/height)
+- Operator configuration (gear, motor, cable, RTS, solar)
+- Installation requirement tracking
+- Production order email generation
+- Auto-adjusting hem bar brush size based on slope
 
-- **Multi-Screen Orders** - Add multiple screens to a single quote
-- **Pricing Comparison** - Compare different motor options side-by-side
-- **Discount Management** - Apply percentage-based discounts to materials
-- **Installation Calculation** - Automatic installation pricing based on dimensions
-- **PDF Export** - Generate professional PDF quotes
-- **Save/Load Quotes** - Save quotes for later retrieval
-- **Client-Facing Output** - Clean, branded quotes without internal pricing
+### Backend (Cloudflare Worker)
+- Secure email sending via Resend API
+- Cloud quote storage in D1 database
+- CORS-compliant API endpoints
 
-## 🛠️ Product Support
+## Project Structure
 
-### Screen Types
-- Sunair Zipper Track (Manual & Motorized)
-- Sunair Cable (Manual & Motorized)
-- Fenetex Keder Track (RTS Motor included)
+```
+screen-quote-tool/
+├── index.html            # Quote generation (HTML + page-specific CSS)
+├── finalize.html         # Finalization and measurements
+├── styles.css            # Shared CSS
+├── pricing-data.js       # Pricing tables and constants
+├── app.js                # Core application logic
+├── email-templates.js    # Customer quote email generation
+├── cloudflare-worker.js  # Backend API (Cloudflare Worker)
+├── wrangler.toml         # Worker configuration
+├── d1-schema.sql         # Database schema
+├── .gitignore
+└── README.md
+```
 
-### Motor Options
-- Gaposa RTS Motor
-- Gaposa Solar Motor
-- Somfy RTS Motor
-- Manual Gear Operation
+## Technology Stack
 
-### Accessories
-- Remote controls (various types)
-- Wall-mounted controls
-- Solar extension cords
-- Digital keypads
+- **Frontend:** Vanilla HTML/CSS/JavaScript (no build tools)
+- **Backend:** Cloudflare Workers (serverless)
+- **Database:** Cloudflare D1 (SQL)
+- **Email:** Resend API
+- **Hosting:** GitHub Pages (frontend), Cloudflare (backend)
 
-## 📖 How to Use
+## Deployment
 
-1. Enter customer information
-2. Configure each screen (dimensions, track type, motor, fabric)
-3. Add accessories as needed
-4. Click "Add to Order" to add screen
-5. Repeat for additional screens
-6. Click "Calculate Order Quote" to generate final quote
-7. Export as PDF or email to customer
+### Worker (already deployed)
+The Cloudflare Worker is deployed at `rollashield-quote-worker.derek-44b.workers.dev`.
 
-## 🔄 Updates
+To redeploy after changes:
+```bash
+wrangler deploy
+```
 
-To update the application:
-1. Upload new `index.html` file to this repository
-2. GitHub Pages will automatically deploy within 1-2 minutes
+### Secrets
+Set via Cloudflare (never commit API keys):
+```bash
+wrangler secret put RESEND_API_KEY
+```
 
-## 📝 Version History
+### Frontend
+Push to `main` branch — GitHub Pages deploys automatically.
 
-- **v2.0** (2026-02-06) - Multi-screen orders, comparison feature, discount management
-- **v1.0** (Initial) - Single screen quoting
+## Email Functionality
 
-## 📞 Support
+### Customer Quote Email
+- Sent from: `Roll-A-Shield Quotes <onboarding@resend.dev>`
+- Sent to: Customer email
+- CC: derek@rollashield.com
+- Contains: Quote summary, pricing, screen details
 
-For questions or issues, contact the Roll-A-Shield technical team.
+### Production Order Email
+- Sent from: `Roll-A-Shield Production <onboarding@resend.dev>`
+- Sent to: derek@rollashield.com
+- Contains: Final measurements, installation details, operator configuration
 
----
+## API Endpoints (Cloudflare Worker)
 
-**Roll-A-Shield** | Custom Rolling Screen Solutions
+- `POST /api/send-email` — Send email via Resend
+- `POST /api/save-quote` — Save quote to D1
+- `GET /api/quotes` — List all quotes
+- `GET /api/quote/:id` — Get specific quote
+
+## Local Development
+
+```bash
+# Start local Worker
+wrangler dev
+
+# Update WORKER_URL in index.html and finalize.html to:
+# const WORKER_URL = 'http://localhost:8787';
+```
+
+## Troubleshooting
+
+### Email Not Sending
+1. Check Worker is deployed: `wrangler deployments list`
+2. Verify API key is set: `wrangler secret list`
+3. Check Worker logs: `wrangler tail`
+4. Verify `WORKER_URL` is correct in HTML files
+
+### CORS Errors
+- Make sure you're calling the Worker, not Resend directly
+- Check browser console for the specific error
+- Verify Worker is returning proper CORS headers
+
+### Database Errors
+- Verify D1 binding name is `DB` in `wrangler.toml`
+- Check database exists: `wrangler d1 list`
+- Verify schema: `wrangler d1 execute rollashield_quotes --command="SELECT * FROM quotes"`
+
+## License
+
+Internal use for Roll-A-Shield only.

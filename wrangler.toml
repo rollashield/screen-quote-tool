@@ -1,0 +1,11 @@
+name = "rollashield-quote-worker"
+main = "cloudflare-worker.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rollashield_quotes"
+database_id = "fc1e7cfe-2140-430f-a65d-7444d98e71a5"
+
+[vars]
+# Non-sensitive environment variables can go here if needed
