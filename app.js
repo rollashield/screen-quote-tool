@@ -1,0 +1,1755 @@
+/**
+ * app.js
+ * Core application logic for the Screen Quote Tool (index.html).
+ *
+ * Dependencies:
+ *   - pricing-data.js must be loaded first (provides all pricing constants/tables)
+ *   - DOM elements from index.html must exist
+ *
+ * Global state:
+ *   - screensInOrder: Array of screen objects in the current order
+ *   - editingScreenIndex: Index of screen being edited, or null
+ *   - window.currentOrderData: Set by displayOrderQuoteSummary(), read by emailQuote()
+ *
+ * ORDER DATA SHAPE (window.currentOrderData):
+ * {
+ *   customerName: string,
+ *   screens: Array<{
+ *     screenName: string,
+ *     trackType: string,              // e.g. 'sunair-zipper'
+ *     trackTypeName: string,
+ *     operatorType: string,           // e.g. 'gear', 'gaposa-rts', 'somfy-rts'
+ *     operatorTypeName: string,
+ *     fabricColor: string,
+ *     fabricColorName: string,
+ *     frameColor: string,
+ *     frameColorName: string,
+ *     actualWidthDisplay: string,     // e.g. "18' 0.5\""
+ *     actualHeightDisplay: string,
+ *     customerPrice: number,
+ *     installationPrice: number,
+ *     totalCost: number,
+ *     screenCostOnly: number,
+ *     motorCost: number,
+ *     accessoriesCost: number,
+ *     installationCost: number,
+ *     accessories: Array<{name, cost, needsMarkup}>,
+ *     isFenetex: boolean,
+ *     noTracks: boolean,
+ *     includeInstallation: boolean,
+ *     trackDeduction: number
+ *   }>,
+ *   orderTotalCost: number,
+ *   orderTotalMaterialsPrice: number,
+ *   orderTotalInstallationPrice: number,
+ *   orderTotalInstallationCost: number,
+ *   orderTotalPrice: number,          // Grand total charged to customer
+ *   totalProfit: number,
+ *   marginPercent: number,
+ *   hasCableScreen: boolean,
+ *   totalScreenCosts: number,
+ *   totalMotorCosts: number,
+ *   totalAccessoriesCosts: number,
+ *   totalCableSurcharge: number,
+ *   discountPercent: number,
+ *   discountLabel: string,
+ *   discountAmount: number,
+ *   discountedMaterialsPrice: number,
+ *   enableComparison: boolean,
+ *   comparisonMotor: string,
+ *   comparisonTotalMaterialsPrice: number,
+ *   comparisonDiscountedMaterialsPrice: number,
+ *   comparisonTotalPrice: number
+ * }
+ */
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSavedQuotes();
+
+    // Toggle optional customer fields
+    document.getElementById('toggleOptionalFields').addEventListener('click', function() {
+        const optionalFields = document.getElementById('optionalCustomerFields');
+        const isHidden = optionalFields.style.display === 'none';
+
+        if (isHidden) {
+            optionalFields.style.display = 'block';
+            this.textContent = '− Hide Addnl Fields';
+        } else {
+            optionalFields.style.display = 'none';
+            this.textContent = '+ Show Addnl Fields';
+        }
+    });
+
+    // Update operator options when track type changes
+    document.getElementById('trackType').addEventListener('change', function() {
+        const trackType = this.value;
+        const operatorSelect = document.getElementById('operatorType');
+        const noTracksGroup = document.getElementById('noTracksGroup');
+        const cableSurchargeInfo = document.getElementById('cableSurchargeInfo');
+
+        operatorSelect.innerHTML = '<option value="">-- Select Operator --</option>';
+        operatorSelect.disabled = false;
+
+        if (trackType === 'sunair-zipper') {
+            operatorSelect.innerHTML += `
+                <option value="gear">Gear Operation (Manual)</option>
+                <option value="gaposa-rts">Gaposa RTS Motor</option>
+                <option value="gaposa-solar">Gaposa Solar Motor</option>
+                <option value="somfy-rts">Somfy RTS Motor</option>
+            `;
+            noTracksGroup.style.display = 'flex';
+            cableSurchargeInfo.style.display = 'none';
+        } else if (trackType === 'sunair-cable') {
+            operatorSelect.innerHTML += `
+                <option value="gear">Gear Operation (Manual)</option>
+                <option value="gaposa-rts">Gaposa RTS Motor</option>
+                <option value="gaposa-solar">Gaposa Solar Motor</option>
+                <option value="somfy-rts">Somfy RTS Motor</option>
+            `;
+            noTracksGroup.style.display = 'none';
+            document.getElementById('noTracks').checked = false;
+            cableSurchargeInfo.style.display = 'block';
+        } else if (trackType === 'fenetex-keder') {
+            operatorSelect.innerHTML += `
+                <option value="gaposa-rts">Gaposa RTS Motor (Included)</option>
+            `;
+            noTracksGroup.style.display = 'none';
+            document.getElementById('noTracks').checked = false;
+            cableSurchargeInfo.style.display = 'none';
+        } else {
+            operatorSelect.disabled = true;
+            noTracksGroup.style.display = 'none';
+            cableSurchargeInfo.style.display = 'none';
+        }
+
+        // Clear operator selection
+        operatorSelect.value = '';
+        updateAccessories();
+    });
+
+    // Update accessories when operator type changes
+    document.getElementById('operatorType').addEventListener('change', function() {
+        updateAccessories();
+        updateComparisonOptions();
+    });
+
+    // Update pricing dimensions when measurements change
+    ['widthInches', 'widthFraction', 'heightInches', 'heightFraction'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updatePricingDimensions);
+    });
+
+    // Enable/disable comparison options
+    document.getElementById('enableComparison').addEventListener('change', function() {
+        const comparisonOptions = document.getElementById('comparisonOptions');
+        comparisonOptions.style.display = this.checked ? 'grid' : 'none';
+        if (!this.checked) {
+            document.getElementById('comparisonMotor').value = '';
+        }
+    });
+});
+
+function parseFraction(fractionStr) {
+    if (!fractionStr || fractionStr.trim() === '') return 0;
+
+    const parts = fractionStr.trim().split('/');
+    if (parts.length === 2) {
+        const numerator = parseFloat(parts[0]);
+        const denominator = parseFloat(parts[1]);
+        if (denominator !== 0 && !isNaN(numerator) && !isNaN(denominator)) {
+            return numerator / denominator;
+        }
+    }
+    return 0;
+}
+
+function inchesToFeetAndInches(totalInches) {
+    const feet = Math.floor(totalInches / 12);
+    const inches = totalInches % 12;
+
+    // Round inches to nearest 1/8
+    const roundedInches = Math.round(inches * 8) / 8;
+
+    if (roundedInches === 12) {
+        return `${feet + 1}' 0"`;
+    }
+
+    return `${feet}' ${roundedInches.toFixed(3).replace(/\.?0+$/, '')}"`;
+}
+
+function formatCurrency(amount) {
+    return '$' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function getClientFacingOperatorName(operatorType, operatorTypeName) {
+    // Remove brand names from motor descriptions for client-facing display
+    if (operatorType === 'gear') {
+        return 'Manual Gear Operation';
+    }
+    if (operatorType === 'gaposa-rts') {
+        return 'Remote-Operated Motor';
+    }
+    if (operatorType === 'gaposa-solar') {
+        return 'Solar Motor';
+    }
+    if (operatorType === 'somfy-rts') {
+        return 'Somfy Remote-Operated Motor';
+    }
+    return operatorTypeName;
+}
+
+function getClientFacingTrackName(trackTypeName) {
+    // Remove brand names from track descriptions
+    return trackTypeName.replace('Sunair ', '').replace('Fenetex ', '');
+}
+
+function updatePricingDimensions() {
+    const widthInches = parseFloat(document.getElementById('widthInches').value) || 0;
+    const widthFraction = parseFraction(document.getElementById('widthFraction').value);
+    const heightInches = parseFloat(document.getElementById('heightInches').value) || 0;
+    const heightFraction = parseFraction(document.getElementById('heightFraction').value);
+
+    const totalWidthInches = widthInches + widthFraction;
+    const totalHeightInches = heightInches + heightFraction;
+
+    if (totalWidthInches > 0 || totalHeightInches > 0) {
+        const widthDisplay = inchesToFeetAndInches(totalWidthInches);
+        const heightDisplay = inchesToFeetAndInches(totalHeightInches);
+
+        const pricingWidth = Math.round(totalWidthInches / 12);
+        const pricingHeight = Math.round(totalHeightInches / 12);
+
+        document.getElementById('pricingDimensions').textContent =
+            `${widthDisplay} W x ${heightDisplay} H (pricing based on ${pricingWidth}' x ${pricingHeight}')`;
+        document.getElementById('dimensionsSummary').style.display = 'block';
+    } else {
+        document.getElementById('dimensionsSummary').style.display = 'none';
+    }
+}
+
+function updateComparisonOptions() {
+    const operatorType = document.getElementById('operatorType').value;
+    const trackType = document.getElementById('trackType').value;
+    const comparisonMotor = document.getElementById('comparisonMotor');
+
+    comparisonMotor.innerHTML = '<option value="">-- Select Motor to Compare --</option>';
+
+    if (!trackType || !operatorType || operatorType === 'gear') {
+        return;
+    }
+
+    // Build list of alternative motors based on current selection
+    const motorOptions = [];
+
+    if (trackType === 'sunair-zipper' || trackType === 'sunair-cable') {
+        if (operatorType !== 'gaposa-rts') {
+            motorOptions.push({value: 'gaposa-rts', label: 'Remote-Operated Motor'});
+        }
+        if (operatorType !== 'gaposa-solar') {
+            motorOptions.push({value: 'gaposa-solar', label: 'Solar Motor'});
+        }
+        if (operatorType !== 'somfy-rts') {
+            motorOptions.push({value: 'somfy-rts', label: 'Somfy Remote-Operated Motor'});
+        }
+    }
+
+    motorOptions.forEach(opt => {
+        comparisonMotor.innerHTML += `<option value="${opt.value}">${opt.label}</option>`;
+    });
+}
+
+function calculateScreenWithAlternateMotor(screen, alternateMotorType) {
+    // Calculate what the screen would cost with a different motor
+    let alternateMotorCost = 0;
+
+    if (alternateMotorType === 'gaposa-rts') {
+        alternateMotorCost = motorCosts['gaposa-rts'];
+    } else if (alternateMotorType === 'gaposa-solar') {
+        alternateMotorCost = motorCosts['gaposa-solar'];
+    } else if (alternateMotorType === 'somfy-rts') {
+        alternateMotorCost = motorCosts['somfy-rts'];
+    }
+
+    // Start with screen-only cost (no motor)
+    let screenOnlyCost = screen.screenCostOnly;
+
+    // Add track deduction if applicable
+    if (screen.trackDeduction) {
+        screenOnlyCost += screen.trackDeduction;
+    }
+
+    // Add accessories cost
+    let accessoriesCost = 0;
+    screen.accessories.forEach(acc => {
+        accessoriesCost += acc.cost;
+    });
+
+    // Calculate customer price with alternate motor
+    let customerPrice = screenOnlyCost * CUSTOMER_MARKUP;
+    customerPrice += alternateMotorCost * CUSTOMER_MARKUP;
+
+    // Add back track deduction after markup
+    if (screen.trackDeduction) {
+        customerPrice += screen.trackDeduction;
+    }
+
+    // Add accessories with their proper markup
+    screen.accessories.forEach(acc => {
+        if (acc.needsMarkup) {
+            customerPrice += acc.cost * CUSTOMER_MARKUP;
+        } else {
+            customerPrice += acc.cost;
+        }
+    });
+
+    // Add installation (same for all motor types with same size/type)
+    customerPrice += screen.installationPrice;
+
+    return {
+        customerPrice: customerPrice,
+        motorCost: alternateMotorCost,
+        materialPrice: customerPrice - screen.installationPrice
+    };
+}
+
+function updateAccessories() {
+    const operatorType = document.getElementById('operatorType').value;
+    const accessoriesList = document.getElementById('accessoriesList');
+
+    let motorType = null;
+    if (operatorType === 'gaposa-rts' || operatorType === 'gaposa-solar') {
+        motorType = 'gaposa';
+    } else if (operatorType === 'somfy-rts') {
+        motorType = 'somfy';
+    }
+
+    if (!motorType) {
+        accessoriesList.innerHTML = '<p>Please select a motorized operator to see available accessories.</p>';
+        return;
+    }
+
+    let availableAccessories = accessories[motorType];
+
+    // Filter out extension cord for non-solar motors
+    if (operatorType !== 'gaposa-solar') {
+        availableAccessories = availableAccessories.filter(acc => acc.id !== 'gaposa-solar-ext');
+    }
+
+    let html = '';
+
+    availableAccessories.forEach(acc => {
+        html += `
+            <div class="accessory-item">
+                <input type="checkbox" id="${acc.id}" data-cost="${acc.cost}" data-markup="${acc.markup}" data-name="${acc.name}">
+                <label for="${acc.id}">${acc.name}</label>
+            </div>
+        `;
+    });
+
+    accessoriesList.innerHTML = html;
+}
+
+function calculateQuote() {
+    // Get form values
+    const customerName = document.getElementById('customerName').value;
+    const trackType = document.getElementById('trackType').value;
+    const operatorType = document.getElementById('operatorType').value;
+    const noTracks = document.getElementById('noTracks').checked;
+    const includeInstallation = document.getElementById('includeInstallation').checked;
+
+    // Get dimensions
+    const widthInches = parseFloat(document.getElementById('widthInches').value) || 0;
+    const widthFraction = parseFraction(document.getElementById('widthFraction').value);
+    const heightInches = parseFloat(document.getElementById('heightInches').value) || 0;
+    const heightFraction = parseFraction(document.getElementById('heightFraction').value);
+
+    // Calculate total inches and round to nearest foot for pricing
+    const totalWidthInches = widthInches + widthFraction;
+    const totalHeightInches = heightInches + heightFraction;
+    const width = Math.round(totalWidthInches / 12);
+    const height = Math.round(totalHeightInches / 12);
+
+    // Store actual dimensions for display
+    const actualWidthDisplay = inchesToFeetAndInches(totalWidthInches);
+    const actualHeightDisplay = inchesToFeetAndInches(totalHeightInches);
+
+    // Validation
+    if (!customerName || !trackType || !operatorType) {
+        alert('Please fill in all required fields (marked with *)');
+        return;
+    }
+
+    if (totalWidthInches === 0 || totalHeightInches === 0) {
+        alert('Please enter valid screen dimensions');
+        return;
+    }
+
+    // Build screen type identifier
+    const screenType = `${trackType}-${operatorType}`;
+
+    // Calculate base screen cost
+    let baseCost = 0;
+    let screenCostOnly = 0;
+    let priceData = null;
+    let motorCost = 0;
+    let isFenetex = false;
+
+    if (trackType === 'sunair-zipper') {
+        priceData = sunairZipperGear;
+    } else if (trackType === 'sunair-cable') {
+        priceData = sunairCableGear;
+        baseCost += CABLE_SURCHARGE; // Add cable surcharge
+    } else if (trackType === 'fenetex-keder') {
+        priceData = fenetexKeder;
+        isFenetex = true;
+    }
+
+    // Get screen cost from pricing matrix
+    if (priceData && priceData[width] && priceData[width][height] !== null && priceData[width][height] !== undefined) {
+        let screenCost = priceData[width][height];
+
+        // Apply Sunair discount for non-Fenetex screens
+        if (!isFenetex) {
+            screenCost = screenCost * (1 - SUNAIR_DISCOUNT);
+        }
+
+        screenCostOnly = screenCost;
+        baseCost += screenCost;
+    } else {
+        alert(`Invalid screen dimensions. No pricing available for ${width}' W x ${height}' H. Please check the size and try again.`);
+        return;
+    }
+
+    // Add motor cost for motorized options
+    if (operatorType === 'gaposa-rts') {
+        motorCost = motorCosts['gaposa-rts'];
+    } else if (operatorType === 'gaposa-solar') {
+        motorCost = motorCosts['gaposa-solar'];
+    } else if (operatorType === 'somfy-rts') {
+        motorCost = motorCosts['somfy-rts'];
+    }
+
+    // For Fenetex, RTS motor is already included in pricing
+    if (!isFenetex && motorCost > 0) {
+        baseCost += motorCost;
+    }
+
+    // Apply track deduction if selected
+    let trackDeduction = 0;
+    if (noTracks && trackDeductions[height]) {
+        trackDeduction = trackDeductions[height] * (1 - SUNAIR_DISCOUNT);
+        baseCost += trackDeduction;
+    }
+
+    // Calculate accessories cost
+    let accessoriesCost = 0;
+    const checkboxes = document.querySelectorAll('.accessory-item input[type="checkbox"]:checked');
+    checkboxes.forEach(cb => {
+        let accCost = parseFloat(cb.dataset.cost);
+        const needsDiscount = cb.dataset.markup === 'true';
+        if (needsDiscount) {
+            accCost = accCost * (1 - SUNAIR_DISCOUNT);
+        }
+        accessoriesCost += accCost;
+    });
+
+    let totalCost = baseCost + accessoriesCost;
+
+    // Apply markup to get customer price
+    let customerPrice = 0;
+    if (isFenetex) {
+        // For Fenetex, use Sunair Zipper RTS price for that size + 20%
+        const sunairScreenCost = sunairZipperGear[width] && sunairZipperGear[width][height]
+            ? sunairZipperGear[width][height] * (1 - SUNAIR_DISCOUNT)
+            : 0;
+        const sunairRTSMotor = motorCosts['gaposa-rts'];
+
+        // Apply markup: (screen * 1.8 + motor * 1.8) * 1.2
+        customerPrice = (sunairScreenCost + sunairRTSMotor) * CUSTOMER_MARKUP * FENETEX_MARKUP;
+
+        // Add accessories with their proper markup
+        checkboxes.forEach(cb => {
+            let accCost = parseFloat(cb.dataset.cost);
+            const needsMarkup = cb.dataset.markup === 'true';
+            if (needsMarkup) {
+                accCost = accCost * (1 - SUNAIR_DISCOUNT) * CUSTOMER_MARKUP;
+            }
+            customerPrice += accCost;
+        });
+    } else {
+        // Standard Sunair pricing - separate screen and motor markup
+        // Screen cost (with any cable surcharge) gets discounted and marked up
+        let screenOnlyCost = baseCost - motorCost;
+
+        // Handle track deduction
+        if (noTracks) {
+            screenOnlyCost -= trackDeduction; // Remove track deduction from markup base
+        }
+
+        // Apply 1.8x markup to screen
+        customerPrice = screenOnlyCost * CUSTOMER_MARKUP;
+
+        // Add motor with 1.8x markup (motor cost is already special price, no discount)
+        customerPrice += motorCost * CUSTOMER_MARKUP;
+
+        // Add back track deduction (negative value) after markup
+        if (noTracks) {
+            customerPrice += trackDeduction;
+        }
+
+        // Add accessories with their proper markup
+        checkboxes.forEach(cb => {
+            let accCost = parseFloat(cb.dataset.cost);
+            const needsMarkup = cb.dataset.markup === 'true';
+            if (needsMarkup) {
+                accCost = accCost * (1 - SUNAIR_DISCOUNT) * CUSTOMER_MARKUP;
+            }
+            customerPrice += accCost;
+        });
+    }
+
+    // Calculate installation
+    let installationCost = 0;
+    let installationPrice = 0;
+    if (includeInstallation) {
+        const isLarge = width >= 12;
+        const isSolar = operatorType === 'gaposa-solar';
+
+        if (isLarge) {
+            installationPrice = isSolar ? installationPricing['solar-large'] : installationPricing['rts-large'];
+        } else {
+            installationPrice = isSolar ? installationPricing['solar-small'] : installationPricing['rts-small'];
+        }
+
+        installationCost = installationPrice * 0.7; // Cost to company (70% to installer)
+        customerPrice += installationPrice;
+    }
+
+    const totalProfit = customerPrice - totalCost - installationCost;
+    const marginPercent = (totalProfit / customerPrice) * 100;
+
+    // Display quote summary
+    displayQuoteSummary({
+        customerName,
+        trackType,
+        operatorType,
+        screenType,
+        width,
+        height,
+        actualWidthDisplay,
+        actualHeightDisplay,
+        noTracks,
+        includeInstallation,
+        screenCostOnly,
+        motorCost,
+        baseCost,
+        accessoriesCost,
+        totalCost,
+        installationCost,
+        installationPrice,
+        customerPrice,
+        totalProfit,
+        marginPercent,
+        isFenetex
+    });
+}
+
+function displayQuoteSummary(quote) {
+    const summaryContent = document.getElementById('summaryContent');
+    const internalInfo = document.getElementById('internalInfo');
+    const quoteSummary = document.getElementById('quoteSummary');
+
+    const trackTypeName = document.getElementById('trackType').selectedOptions[0].text;
+    const operatorTypeName = document.getElementById('operatorType').selectedOptions[0].text;
+    const fabricColor = document.getElementById('fabricColor').selectedOptions[0].text;
+
+    // Build address display
+    let addressParts = [];
+    if (quote.streetAddress) addressParts.push(quote.streetAddress);
+    if (quote.aptSuite) addressParts.push(quote.aptSuite);
+    const addressLine1 = addressParts.join(', ');
+
+    let cityStateZip = [];
+    if (quote.city) cityStateZip.push(quote.city);
+    if (quote.state) cityStateZip.push(quote.state);
+    const addressLine2 = cityStateZip.join(', ');
+    if (quote.zipCode) addressLine2 ? addressLine2 += ' ' + quote.zipCode : quote.zipCode;
+
+    const fullAddress = [addressLine1, addressLine2].filter(x => x).join('<br>');
+
+    // Customer-facing summary
+    let customerHTML = `
+        <div class="summary-row">
+            <strong>Customer:</strong>
+            <span>${quote.customerName}${quote.companyName ? ' (' + quote.companyName + ')' : ''}</span>
+        </div>
+        ${fullAddress ? `<div class="summary-row">
+            <strong>Project Address:</strong>
+            <span>${fullAddress}</span>
+        </div>` : ''}
+        ${quote.nearestIntersection ? `<div class="summary-row">
+            <strong>Nearest Intersection:</strong>
+            <span>${quote.nearestIntersection}</span>
+        </div>` : ''}
+        <div class="summary-row">
+            <strong>Track System:</strong>
+            <span>${trackTypeName}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Operator:</strong>
+            <span>${operatorTypeName}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Fabric Color:</strong>
+            <span>${fabricColor}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Frame Color:</strong>
+            <span>${quote.frameColorName || 'Not specified'}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Dimensions:</strong>
+            <span>${quote.actualWidthDisplay} W x ${quote.actualHeightDisplay} H</span>
+        </div>
+    `;
+
+    if (quote.noTracks) {
+        customerHTML += `
+            <div class="summary-row">
+                <strong>Configuration:</strong>
+                <span>No Tracks</span>
+            </div>
+        `;
+    }
+
+    const selectedAccessories = Array.from(document.querySelectorAll('.accessory-item input[type="checkbox"]:checked'))
+        .map(cb => cb.nextElementSibling.textContent);
+
+    if (selectedAccessories.length > 0) {
+        customerHTML += `
+            <div class="summary-row">
+                <strong>Accessories:</strong>
+                <span>${selectedAccessories.join(', ')}</span>
+            </div>
+        `;
+    }
+
+    if (quote.includeInstallation) {
+        customerHTML += `
+            <div class="summary-row">
+                <strong>Installation:</strong>
+                <span>$${quote.installationPrice.toFixed(2)}</span>
+            </div>
+        `;
+    }
+
+    customerHTML += `
+        <div class="summary-row total">
+            <strong>Total Price:</strong>
+            <span>$${quote.customerPrice.toFixed(2)}</span>
+        </div>
+    `;
+
+    summaryContent.innerHTML = customerHTML;
+
+    // Internal information with separated costs
+    let internalHTML = `
+        <div class="summary-row">
+            <strong>Pricing Dimensions:</strong>
+            <span>${quote.width}' W x ${quote.height}' H (rounded from actual)</span>
+        </div>
+        <div class="summary-row">
+            <strong>Screen Cost (base):</strong>
+            <span>$${quote.screenCostOnly.toFixed(2)}</span>
+        </div>
+    `;
+
+    if (quote.motorCost > 0 && !quote.isFenetex) {
+        internalHTML += `
+            <div class="summary-row">
+                <strong>Motor Cost:</strong>
+                <span>$${quote.motorCost.toFixed(2)}</span>
+            </div>
+        `;
+    }
+
+    if (quote.isFenetex) {
+        internalHTML += `
+            <div class="summary-row">
+                <strong>Motor Cost:</strong>
+                <span>Included in screen price</span>
+            </div>
+        `;
+    }
+
+    internalHTML += `
+        <div class="summary-row">
+            <strong>Total Screen + Motor:</strong>
+            <span>$${quote.baseCost.toFixed(2)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Accessories Cost:</strong>
+            <span>$${quote.accessoriesCost.toFixed(2)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Installation Cost:</strong>
+            <span>$${quote.installationCost.toFixed(2)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Total Cost:</strong>
+            <span>$${(quote.totalCost + quote.installationCost).toFixed(2)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Profit:</strong>
+            <span>$${quote.totalProfit.toFixed(2)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Margin:</strong>
+            <span>${quote.marginPercent.toFixed(1)}%</span>
+        </div>
+    `;
+
+    internalInfo.innerHTML = internalHTML;
+    quoteSummary.classList.remove('hidden');
+
+    // Scroll to summary
+    quoteSummary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function saveQuote() {
+    const customerName = document.getElementById('customerName').value;
+    if (!customerName) {
+        alert('Please calculate a quote first');
+        return;
+    }
+
+    const quoteSummary = document.getElementById('quoteSummary');
+    if (quoteSummary.classList.contains('hidden')) {
+        alert('Please calculate a quote first');
+        return;
+    }
+
+    // Get current quote data
+    const quoteData = {
+        id: Date.now(),
+        date: new Date().toISOString(),
+        customerName: document.getElementById('customerName').value,
+        companyName: document.getElementById('companyName').value,
+        customerEmail: document.getElementById('customerEmail').value,
+        customerPhone: document.getElementById('customerPhone').value,
+        streetAddress: document.getElementById('streetAddress').value,
+        aptSuite: document.getElementById('aptSuite').value,
+        nearestIntersection: document.getElementById('nearestIntersection').value,
+        city: document.getElementById('city').value,
+        state: document.getElementById('state').value,
+        zipCode: document.getElementById('zipCode').value,
+        trackType: document.getElementById('trackType').value,
+        trackTypeName: document.getElementById('trackType').selectedOptions[0].text,
+        operatorType: document.getElementById('operatorType').value,
+        operatorTypeName: document.getElementById('operatorType').selectedOptions[0].text,
+        fabricColor: document.getElementById('fabricColor').value,
+        fabricColorName: document.getElementById('fabricColor').selectedOptions[0].text,
+        frameColor: document.getElementById('frameColor').value,
+        frameColorName: document.getElementById('frameColor').selectedOptions[0].text,
+        widthInches: document.getElementById('widthInches').value,
+        widthFraction: document.getElementById('widthFraction').value,
+        heightInches: document.getElementById('heightInches').value,
+        heightFraction: document.getElementById('heightFraction').value,
+        noTracks: document.getElementById('noTracks').checked,
+        includeInstallation: document.getElementById('includeInstallation').checked,
+        accessories: Array.from(document.querySelectorAll('.accessory-item input[type="checkbox"]:checked'))
+            .map(cb => ({id: cb.id, name: cb.nextElementSibling.textContent})),
+        summaryHTML: document.getElementById('summaryContent').innerHTML,
+        internalHTML: document.getElementById('internalInfo').innerHTML
+    };
+
+    // Save to localStorage
+    let savedQuotes = JSON.parse(localStorage.getItem('screenQuotes') || '[]');
+    savedQuotes.unshift(quoteData);
+    localStorage.setItem('screenQuotes', JSON.stringify(savedQuotes));
+
+    alert('Quote saved successfully!');
+    loadSavedQuotes();
+}
+
+function loadSavedQuotes() {
+    const savedQuotes = JSON.parse(localStorage.getItem('screenQuotes') || '[]');
+    const savedQuotesList = document.getElementById('savedQuotesList');
+
+    if (savedQuotes.length === 0) {
+        savedQuotesList.innerHTML = '<p style="color: #666;">No saved quotes yet.</p>';
+        return;
+    }
+
+    let html = '';
+    savedQuotes.forEach(quote => {
+        const date = new Date(quote.date).toLocaleDateString();
+        const displayTrack = quote.trackTypeName || 'N/A';
+        const displayOperator = quote.operatorTypeName || 'N/A';
+
+        let displaySize;
+        if (quote.widthInches !== undefined) {
+            const totalWidth = parseFloat(quote.widthInches) + parseFraction(quote.widthFraction || '');
+            const totalHeight = parseFloat(quote.heightInches) + parseFraction(quote.heightFraction || '');
+            displaySize = `${inchesToFeetAndInches(totalWidth)} x ${inchesToFeetAndInches(totalHeight)}`;
+        } else if (quote.widthFeet !== undefined) {
+            // Legacy format
+            displaySize = `${quote.widthFeet}' ${quote.widthInches}" x ${quote.heightFeet}' ${quote.heightInches}"`;
+        } else {
+            displaySize = 'N/A';
+        }
+
+        html += `
+            <div class="quote-card">
+                <h4>${quote.customerName}</h4>
+                <p><strong>Date:</strong> ${date}</p>
+                <p><strong>Track:</strong> ${displayTrack}</p>
+                <p><strong>Operator:</strong> ${displayOperator}</p>
+                <p><strong>Size:</strong> ${displaySize}</p>
+                <div class="quote-card-actions">
+                    <button class="btn-primary" onclick="loadQuote(${quote.id})">Load</button>
+                    <button class="btn-secondary" onclick="deleteQuote(${quote.id})">Delete</button>
+                </div>
+            </div>
+        `;
+    });
+
+    savedQuotesList.innerHTML = html;
+}
+
+function loadQuote(quoteId) {
+    const savedQuotes = JSON.parse(localStorage.getItem('screenQuotes') || '[]');
+    const quote = savedQuotes.find(q => q.id === quoteId);
+
+    if (!quote) return;
+
+    // Populate form
+    document.getElementById('customerName').value = quote.customerName;
+    document.getElementById('companyName').value = quote.companyName || '';
+    document.getElementById('customerEmail').value = quote.customerEmail || '';
+    document.getElementById('customerPhone').value = quote.customerPhone || '';
+    document.getElementById('streetAddress').value = quote.streetAddress || '';
+    document.getElementById('aptSuite').value = quote.aptSuite || '';
+    document.getElementById('nearestIntersection').value = quote.nearestIntersection || '';
+    document.getElementById('city').value = quote.city || '';
+    document.getElementById('state').value = quote.state || '';
+    document.getElementById('zipCode').value = quote.zipCode || '';
+
+    // Show optional fields if any have values
+    if (quote.companyName || quote.aptSuite || quote.nearestIntersection) {
+        document.getElementById('optionalCustomerFields').style.display = 'block';
+        document.getElementById('toggleOptionalFields').textContent = '− Hide Addnl Fields';
+    }
+
+    // Handle new format (with trackType/operatorType) and old format (with screenType)
+    if (quote.trackType && quote.operatorType) {
+        document.getElementById('trackType').value = quote.trackType;
+        // Trigger change event to populate operator options
+        document.getElementById('trackType').dispatchEvent(new Event('change'));
+        setTimeout(() => {
+            document.getElementById('operatorType').value = quote.operatorType;
+            document.getElementById('operatorType').dispatchEvent(new Event('change'));
+        }, 50);
+    }
+
+    document.getElementById('fabricColor').value = quote.fabricColor;
+    document.getElementById('frameColor').value = quote.frameColor || '';
+
+    // Handle new format (inches + fractions) and old formats
+    if (quote.widthInches !== undefined && quote.heightInches !== undefined) {
+        document.getElementById('widthInches').value = quote.widthInches;
+        document.getElementById('widthFraction').value = quote.widthFraction || '';
+        document.getElementById('heightInches').value = quote.heightInches;
+        document.getElementById('heightFraction').value = quote.heightFraction || '';
+        updatePricingDimensions();
+    } else if (quote.widthFeet !== undefined) {
+        // Legacy format with feet/inches - convert to total inches
+        const totalWidth = (parseFloat(quote.widthFeet) * 12) + parseFloat(quote.widthInches || 0);
+        const totalHeight = (parseFloat(quote.heightFeet) * 12) + parseFloat(quote.heightInches || 0);
+        document.getElementById('widthInches').value = Math.floor(totalWidth);
+        document.getElementById('widthFraction').value = '';
+        document.getElementById('heightInches').value = Math.floor(totalHeight);
+        document.getElementById('heightFraction').value = '';
+        updatePricingDimensions();
+    }
+
+    document.getElementById('noTracks').checked = quote.noTracks;
+    document.getElementById('includeInstallation').checked = quote.includeInstallation;
+
+    // Check saved accessories
+    setTimeout(() => {
+        quote.accessories.forEach(acc => {
+            const checkbox = document.getElementById(acc.id);
+            if (checkbox) checkbox.checked = true;
+        });
+    }, 150);
+
+    // Display summary
+    document.getElementById('summaryContent').innerHTML = quote.summaryHTML;
+    document.getElementById('internalInfo').innerHTML = quote.internalHTML;
+    document.getElementById('quoteSummary').classList.remove('hidden');
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function deleteQuote(quoteId) {
+    if (!confirm('Are you sure you want to delete this quote?')) return;
+
+    let savedQuotes = JSON.parse(localStorage.getItem('screenQuotes') || '[]');
+    savedQuotes = savedQuotes.filter(q => q.id !== quoteId);
+    localStorage.setItem('screenQuotes', JSON.stringify(savedQuotes));
+
+    loadSavedQuotes();
+}
+
+function generatePDF() {
+    const quoteSummary = document.getElementById('quoteSummary');
+    if (quoteSummary.classList.contains('hidden')) {
+        alert('Please calculate a quote first');
+        return;
+    }
+
+    // Hide internal info temporarily
+    const internalInfo = document.querySelector('.internal-info');
+    const buttonGroup = document.querySelector('.button-group');
+    internalInfo.style.display = 'none';
+    buttonGroup.style.display = 'none';
+
+    window.print();
+
+    // Restore
+    setTimeout(() => {
+        internalInfo.style.display = 'block';
+        buttonGroup.style.display = 'flex';
+    }, 1000);
+}
+
+function finalizeProjectDetails() {
+    // Check if order has been calculated
+    if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
+        alert('Please calculate an order quote first before finalizing project details.');
+        return;
+    }
+
+    // Store order data temporarily for the finalize page
+    localStorage.setItem('tempOrderForFinalize', JSON.stringify(window.currentOrderData));
+
+    // Navigate to finalize page
+    window.location.href = `finalize.html?orderId=${window.currentOrderData.id || Date.now()}`;
+}
+
+
+function resetForm() {
+    if (!confirm('Are you sure you want to clear the form?')) return;
+
+    document.getElementById('screenName').value = '';
+    document.getElementById('customerName').value = '';
+    document.getElementById('companyName').value = '';
+    document.getElementById('customerEmail').value = '';
+    document.getElementById('customerPhone').value = '';
+    document.getElementById('streetAddress').value = '';
+    document.getElementById('aptSuite').value = '';
+    document.getElementById('nearestIntersection').value = '';
+    document.getElementById('city').value = '';
+    document.getElementById('state').value = '';
+    document.getElementById('zipCode').value = '';
+    document.getElementById('trackType').value = '';
+    document.getElementById('operatorType').value = '';
+    document.getElementById('operatorType').disabled = true;
+    document.getElementById('fabricColor').value = '';
+    document.getElementById('frameColor').value = '';
+    document.getElementById('widthInches').value = '';
+    document.getElementById('widthFraction').value = '';
+    document.getElementById('heightInches').value = '';
+    document.getElementById('heightFraction').value = '';
+    document.getElementById('noTracks').checked = false;
+    document.getElementById('includeInstallation').checked = true;
+    document.getElementById('dimensionsSummary').style.display = 'none';
+    document.getElementById('enableComparison').checked = false;
+    document.getElementById('comparisonOptions').style.display = 'none';
+    document.getElementById('comparisonMotor').value = '';
+    document.getElementById('discountLabel').value = '';
+    document.getElementById('discountPercent').value = '0';
+    updateAccessories();
+    editingScreenIndex = null;
+}
+
+// Multi-screen order functions
+function addToOrder() {
+    // Calculate screen data
+    const screenData = calculateScreenData();
+    if (!screenData) return; // Validation failed
+
+    if (editingScreenIndex !== null) {
+        // Update existing screen
+        screensInOrder[editingScreenIndex] = screenData;
+        editingScreenIndex = null;
+    } else {
+        // Add new screen
+        screensInOrder.push(screenData);
+    }
+
+    // Clear form for next screen
+    resetFormForNextScreen();
+
+    // Reset button text
+    updateAddToOrderButton();
+
+    // Update screen list display
+    renderScreensList();
+
+    // Show screens section and hide quote
+    document.getElementById('screensInOrder').classList.remove('hidden');
+    document.getElementById('quoteSummary').classList.add('hidden');
+}
+
+function calculateScreenData() {
+    // Get form values
+    const screenName = document.getElementById('screenName').value.trim();
+    const trackType = document.getElementById('trackType').value;
+    const operatorType = document.getElementById('operatorType').value;
+    const fabricColor = document.getElementById('fabricColor').value;
+    const noTracks = document.getElementById('noTracks').checked;
+    const includeInstallation = document.getElementById('includeInstallation').checked;
+
+    // Get dimensions
+    const widthInches = parseFloat(document.getElementById('widthInches').value) || 0;
+    const widthFraction = parseFraction(document.getElementById('widthFraction').value);
+    const heightInches = parseFloat(document.getElementById('heightInches').value) || 0;
+    const heightFraction = parseFraction(document.getElementById('heightFraction').value);
+
+    // Calculate total inches and round to nearest foot for pricing
+    const totalWidthInches = widthInches + widthFraction;
+    const totalHeightInches = heightInches + heightFraction;
+    const width = Math.round(totalWidthInches / 12);
+    const height = Math.round(totalHeightInches / 12);
+
+    // Store actual dimensions for display
+    const actualWidthDisplay = inchesToFeetAndInches(totalWidthInches);
+    const actualHeightDisplay = inchesToFeetAndInches(totalHeightInches);
+
+    // Validation
+    if (!trackType || !operatorType || !fabricColor) {
+        alert('Please fill in all required fields (marked with *)');
+        return null;
+    }
+
+    if (totalWidthInches === 0 || totalHeightInches === 0) {
+        alert('Please enter valid screen dimensions');
+        return null;
+    }
+
+    // Get text labels
+    const trackTypeName = document.getElementById('trackType').selectedOptions[0].text;
+    const operatorTypeName = document.getElementById('operatorType').selectedOptions[0].text;
+    const fabricColorName = document.getElementById('fabricColor').selectedOptions[0].text;
+
+    // Calculate pricing
+    const screenType = `${trackType}-${operatorType}`;
+    let baseCost = 0;
+    let screenCostOnly = 0;
+    let priceData = null;
+    let motorCost = 0;
+    let isFenetex = false;
+
+    if (trackType === 'sunair-zipper') {
+        priceData = sunairZipperGear;
+    } else if (trackType === 'sunair-cable') {
+        priceData = sunairCableGear;
+    } else if (trackType === 'fenetex-keder') {
+        priceData = fenetexKeder;
+        isFenetex = true;
+    }
+
+    // Get screen cost from pricing matrix
+    if (priceData && priceData[width] && priceData[width][height] !== null && priceData[width][height] !== undefined) {
+        let screenCost = priceData[width][height];
+
+        // Apply Sunair discount for non-Fenetex screens
+        if (!isFenetex) {
+            screenCost = screenCost * (1 - SUNAIR_DISCOUNT);
+        }
+
+        screenCostOnly = screenCost;
+        baseCost += screenCost;
+    } else {
+        alert(`Invalid screen dimensions. No pricing available for ${width}' W x ${height}' H. Please check the size and try again.`);
+        return null;
+    }
+
+    // Add motor cost for motorized options
+    if (operatorType === 'gaposa-rts') {
+        motorCost = motorCosts['gaposa-rts'];
+    } else if (operatorType === 'gaposa-solar') {
+        motorCost = motorCosts['gaposa-solar'];
+    } else if (operatorType === 'somfy-rts') {
+        motorCost = motorCosts['somfy-rts'];
+    }
+
+    // For Fenetex, RTS motor is already included in pricing
+    if (!isFenetex && motorCost > 0) {
+        baseCost += motorCost;
+    }
+
+    // Apply track deduction if selected
+    let trackDeduction = 0;
+    if (noTracks && trackDeductions[height]) {
+        trackDeduction = trackDeductions[height] * (1 - SUNAIR_DISCOUNT);
+        baseCost += trackDeduction;
+    }
+
+    // Calculate accessories cost
+    let accessoriesCost = 0;
+    const accessories = [];
+    const checkboxes = document.querySelectorAll('.accessory-item input[type="checkbox"]:checked');
+    checkboxes.forEach(cb => {
+        const accName = cb.dataset.name;
+        let accCost = parseFloat(cb.dataset.cost);
+        const needsDiscount = cb.dataset.markup === 'true';
+        if (needsDiscount) {
+            accCost = accCost * (1 - SUNAIR_DISCOUNT);
+        }
+        accessoriesCost += accCost;
+        accessories.push({
+            name: accName,
+            cost: accCost,
+            needsMarkup: needsDiscount
+        });
+    });
+
+    let totalCost = baseCost + accessoriesCost;
+
+    // Apply markup to get customer price
+    let customerPrice = 0;
+    if (isFenetex) {
+        // For Fenetex, use Sunair Zipper RTS price for that size + 20%
+        const sunairScreenCost = sunairZipperGear[width] && sunairZipperGear[width][height]
+            ? sunairZipperGear[width][height] * (1 - SUNAIR_DISCOUNT)
+            : 0;
+        const sunairRTSMotor = motorCosts['gaposa-rts'];
+
+        // Apply markup: (screen * 1.8 + motor * 1.8) * 1.2
+        customerPrice = (sunairScreenCost + sunairRTSMotor) * CUSTOMER_MARKUP * FENETEX_MARKUP;
+
+        // Add accessories with their proper markup
+        accessories.forEach(acc => {
+            if (acc.needsMarkup) {
+                customerPrice += acc.cost * CUSTOMER_MARKUP;
+            } else {
+                customerPrice += acc.cost;
+            }
+        });
+    } else {
+        // Standard Sunair pricing - separate screen and motor markup
+        let screenOnlyCost = baseCost - motorCost;
+
+        // Handle track deduction
+        if (noTracks) {
+            screenOnlyCost -= trackDeduction;
+        }
+
+        // Apply 1.8x markup to screen
+        customerPrice = screenOnlyCost * CUSTOMER_MARKUP;
+
+        // Add motor with 1.8x markup
+        customerPrice += motorCost * CUSTOMER_MARKUP;
+
+        // Add back track deduction (negative value) after markup
+        if (noTracks) {
+            customerPrice += trackDeduction;
+        }
+
+        // Add accessories with their proper markup
+        accessories.forEach(acc => {
+            if (acc.needsMarkup) {
+                customerPrice += acc.cost * CUSTOMER_MARKUP;
+            } else {
+                customerPrice += acc.cost;
+            }
+        });
+    }
+
+    // Calculate installation
+    let installationCost = 0;
+    let installationPrice = 0;
+    if (includeInstallation) {
+        const isLarge = width >= 12;
+        const isSolar = operatorType === 'gaposa-solar';
+
+        if (isLarge) {
+            installationPrice = isSolar ? installationPricing['solar-large'] : installationPricing['rts-large'];
+        } else {
+            installationPrice = isSolar ? installationPricing['solar-small'] : installationPricing['rts-small'];
+        }
+
+        installationCost = installationPrice * 0.7;
+        customerPrice += installationPrice;
+    }
+
+    return {
+        screenName: screenName || null,
+        trackType,
+        trackTypeName,
+        operatorType,
+        operatorTypeName,
+        fabricColor,
+        fabricColorName,
+        width,
+        height,
+        actualWidthDisplay,
+        actualHeightDisplay,
+        noTracks,
+        includeInstallation,
+        screenCostOnly,
+        motorCost,
+        baseCost,
+        accessories,
+        accessoriesCost,
+        totalCost,
+        installationCost,
+        installationPrice,
+        customerPrice,
+        isFenetex,
+        trackDeduction
+    };
+}
+
+function resetFormForNextScreen() {
+    document.getElementById('screenName').value = '';
+    document.getElementById('trackType').value = '';
+    document.getElementById('operatorType').value = '';
+    document.getElementById('operatorType').disabled = true;
+    document.getElementById('fabricColor').value = '';
+    document.getElementById('frameColor').value = '';
+    document.getElementById('widthInches').value = '';
+    document.getElementById('widthFraction').value = '';
+    document.getElementById('heightInches').value = '';
+    document.getElementById('heightFraction').value = '';
+    document.getElementById('noTracks').checked = false;
+    document.getElementById('includeInstallation').checked = true;
+    document.getElementById('dimensionsSummary').style.display = 'none';
+    updateAccessories();
+}
+
+function renderScreensList() {
+    const screensList = document.getElementById('screensList');
+    const screenCount = document.getElementById('screenCount');
+
+    screenCount.textContent = screensInOrder.length;
+
+    if (screensInOrder.length === 0) {
+        screensList.innerHTML = '<p>No screens added yet.</p>';
+        return;
+    }
+
+    let html = '';
+    screensInOrder.forEach((screen, index) => {
+        const displayName = screen.screenName || `Screen ${index + 1}`;
+        const clientTrackName = getClientFacingTrackName(screen.trackTypeName);
+        const clientMotorName = getClientFacingOperatorName(screen.operatorType, screen.operatorTypeName);
+        const accessoriesText = screen.accessories.length > 0
+            ? screen.accessories.map(a => a.name).join(', ')
+            : 'None';
+        const isEditing = editingScreenIndex === index;
+
+        html += `
+            <div class="screen-card ${isEditing ? 'editing' : ''}">
+                <div class="screen-card-header">
+                    <h4>${displayName}${isEditing ? ' <span style="color: #007bff;">(Editing...)</span>' : ''}</h4>
+                    <div class="screen-card-actions">
+                        <button class="btn-edit" onclick="editScreen(${index})">${isEditing ? 'Editing ↑' : 'Edit'}</button>
+                        <button class="btn-duplicate" onclick="duplicateScreen(${index})">Duplicate</button>
+                        <button class="btn-remove" onclick="removeScreen(${index})">Remove</button>
+                    </div>
+                </div>
+                <div class="screen-card-details">
+                    <strong>Track:</strong> ${clientTrackName} |
+                    <strong>Motor:</strong> ${clientMotorName}<br>
+                    <strong>Size:</strong> ${screen.actualWidthDisplay} W x ${screen.actualHeightDisplay} H |
+                    <strong>Fabric:</strong> ${screen.fabricColorName} |
+                    <strong>Frame:</strong> ${screen.frameColorName || 'Not specified'}<br>
+                    ${screen.noTracks ? '<strong>Configuration:</strong> No Tracks<br>' : ''}
+                    <strong>Accessories:</strong> ${accessoriesText}<br>
+                    ${screen.includeInstallation ? '<strong>Installation:</strong> Included<br>' : ''}
+                    <strong>Price:</strong> ${formatCurrency(screen.customerPrice)}
+                </div>
+            </div>
+        `;
+    });
+
+    screensList.innerHTML = html;
+}
+
+function editScreen(index) {
+    const screen = screensInOrder[index];
+    editingScreenIndex = index;
+
+    // Populate form with screen data
+    document.getElementById('screenName').value = screen.screenName || '';
+    document.getElementById('trackType').value = screen.trackType;
+    document.getElementById('operatorType').value = screen.operatorType;
+    document.getElementById('fabricColor').value = screen.fabricColor;
+    document.getElementById('noTracks').checked = screen.noTracks;
+    document.getElementById('includeInstallation').checked = screen.includeInstallation;
+
+    // Set dimensions - need to calculate back from display
+    // For simplicity, we'll use the pricing dimensions
+    document.getElementById('widthInches').value = screen.width * 12;
+    document.getElementById('widthFraction').value = '';
+    document.getElementById('heightInches').value = screen.height * 12;
+    document.getElementById('heightFraction').value = '';
+
+    // Trigger track type change to populate operator dropdown
+    const trackTypeSelect = document.getElementById('trackType');
+    trackTypeSelect.dispatchEvent(new Event('change'));
+
+    // Set operator type after dropdown is populated, then check accessories
+    setTimeout(() => {
+        document.getElementById('operatorType').value = screen.operatorType;
+        // Update accessories after operator is set
+        updateAccessories();
+
+        // Check the accessories that were selected - wait for accessories to render
+        setTimeout(() => {
+            screen.accessories.forEach(acc => {
+                const checkboxes = document.querySelectorAll('.accessory-item input[type="checkbox"]');
+                checkboxes.forEach(cb => {
+                    if (cb.dataset.name === acc.name) {
+                        cb.checked = true;
+                    }
+                });
+            });
+        }, 50);
+    }, 10);
+
+    // Update button text to show we're editing
+    updateAddToOrderButton();
+
+    // Update the screen card display to show editing state
+    renderScreensList();
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Show alert
+    alert(`Editing "${displayName}". Make your changes above and click "Update Screen" to save.`);
+}
+
+function updateAddToOrderButton() {
+    const btn = document.getElementById('addToOrderBtn');
+    if (!btn) return;
+
+    if (editingScreenIndex !== null) {
+        btn.textContent = 'Update Screen';
+        btn.style.background = '#28a745';
+    } else {
+        btn.textContent = 'Add to Order';
+        btn.style.background = '';
+    }
+}
+
+function duplicateScreen(index) {
+    const screen = JSON.parse(JSON.stringify(screensInOrder[index])); // Deep copy
+    screen.screenName = screen.screenName ? `${screen.screenName} (Copy)` : null;
+    screensInOrder.push(screen);
+    renderScreensList();
+}
+
+function removeScreen(index) {
+    if (!confirm('Are you sure you want to remove this screen?')) return;
+    screensInOrder.splice(index, 1);
+    renderScreensList();
+
+    if (screensInOrder.length === 0) {
+        document.getElementById('screensInOrder').classList.add('hidden');
+        document.getElementById('quoteSummary').classList.add('hidden');
+    }
+}
+
+function calculateOrderQuote() {
+    if (screensInOrder.length === 0) {
+        alert('Please add at least one screen to the order');
+        return;
+    }
+
+    // Get customer info
+    const customerName = document.getElementById('customerName').value;
+    if (!customerName) {
+        alert('Please enter customer name');
+        return;
+    }
+
+    // Calculate totals
+    let orderTotalCost = 0;
+    let orderTotalMaterialsPrice = 0;
+    let orderTotalInstallationCost = 0;
+    let orderTotalInstallationPrice = 0;
+    let hasCableScreen = false;
+
+    // Internal cost breakdowns
+    let totalScreenCosts = 0;
+    let totalMotorCosts = 0;
+    let totalAccessoriesCosts = 0;
+    let totalCableSurcharge = 0;
+
+    screensInOrder.forEach((screen, index) => {
+        // Materials price (excluding installation)
+        let screenMaterialsPrice = screen.customerPrice - screen.installationPrice;
+
+        // Check if this is a cable screen and apply surcharge only to first
+        let screenCost = screen.totalCost;
+
+        if (screen.trackType === 'sunair-cable') {
+            if (!hasCableScreen) {
+                // First cable screen - add surcharge
+                screenCost += CABLE_SURCHARGE;
+                screenMaterialsPrice += CABLE_SURCHARGE * CUSTOMER_MARKUP;
+                totalCableSurcharge += CABLE_SURCHARGE;
+                hasCableScreen = true;
+            }
+        }
+
+        orderTotalCost += screenCost;
+        orderTotalMaterialsPrice += screenMaterialsPrice;
+        orderTotalInstallationCost += screen.installationCost;
+        orderTotalInstallationPrice += screen.installationPrice;
+
+        // Track internal cost breakdowns
+        totalScreenCosts += screen.screenCostOnly;
+        totalMotorCosts += screen.motorCost;
+        totalAccessoriesCosts += screen.accessoriesCost;
+    });
+
+    // Get discount information
+    const discountPercent = parseFloat(document.getElementById('discountPercent').value) || 0;
+    const discountLabel = document.getElementById('discountLabel').value.trim() || 'Discount';
+    const discountAmount = (orderTotalMaterialsPrice * discountPercent) / 100;
+    const discountedMaterialsPrice = orderTotalMaterialsPrice - discountAmount;
+
+    const orderTotalPrice = discountedMaterialsPrice + orderTotalInstallationPrice;
+    const totalProfit = orderTotalPrice - orderTotalCost - orderTotalInstallationCost;
+    const marginPercent = orderTotalPrice > 0 ? (totalProfit / orderTotalPrice) * 100 : 0;
+
+    // Get comparison information
+    const enableComparison = document.getElementById('enableComparison').checked;
+    const comparisonMotor = document.getElementById('comparisonMotor').value;
+
+    // Calculate comparison totals if enabled
+    let comparisonTotalMaterialsPrice = 0;
+    let comparisonTotalPrice = 0;
+    let comparisonDiscountedMaterialsPrice = 0;
+    const comparisonScreens = [];
+
+    if (enableComparison && comparisonMotor) {
+        screensInOrder.forEach(screen => {
+            // Only compare motorized screens
+            if (screen.operatorType !== 'gear') {
+                const comparisonData = calculateScreenWithAlternateMotor(screen, comparisonMotor);
+                comparisonScreens.push({
+                    ...screen,
+                    comparisonPrice: comparisonData.customerPrice,
+                    comparisonMaterialPrice: comparisonData.materialPrice
+                });
+                comparisonTotalMaterialsPrice += comparisonData.materialPrice;
+            } else {
+                comparisonScreens.push({
+                    ...screen,
+                    comparisonPrice: screen.customerPrice,
+                    comparisonMaterialPrice: screen.customerPrice - screen.installationPrice
+                });
+                comparisonTotalMaterialsPrice += (screen.customerPrice - screen.installationPrice);
+            }
+        });
+
+        // Apply discount to comparison totals
+        const comparisonDiscountAmount = (comparisonTotalMaterialsPrice * discountPercent) / 100;
+        comparisonDiscountedMaterialsPrice = comparisonTotalMaterialsPrice - comparisonDiscountAmount;
+        comparisonTotalPrice = comparisonDiscountedMaterialsPrice + orderTotalInstallationPrice;
+    }
+
+    // Display order quote summary
+    displayOrderQuoteSummary({
+        customerName,
+        screens: enableComparison && comparisonMotor ? comparisonScreens : screensInOrder,
+        orderTotalCost,
+        orderTotalMaterialsPrice,
+        orderTotalInstallationPrice,
+        orderTotalPrice,
+        orderTotalInstallationCost,
+        totalProfit,
+        marginPercent,
+        hasCableScreen,
+        totalScreenCosts,
+        totalMotorCosts,
+        totalAccessoriesCosts,
+        totalCableSurcharge,
+        discountPercent,
+        discountLabel,
+        discountAmount,
+        discountedMaterialsPrice,
+        enableComparison,
+        comparisonMotor,
+        comparisonTotalMaterialsPrice,
+        comparisonDiscountedMaterialsPrice,
+        comparisonTotalPrice
+    });
+}
+
+function displayOrderQuoteSummary(orderData) {
+    // Store order data globally for finalize page access
+    window.currentOrderData = orderData;
+
+    const summaryContent = document.getElementById('summaryContent');
+    const internalInfo = document.getElementById('internalInfo');
+    const quoteSummary = document.getElementById('quoteSummary');
+
+    // Get motor names for comparison if enabled
+    let comparisonMotorName = '';
+    let clientMotorName = '';
+    if (orderData.enableComparison && orderData.comparisonMotor && orderData.screens.length > 0) {
+        comparisonMotorName = getClientFacingOperatorName(orderData.comparisonMotor, '');
+        // Get the first screen's motor name for the header
+        const firstMotorizedScreen = orderData.screens.find(s => s.operatorType !== 'gear');
+        if (firstMotorizedScreen) {
+            clientMotorName = getClientFacingOperatorName(firstMotorizedScreen.operatorType, firstMotorizedScreen.operatorTypeName);
+        }
+    }
+
+    // Build address display
+    let addressParts = [];
+    if (orderData.streetAddress) addressParts.push(orderData.streetAddress);
+    if (orderData.aptSuite) addressParts.push(orderData.aptSuite);
+    const addressLine1 = addressParts.join(', ');
+
+    let cityStateZip = [];
+    if (orderData.city) cityStateZip.push(orderData.city);
+    if (orderData.state) cityStateZip.push(orderData.state);
+    let addressLine2 = cityStateZip.join(', ');
+    if (orderData.zipCode) addressLine2 = addressLine2 ? addressLine2 + ' ' + orderData.zipCode : orderData.zipCode;
+
+    const fullAddress = [addressLine1, addressLine2].filter(x => x).join('<br>');
+
+    // Customer-facing summary
+    let customerHTML = `
+        <div class="summary-row">
+            <strong>Customer:</strong>
+            <span>${orderData.customerName}${orderData.companyName ? ' (' + orderData.companyName + ')' : ''}</span>
+        </div>
+        ${fullAddress ? `<div class="summary-row">
+            <strong>Project Address:</strong>
+            <span>${fullAddress}</span>
+        </div>` : ''}
+        ${orderData.nearestIntersection ? `<div class="summary-row">
+            <strong>Nearest Intersection:</strong>
+            <span>${orderData.nearestIntersection}</span>
+        </div>` : ''}
+        <div class="summary-row" style="border-bottom: 2px solid #0056A3; padding-bottom: 10px; margin-bottom: 10px;">
+            <strong>Total Screens:</strong>
+            <span>${orderData.screens.length}</span>
+        </div>
+    `;
+
+    // Add each screen details
+    orderData.screens.forEach((screen, index) => {
+        const displayName = screen.screenName || `Screen ${index + 1}`;
+        const screenMaterialsPrice = screen.customerPrice - screen.installationPrice;
+        const clientTrackName = getClientFacingTrackName(screen.trackTypeName);
+        const clientMotorName = getClientFacingOperatorName(screen.operatorType, screen.operatorTypeName);
+
+        customerHTML += `
+            <div style="margin-bottom: 15px; padding: 10px; background: #f0f8ff; border-radius: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #0056A3; padding-bottom: 8px; margin-bottom: 8px;">
+                    <strong style="flex: 1;">${displayName}</strong>
+                    <div style="display: flex; gap: 20px; align-items: center;">
+                        ${orderData.enableComparison && orderData.comparisonMotor ? `
+                            <div style="text-align: right;">
+                                <div style="font-size: 0.75rem; color: #666; margin-bottom: 2px;">${clientMotorName}</div>
+                                <strong>${formatCurrency(screenMaterialsPrice)}</strong>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 0.75rem; color: #666; margin-bottom: 2px;">${comparisonMotorName}</div>
+                                <strong style="color: #007bff;">${formatCurrency(screen.comparisonMaterialPrice || screenMaterialsPrice)}</strong>
+                            </div>
+                        ` : `
+                            <strong>${formatCurrency(screenMaterialsPrice)}</strong>
+                        `}
+                    </div>
+                </div>
+                <div class="summary-row">
+                    <span>Track System:</span>
+                    <span>${clientTrackName}</span>
+                </div>
+                <div class="summary-row">
+                    <span>Operator:</span>
+                    <span>${clientMotorName}</span>
+                </div>
+                <div class="summary-row">
+                    <span>Fabric:</span>
+                    <span>${screen.fabricColorName}</span>
+                </div>
+                <div class="summary-row">
+                    <span>Frame:</span>
+                    <span>${screen.frameColorName || 'Not specified'}</span>
+                </div>
+                <div class="summary-row">
+                    <span>Dimensions:</span>
+                    <span>${screen.actualWidthDisplay} W x ${screen.actualHeightDisplay} H</span>
+                </div>
+                ${screen.noTracks ? '<div class="summary-row"><span>Configuration:</span><span>No Tracks</span></div>' : ''}
+                ${screen.accessories.length > 0 ? `<div class="summary-row"><span>Accessories:</span><span>${screen.accessories.map(a => a.name).join(', ')}</span></div>` : ''}
+            </div>
+        `;
+    });
+
+    // Add subtotal, discount, installation, and grand total
+    if (orderData.enableComparison && orderData.comparisonMotor) {
+        // Show comparison columns
+        customerHTML += `
+            <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 1.05rem; border-top: 2px solid #0056A3; padding-top: 10px; margin-bottom: 8px;">
+                <strong>Materials Subtotal:</strong>
+                <div style="display: flex; gap: 20px;">
+                    <div style="min-width: 120px; text-align: right;">
+                        <div style="font-size: 0.75rem; color: #666; font-weight: normal; margin-bottom: 2px;">${clientMotorName}</div>
+                        <strong>${formatCurrency(orderData.orderTotalMaterialsPrice)}</strong>
+                    </div>
+                    <div style="min-width: 120px; text-align: right;">
+                        <div style="font-size: 0.75rem; color: #666; font-weight: normal; margin-bottom: 2px;">${comparisonMotorName}</div>
+                        <strong style="color: #007bff;">${formatCurrency(orderData.comparisonTotalMaterialsPrice)}</strong>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (orderData.discountAmount > 0) {
+            const comparisonDiscountAmount = (orderData.comparisonTotalMaterialsPrice * orderData.discountPercent) / 100;
+            customerHTML += `
+                <div style="display: flex; justify-content: space-between; align-items: center; color: #28a745; margin-bottom: 8px;">
+                    <strong>${orderData.discountLabel} (${orderData.discountPercent}%):</strong>
+                    <div style="display: flex; gap: 20px;">
+                        <strong style="min-width: 120px; text-align: right;">-${formatCurrency(orderData.discountAmount)}</strong>
+                        <strong style="min-width: 120px; text-align: right; color: #007bff;">-${formatCurrency(comparisonDiscountAmount)}</strong>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 8px;">
+                    <strong>Discounted Materials Total:</strong>
+                    <div style="display: flex; gap: 20px;">
+                        <strong style="min-width: 120px; text-align: right;">${formatCurrency(orderData.discountedMaterialsPrice)}</strong>
+                        <strong style="min-width: 120px; text-align: right; color: #007bff;">${formatCurrency(orderData.comparisonDiscountedMaterialsPrice)}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (orderData.orderTotalInstallationPrice > 0) {
+            customerHTML += `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong>Installation:</strong>
+                    <div style="display: flex; gap: 20px;">
+                        <strong style="min-width: 120px; text-align: right;">${formatCurrency(orderData.orderTotalInstallationPrice)}</strong>
+                        <strong style="min-width: 120px; text-align: right; color: #007bff;">${formatCurrency(orderData.orderTotalInstallationPrice)}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
+        customerHTML += `
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 1.2rem; font-weight: bold; color: #0056A3; margin-top: 8px; padding-top: 12px; border-top: 2px solid #0056A3;">
+                <strong>Grand Total:</strong>
+                <div style="display: flex; gap: 20px;">
+                    <strong style="min-width: 120px; text-align: right;">${formatCurrency(orderData.orderTotalPrice)}</strong>
+                    <strong style="min-width: 120px; text-align: right; color: #007bff;">${formatCurrency(orderData.comparisonTotalPrice)}</strong>
+                </div>
+            </div>
+        `;
+    } else {
+        // Standard single-column display
+        customerHTML += `
+            <div class="summary-row" style="font-weight: bold; font-size: 1.05rem; border-top: 2px solid #0056A3; padding-top: 10px;">
+                <strong>Materials Subtotal:</strong>
+                <strong>${formatCurrency(orderData.orderTotalMaterialsPrice)}</strong>
+            </div>
+        `;
+
+        if (orderData.discountAmount > 0) {
+            customerHTML += `
+                <div class="summary-row" style="color: #28a745;">
+                    <strong>${orderData.discountLabel} (${orderData.discountPercent}%):</strong>
+                    <strong>-${formatCurrency(orderData.discountAmount)}</strong>
+                </div>
+                <div class="summary-row" style="font-weight: bold;">
+                    <strong>Discounted Materials Total:</strong>
+                    <strong>${formatCurrency(orderData.discountedMaterialsPrice)}</strong>
+                </div>
+            `;
+        }
+
+        if (orderData.orderTotalInstallationPrice > 0) {
+            customerHTML += `
+                <div class="summary-row">
+                    <strong>Installation:</strong>
+                    <strong>${formatCurrency(orderData.orderTotalInstallationPrice)}</strong>
+                </div>
+            `;
+        }
+
+        customerHTML += `
+            <div class="summary-row total">
+                <strong>Grand Total:</strong>
+                <strong>${formatCurrency(orderData.orderTotalPrice)}</strong>
+            </div>
+        `;
+    }
+
+    summaryContent.innerHTML = customerHTML;
+
+    // Internal information
+    let internalHTML = `
+        <h4 style="margin-bottom: 10px;">Cost Breakdown (Internal)</h4>
+        <div class="summary-row">
+            <strong>Total Screen Costs:</strong>
+            <span>${formatCurrency(orderData.totalScreenCosts)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Total Motor Costs:</strong>
+            <span>${formatCurrency(orderData.totalMotorCosts)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Total Accessories Costs:</strong>
+            <span>${formatCurrency(orderData.totalAccessoriesCosts)}</span>
+        </div>
+    `;
+
+    if (orderData.totalCableSurcharge > 0) {
+        internalHTML += `
+            <div class="summary-row">
+                <strong>Cable Surcharge:</strong>
+                <span>${formatCurrency(orderData.totalCableSurcharge)}</span>
+            </div>
+        `;
+    }
+
+    internalHTML += `
+        <div class="summary-row" style="border-top: 1px solid #856404; padding-top: 8px; margin-top: 8px;">
+            <strong>Total Materials Cost:</strong>
+            <span>${formatCurrency(orderData.orderTotalCost)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Installation Cost (70% to installer):</strong>
+            <span>${formatCurrency(orderData.orderTotalInstallationCost)}</span>
+        </div>
+        <div class="summary-row" style="border-top: 2px solid #856404; padding-top: 8px; margin-top: 8px;">
+            <strong>Total Profit:</strong>
+            <span style="color: #28a745; font-weight: bold;">${formatCurrency(orderData.totalProfit)}</span>
+        </div>
+        <div class="summary-row">
+            <strong>Margin:</strong>
+            <span style="color: #28a745; font-weight: bold;">${orderData.marginPercent.toFixed(1)}%</span>
+        </div>
+    `;
+
+    internalInfo.innerHTML = internalHTML;
+    quoteSummary.classList.remove('hidden');
+
+    // Scroll to quote
+    quoteSummary.scrollIntoView({ behavior: 'smooth' });
+}
