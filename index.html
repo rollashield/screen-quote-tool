@@ -358,6 +358,119 @@
         .screen-card-details strong {
             color: #333;
         }
+        /* Airtable Opportunity Search */
+        .opp-search-container {
+            flex: 1;
+            position: relative;
+        }
+
+        .opp-search-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 2px solid #0056A3;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+
+        .opp-search-input:focus {
+            outline: none;
+            border-color: #003D7A;
+            box-shadow: 0 0 0 3px rgba(0, 86, 163, 0.15);
+        }
+
+        .opp-search-results {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #0056A3;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .opp-search-result {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s;
+        }
+
+        .opp-search-result:hover {
+            background: #e8f4f8;
+        }
+
+        .opp-search-result:last-child {
+            border-bottom: none;
+        }
+
+        .opp-search-result .opp-name {
+            font-weight: 600;
+            color: #0056A3;
+            font-size: 0.9rem;
+        }
+
+        .opp-search-result .opp-details {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .opp-search-result.manual-entry {
+            background: #fff3cd;
+            border-bottom: none;
+            color: #856404;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .opp-search-result.manual-entry:hover {
+            background: #ffeeba;
+        }
+
+        .opp-search-loading {
+            padding: 10px 12px;
+            color: #666;
+            font-style: italic;
+            font-size: 0.85rem;
+        }
+
+        .linked-opp-banner {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .linked-opp-banner .linked-text {
+            color: #155724;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .linked-opp-banner .unlink-btn {
+            background: none;
+            border: none;
+            color: #856404;
+            cursor: pointer;
+            font-size: 0.85rem;
+            text-decoration: underline;
+            padding: 2px 6px;
+        }
+
+        .linked-opp-banner .unlink-btn:hover {
+            color: #533f03;
+        }
     </style>
 </head>
 <body>
@@ -369,8 +482,27 @@
 
         <div class="content">
             <!-- Customer Information -->
-            <div class="form-section">
-                <h2>Customer Information</h2>
+            <div class="form-section" id="customerInfoSection">
+                <!-- Opportunity Search Bar -->
+                <div id="opportunitySearchBar" style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <h2 style="flex-shrink: 0; margin: 0; border: none; padding: 0;">Customer Information</h2>
+                    <div class="opp-search-container">
+                        <input type="text" id="opportunitySearch" class="opp-search-input"
+                               placeholder="Search opportunities by name..." autocomplete="off">
+                        <div id="opportunitySearchResults" class="opp-search-results"></div>
+                    </div>
+                </div>
+
+                <!-- Linked Opportunity Banner (hidden by default) -->
+                <div id="linkedOpportunityBanner" class="linked-opp-banner hidden" style="display: none;">
+                    <span id="linkedOpportunityText" class="linked-text"></span>
+                    <button type="button" class="unlink-btn" onclick="unlinkOpportunity()">Unlink</button>
+                </div>
+
+                <!-- Hidden fields for Airtable IDs -->
+                <input type="hidden" id="airtableOpportunityId">
+                <input type="hidden" id="airtableContactId">
+
                 <div class="form-row">
                     <div class="form-group">
                         <label for="customerName">Customer Name *</label>
@@ -645,6 +777,18 @@
                 <div class="internal-info">
                     <h4>Internal Information (Not shown to customer)</h4>
                     <div id="internalInfo"></div>
+
+                    <!-- Internal Comments -->
+                    <div style="margin-top: 12px; border-top: 1px solid #ffc107; padding-top: 10px;">
+                        <label for="internalComments" style="font-weight: 600; color: #856404; font-size: 0.85rem; display: block; margin-bottom: 4px;">
+                            Internal Comments / Notes
+                        </label>
+                        <textarea id="internalComments"
+                                  placeholder="Add notes about this quote (e.g., special conditions, site access notes, follow-up instructions)..."
+                                  style="width: 100%; min-height: 80px; padding: 8px 10px; border: 2px solid #ffc107;
+                                         border-radius: 4px; font-size: 0.85rem; font-family: inherit;
+                                         resize: vertical; background: #fffdf0; box-sizing: border-box;"></textarea>
+                    </div>
                 </div>
 
                 <div class="button-group" style="margin-top: 15px;">

@@ -17,10 +17,16 @@ CREATE TABLE IF NOT EXISTS quotes (
   screen_count INTEGER,
   quote_data TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  airtable_opportunity_id TEXT,
+  airtable_contact_id TEXT,
+  airtable_quote_id TEXT,
+  quote_number TEXT,
+  internal_comments TEXT
 );
 
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_quotes_customer_email ON quotes(customer_email);
 CREATE INDEX IF NOT EXISTS idx_quotes_created_at ON quotes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_quotes_customer_name ON quotes(customer_name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_quote_number ON quotes(quote_number);

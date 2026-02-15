@@ -1,6 +1,53 @@
 // Cloudflare Worker for Roll-A-Shield Screen Quote Tool
-// This worker handles email sending via Resend API and quote storage
+// This worker handles email sending via Resend API, quote storage, and Airtable CRM integration
 
+// ─── Airtable Configuration ────────────────────────────────────────────────────
+const AIRTABLE_BASE_ID = 'appaKEVA8DolQ9zo2';
+const AIRTABLE_BASE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}`;
+
+const AT_TABLES = {
+  contacts: 'tblHZEP2tZVU8wUoI',
+  opportunities: 'tblCIUFpjmay1GoMf',
+  quotes: 'tbl6RLxDgiawz9olk'
+};
+
+const AT_FIELDS = {
+  contacts: {
+    name: 'fldRN4XeJLbIqvE4I',
+    firstName: 'fld4FQOVkmVw66G07',
+    lastName: 'fldcAQfh7s69E6vsp',
+    email: 'fldSFKtnKBvE1Fpjh',
+    phone: 'fldyaBHgXeNwXlzsQ',
+    streetAddress: 'fld5UT5trvwuvCmMj',
+    city: 'fldVnQWPGz0z4Cy9S',
+    state: 'fldf5RZ2pI4eePwea',
+    zipCode: 'fldgIcm6aPFTBOSZy',
+    companyName: 'fldjzu3JEVWqk2m51',
+    opportunities: 'fldbiz3Qo6mf5sp5K'
+  },
+  opportunities: {
+    name: 'fldWtxrddE9syQObH',
+    contacts: 'fldrEwzXiVNddYkaU',
+    status: 'fldurfMg1vz50dPy3',
+    quotes: 'fldOlBGnbtFYiCbZM',
+    dateTime: 'fldS7ocJhrULpGKCy',
+    salesRep: 'fldKcKKuoNWVRGOlU'
+  },
+  quotes: {
+    opportunity: 'fldkkJKXsjTXzgh1F',
+    contacts: 'fldrStoewOhMT5KuX',
+    totalAmount: 'fldr1eVkNZs40eCvm',
+    quoteNumber: 'fld8OiEjdkpTuzbxl',
+    quoteType: 'fldRNy09mivZh33mN',
+    status: 'fldmLV8m91IdBhv48',
+    type: 'fldAUUDSGQGw6z8hf',
+    quoteCheckbox: 'fldRuuwuZUztxUXPQ',
+    notes: 'fldCy96gnMlFvIl13',
+    date: 'fldfc4yRtpFPBj05B'
+  }
+};
+
+// ─── Main Router ───────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
     // Handle CORS preflight
@@ -21,7 +68,7 @@ export default {
       return await handleSendEmail(request, env);
     }
 
-    // Route: Save quote to D1 database
+    // Route: Save quote to D1 database (+ Airtable sync)
     if (url.pathname === '/api/save-quote' && request.method === 'POST') {
       return await handleSaveQuote(request, env);
     }
@@ -43,11 +90,290 @@ export default {
       return await handleDeleteQuote(quoteId, env);
     }
 
+    // Route: Search Airtable Opportunities
+    if (url.pathname === '/api/airtable/opportunities/search' && request.method === 'GET') {
+      return await handleOpportunitySearch(request, env);
+    }
+
     return new Response('Not Found', { status: 404 });
   }
 };
 
-// Send email via Resend API
+// ─── Airtable Helper ───────────────────────────────────────────────────────────
+async function airtableFetch(env, path, options = {}) {
+  const url = `${AIRTABLE_BASE_URL}${path}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${env.AIRTABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error(`Airtable API error (${response.status}):`, errorBody);
+    throw new Error(`Airtable API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// ─── Quote Number Generation ───────────────────────────────────────────────────
+async function generateQuoteNumber(env) {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const prefix = `Q${yy}${mm}`;
+
+  // Query D1 for the highest existing quote number in this period
+  const result = await env.DB.prepare(`
+    SELECT quote_number FROM quotes
+    WHERE quote_number LIKE ?
+    ORDER BY quote_number DESC
+    LIMIT 1
+  `).bind(`${prefix}-%`).first();
+
+  let nextSeq = 1;
+  if (result && result.quote_number) {
+    const parts = result.quote_number.split('-');
+    if (parts.length === 2) {
+      nextSeq = parseInt(parts[1], 10) + 1;
+    }
+  }
+
+  return `${prefix}-${String(nextSeq).padStart(3, '0')}`;
+}
+
+// ─── Quote Notes Builder ───────────────────────────────────────────────────────
+function buildQuoteNotes(quoteData) {
+  let notes = '';
+
+  // Internal comments first
+  if (quoteData.internalComments) {
+    notes += quoteData.internalComments + '\n\n';
+  }
+
+  // Auto-generated summary
+  notes += '--- Quote Summary ---\n';
+  notes += `Screens: ${quoteData.screens?.length || 0}\n`;
+  notes += `Total: $${(quoteData.orderTotalPrice || 0).toFixed(2)}\n`;
+
+  if (quoteData.screens && quoteData.screens.length > 0) {
+    quoteData.screens.forEach((screen, i) => {
+      const name = screen.screenName || `Screen ${i + 1}`;
+      notes += `\n${name}: ${screen.trackTypeName || screen.trackType}`;
+      notes += `, ${screen.operatorTypeName || screen.operatorType}`;
+      notes += `, ${screen.actualWidthDisplay} x ${screen.actualHeightDisplay}`;
+      notes += `, ${screen.fabricColorName || 'N/A'} fabric, ${screen.frameColorName || 'N/A'} frame`;
+      if (screen.accessories && screen.accessories.length > 0) {
+        notes += `\n  Accessories: ${screen.accessories.map(a => a.name).join(', ')}`;
+      }
+    });
+  }
+
+  if (quoteData.discountPercent > 0) {
+    notes += `\n\nDiscount: ${quoteData.discountLabel || 'Discount'} (${quoteData.discountPercent}%)`;
+  }
+
+  return notes;
+}
+
+// ─── Airtable Opportunity Search ───────────────────────────────────────────────
+async function handleOpportunitySearch(request, env) {
+  try {
+    const url = new URL(request.url);
+    const query = (url.searchParams.get('q') || '').trim();
+
+    if (query.length < 2) {
+      return jsonResponse({ error: 'Search query must be at least 2 characters' }, 400);
+    }
+
+    // Sanitize query for Airtable formula (escape double quotes and backslashes)
+    const sanitizedQuery = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    // Search Opportunities by Name, exclude Closed Lost, sort newest first
+    const formula = `AND(SEARCH(LOWER("${sanitizedQuery}"), LOWER({Name})), {Status} != "Closed Lost")`;
+
+    // Airtable needs fields[] as repeated params
+    const fieldParams = ['Name', 'Contacts', 'Status', 'Date & Time', 'Sales Rep']
+      .map(f => `fields%5B%5D=${encodeURIComponent(f)}`)
+      .join('&');
+
+    const oppPath = `/${AT_TABLES.opportunities}?filterByFormula=${encodeURIComponent(formula)}&sort%5B0%5D%5Bfield%5D=${encodeURIComponent('Date & Time')}&sort%5B0%5D%5Bdirection%5D=desc&pageSize=20&${fieldParams}`;
+
+    const oppResult = await airtableFetch(env, oppPath);
+    const opportunities = oppResult.records || [];
+
+    if (opportunities.length === 0) {
+      return jsonResponse({ success: true, opportunities: [] });
+    }
+
+    // Collect all unique Contact record IDs
+    const contactIds = new Set();
+    opportunities.forEach(opp => {
+      const contacts = opp.fields['Contacts'] || [];
+      contacts.forEach(id => contactIds.add(id));
+    });
+
+    // Batch-fetch all Contact records in one request
+    const contactMap = {};
+    if (contactIds.size > 0) {
+      const contactFormula = `OR(${[...contactIds].map(id => `RECORD_ID()='${id}'`).join(',')})`;
+      const contactFields = ['First Name', 'Last Name', 'Email', 'Phone', 'Street Address', 'City', 'State', 'Zip Code', 'Company Name']
+        .map(f => `fields%5B%5D=${encodeURIComponent(f)}`)
+        .join('&');
+
+      const contactPath = `/${AT_TABLES.contacts}?filterByFormula=${encodeURIComponent(contactFormula)}&${contactFields}`;
+      const contactResult = await airtableFetch(env, contactPath);
+
+      (contactResult.records || []).forEach(rec => {
+        contactMap[rec.id] = {
+          id: rec.id,
+          firstName: rec.fields['First Name'] || '',
+          lastName: rec.fields['Last Name'] || '',
+          email: rec.fields['Email'] || '',
+          phone: rec.fields['Phone'] || '',
+          streetAddress: rec.fields['Street Address'] || '',
+          city: rec.fields['City'] || '',
+          state: rec.fields['State'] || '',
+          zipCode: rec.fields['Zip Code'] || '',
+          companyName: rec.fields['Company Name'] || ''
+        };
+      });
+    }
+
+    // Build response with nested Contact data
+    const results = opportunities.map(opp => {
+      const oppContactIds = opp.fields['Contacts'] || [];
+      const contact = oppContactIds.length > 0 ? (contactMap[oppContactIds[0]] || null) : null;
+
+      return {
+        id: opp.id,
+        name: opp.fields['Name'] || '',
+        status: opp.fields['Status'] || '',
+        dateTime: opp.fields['Date & Time'] || '',
+        contact: contact
+      };
+    });
+
+    return jsonResponse({ success: true, opportunities: results });
+
+  } catch (error) {
+    console.error('Error in handleOpportunitySearch:', error);
+    return jsonResponse({
+      success: false,
+      error: 'Airtable is temporarily unavailable. You can enter customer information manually.'
+    }, 503);
+  }
+}
+
+// ─── Airtable Save (Create Quote + Update/Create Contact/Opportunity) ──────────
+async function handleAirtableSave(env, quoteData, quoteNumber, quoteId) {
+  let airtableOpportunityId = quoteData.airtableOpportunityId;
+  let airtableContactId = quoteData.airtableContactId;
+  let airtableQuoteId = null;
+
+  // ── Flow B: Manual entry — create Contact and Opportunity first ──
+  if (!airtableOpportunityId) {
+    // Split customer name into first/last
+    const nameParts = (quoteData.customerName || '').trim().split(/\s+/);
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    // Create Contact
+    const contactFields = {
+      [AT_FIELDS.contacts.firstName]: firstName,
+      [AT_FIELDS.contacts.lastName]: lastName
+    };
+    // Only set non-empty fields to avoid blanking
+    if (quoteData.customerEmail) contactFields[AT_FIELDS.contacts.email] = quoteData.customerEmail;
+    if (quoteData.customerPhone) contactFields[AT_FIELDS.contacts.phone] = quoteData.customerPhone;
+    if (quoteData.streetAddress) contactFields[AT_FIELDS.contacts.streetAddress] = quoteData.streetAddress;
+    if (quoteData.city) contactFields[AT_FIELDS.contacts.city] = quoteData.city;
+    if (quoteData.state) contactFields[AT_FIELDS.contacts.state] = quoteData.state;
+    if (quoteData.zipCode) contactFields[AT_FIELDS.contacts.zipCode] = quoteData.zipCode;
+    if (quoteData.companyName) contactFields[AT_FIELDS.contacts.companyName] = quoteData.companyName;
+
+    const contactResult = await airtableFetch(env, `/${AT_TABLES.contacts}`, {
+      method: 'POST',
+      body: JSON.stringify({ fields: contactFields })
+    });
+    airtableContactId = contactResult.id;
+
+    // Create Opportunity linked to new Contact
+    const oppResult = await airtableFetch(env, `/${AT_TABLES.opportunities}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        fields: {
+          [AT_FIELDS.opportunities.contacts]: [airtableContactId],
+          [AT_FIELDS.opportunities.status]: 'Estimate Sent',
+          [AT_FIELDS.opportunities.dateTime]: new Date().toISOString()
+        }
+      })
+    });
+    airtableOpportunityId = oppResult.id;
+  }
+
+  // ── Create Quote record in Airtable ──
+  const quoteFields = {
+    [AT_FIELDS.quotes.opportunity]: [airtableOpportunityId],
+    [AT_FIELDS.quotes.totalAmount]: quoteData.orderTotalPrice || 0,
+    [AT_FIELDS.quotes.date]: new Date().toISOString().split('T')[0],
+    [AT_FIELDS.quotes.quoteType]: 'Formal',
+    [AT_FIELDS.quotes.quoteNumber]: quoteNumber,
+    [AT_FIELDS.quotes.status]: 'Sent',
+    [AT_FIELDS.quotes.type]: 'In-Person Estimate',
+    [AT_FIELDS.quotes.quoteCheckbox]: true,
+    [AT_FIELDS.quotes.notes]: buildQuoteNotes(quoteData)
+  };
+
+  const quoteResult = await airtableFetch(env, `/${AT_TABLES.quotes}`, {
+    method: 'POST',
+    body: JSON.stringify({ fields: quoteFields })
+  });
+  airtableQuoteId = quoteResult.id;
+
+  // ── Update Contact (sync-back editable fields) ──
+  // Only if we have a Contact ID and there was an existing opportunity
+  // (for manual entry, Contact was already created with current data above)
+  if (airtableContactId && quoteData.airtableOpportunityId) {
+    const updateFields = {};
+    if (quoteData.streetAddress) updateFields[AT_FIELDS.contacts.streetAddress] = quoteData.streetAddress;
+    if (quoteData.city) updateFields[AT_FIELDS.contacts.city] = quoteData.city;
+    if (quoteData.state) updateFields[AT_FIELDS.contacts.state] = quoteData.state;
+    if (quoteData.zipCode) updateFields[AT_FIELDS.contacts.zipCode] = quoteData.zipCode;
+    if (quoteData.customerEmail) updateFields[AT_FIELDS.contacts.email] = quoteData.customerEmail;
+    if (quoteData.customerPhone) updateFields[AT_FIELDS.contacts.phone] = quoteData.customerPhone;
+    if (quoteData.companyName) updateFields[AT_FIELDS.contacts.companyName] = quoteData.companyName;
+
+    if (Object.keys(updateFields).length > 0) {
+      await airtableFetch(env, `/${AT_TABLES.contacts}/${airtableContactId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields: updateFields })
+      });
+    }
+  }
+
+  // ── Update D1 with Airtable record IDs ──
+  await env.DB.prepare(`
+    UPDATE quotes SET
+      airtable_opportunity_id = ?,
+      airtable_contact_id = ?,
+      airtable_quote_id = ?
+    WHERE id = ?
+  `).bind(airtableOpportunityId, airtableContactId, airtableQuoteId, quoteId).run();
+
+  return {
+    success: true,
+    airtableQuoteId,
+    airtableOpportunityId,
+    airtableContactId
+  };
+}
+
+// ─── Email Handler ─────────────────────────────────────────────────────────────
 async function handleSendEmail(request, env) {
   try {
     const emailData = await request.json();
@@ -99,7 +425,7 @@ async function handleSendEmail(request, env) {
   }
 }
 
-// Save quote to D1 database
+// ─── Save Quote (D1 + Airtable dual write) ─────────────────────────────────────
 async function handleSaveQuote(request, env) {
   try {
     const quoteData = await request.json();
@@ -111,6 +437,19 @@ async function handleSaveQuote(request, env) {
 
     const quoteId = quoteData.id || Date.now().toString();
     const timestamp = new Date().toISOString();
+
+    // Generate quote number
+    let quoteNumber = null;
+    try {
+      quoteNumber = await generateQuoteNumber(env);
+    } catch (qnError) {
+      console.error('Error generating quote number:', qnError);
+      // Fallback: use timestamp-based number
+      quoteNumber = `Q${timestamp.slice(2, 4)}${timestamp.slice(5, 7)}-${Date.now().toString().slice(-3)}`;
+    }
+
+    // Store quote number on the data object for the Airtable notes builder
+    quoteData.quoteNumber = quoteNumber;
 
     // Insert into D1 database
     await env.DB.prepare(`
@@ -130,8 +469,13 @@ async function handleSaveQuote(request, env) {
         screen_count,
         quote_data,
         created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        updated_at,
+        airtable_opportunity_id,
+        airtable_contact_id,
+        airtable_quote_id,
+        quote_number,
+        internal_comments
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       quoteId,
       quoteData.customerName,
@@ -148,13 +492,33 @@ async function handleSaveQuote(request, env) {
       quoteData.screens?.length || 0,
       JSON.stringify(quoteData),
       timestamp,
-      timestamp
+      timestamp,
+      quoteData.airtableOpportunityId || null,
+      quoteData.airtableContactId || null,
+      null,
+      quoteNumber,
+      quoteData.internalComments || null
     ).run();
+
+    // Attempt Airtable sync (non-fatal if it fails)
+    let airtableSync = false;
+    let airtableSyncError = null;
+
+    try {
+      const atResult = await handleAirtableSave(env, quoteData, quoteNumber, quoteId);
+      airtableSync = atResult.success;
+    } catch (atError) {
+      console.error('Airtable sync failed:', atError);
+      airtableSyncError = atError.message || 'Airtable sync failed';
+    }
 
     return jsonResponse({
       success: true,
       quoteId: quoteId,
-      message: 'Quote saved successfully'
+      quoteNumber: quoteNumber,
+      airtableSync: airtableSync,
+      airtableSyncError: airtableSyncError,
+      message: airtableSync ? 'Quote saved successfully' : 'Quote saved (Airtable sync failed)'
     });
 
   } catch (error) {
@@ -166,7 +530,7 @@ async function handleSaveQuote(request, env) {
   }
 }
 
-// Get all quotes
+// ─── Get All Quotes ────────────────────────────────────────────────────────────
 async function handleGetQuotes(request, env) {
   try {
     const url = new URL(request.url);
@@ -181,6 +545,7 @@ async function handleGetQuotes(request, env) {
         customer_email,
         total_price,
         screen_count,
+        quote_number,
         created_at,
         updated_at
       FROM quotes
@@ -203,7 +568,7 @@ async function handleGetQuotes(request, env) {
   }
 }
 
-// Get specific quote
+// ─── Get Specific Quote ────────────────────────────────────────────────────────
 async function handleGetQuote(quoteId, env) {
   try {
     const result = await env.DB.prepare(`
@@ -231,7 +596,7 @@ async function handleGetQuote(quoteId, env) {
   }
 }
 
-// Delete specific quote
+// ─── Delete Specific Quote ─────────────────────────────────────────────────────
 async function handleDeleteQuote(quoteId, env) {
   try {
     if (!quoteId) {
@@ -260,7 +625,7 @@ async function handleDeleteQuote(quoteId, env) {
   }
 }
 
-// Helper function for JSON responses with CORS
+// ─── JSON Response Helper ──────────────────────────────────────────────────────
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status: status,

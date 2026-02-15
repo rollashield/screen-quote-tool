@@ -146,7 +146,189 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('comparisonMotor').value = '';
         }
     });
+
+    // ── Airtable Opportunity Search ──
+    let oppSearchTimeout = null;
+    document.getElementById('opportunitySearch').addEventListener('input', function() {
+        const query = this.value.trim();
+        clearTimeout(oppSearchTimeout);
+
+        if (query.length < 2) {
+            document.getElementById('opportunitySearchResults').style.display = 'none';
+            return;
+        }
+
+        oppSearchTimeout = setTimeout(() => searchOpportunities(query), 300);
+    });
+
+    // Close search results when clicking outside
+    document.addEventListener('click', function(e) {
+        const searchBar = document.getElementById('opportunitySearchBar');
+        if (searchBar && !searchBar.contains(e.target)) {
+            document.getElementById('opportunitySearchResults').style.display = 'none';
+        }
+    });
 });
+
+// ─── Airtable Opportunity Search & Selection ────────────────────────────────
+
+async function searchOpportunities(query) {
+    const resultsDiv = document.getElementById('opportunitySearchResults');
+    resultsDiv.style.display = 'block';
+    resultsDiv.innerHTML = '<div class="opp-search-loading">Searching...</div>';
+
+    try {
+        const response = await fetch(
+            `${WORKER_URL}/api/airtable/opportunities/search?q=${encodeURIComponent(query)}`
+        );
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            resultsDiv.innerHTML = `
+                <div class="opp-search-loading" style="color: #c00;">
+                    Search failed. You can enter customer info manually below.
+                </div>
+                <div class="opp-search-result manual-entry" onclick="selectManualEntry()">
+                    + Create Customer Manually
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+
+        if (result.opportunities.length === 0) {
+            html += '<div class="opp-search-loading">No matching opportunities found.</div>';
+        } else {
+            result.opportunities.forEach(opp => {
+                const contactName = opp.contact
+                    ? `${opp.contact.firstName || ''} ${opp.contact.lastName || ''}`.trim()
+                    : 'No contact';
+                const dateStr = opp.dateTime
+                    ? new Date(opp.dateTime).toLocaleDateString()
+                    : '';
+
+                // Store opp data as a data attribute to avoid inline JSON issues
+                html += `
+                    <div class="opp-search-result" data-opp-id="${escapeAttr(opp.id)}"
+                         onclick="selectOpportunityById(this)">
+                        <div class="opp-name">${escapeHtml(opp.name)}</div>
+                        <div class="opp-details">
+                            ${escapeHtml(contactName)}
+                            ${opp.status ? ' &middot; ' + escapeHtml(opp.status) : ''}
+                            ${dateStr ? ' &middot; ' + dateStr : ''}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Always show "Create Manually" at the bottom
+        html += `
+            <div class="opp-search-result manual-entry" onclick="selectManualEntry()">
+                + Create Customer Manually
+            </div>
+        `;
+
+        resultsDiv.innerHTML = html;
+
+        // Store the full results data for lookup by ID
+        window._oppSearchResults = result.opportunities;
+
+    } catch (error) {
+        console.error('Opportunity search error:', error);
+        resultsDiv.innerHTML = `
+            <div class="opp-search-loading" style="color: #c00;">
+                Search unavailable. Enter customer info manually.
+            </div>
+            <div class="opp-search-result manual-entry" onclick="selectManualEntry()">
+                + Create Customer Manually
+            </div>
+        `;
+    }
+}
+
+function selectOpportunityById(element) {
+    const oppId = element.dataset.oppId;
+    const opp = (window._oppSearchResults || []).find(o => o.id === oppId);
+    if (opp) {
+        selectOpportunity(opp);
+    }
+}
+
+function selectOpportunity(opp) {
+    // Store Airtable IDs
+    document.getElementById('airtableOpportunityId').value = opp.id;
+    document.getElementById('airtableContactId').value = opp.contact ? opp.contact.id : '';
+
+    // Populate form fields from Contact
+    if (opp.contact) {
+        const c = opp.contact;
+        const fullName = `${c.firstName || ''} ${c.lastName || ''}`.trim();
+        document.getElementById('customerName').value = fullName;
+        document.getElementById('customerEmail').value = c.email || '';
+        document.getElementById('customerPhone').value = c.phone || '';
+        document.getElementById('streetAddress').value = c.streetAddress || '';
+        document.getElementById('city').value = c.city || '';
+        document.getElementById('state').value = c.state || 'AZ';
+        document.getElementById('zipCode').value = c.zipCode || '';
+        document.getElementById('companyName').value = c.companyName || '';
+
+        // Show optional fields if company name has a value
+        if (c.companyName) {
+            document.getElementById('optionalCustomerFields').style.display = 'block';
+            document.getElementById('toggleOptionalFields').textContent = '− Hide Addnl Fields';
+        }
+    }
+
+    // Show linked banner
+    const banner = document.getElementById('linkedOpportunityBanner');
+    banner.classList.remove('hidden');
+    banner.style.display = 'flex';
+    document.getElementById('linkedOpportunityText').textContent = 'Linked to: ' + opp.name;
+
+    // Hide search results and clear search input
+    document.getElementById('opportunitySearchResults').style.display = 'none';
+    document.getElementById('opportunitySearch').value = '';
+}
+
+function selectManualEntry() {
+    // Clear Airtable IDs
+    document.getElementById('airtableOpportunityId').value = '';
+    document.getElementById('airtableContactId').value = '';
+
+    // Hide linked banner
+    const banner = document.getElementById('linkedOpportunityBanner');
+    banner.classList.add('hidden');
+    banner.style.display = 'none';
+
+    // Hide search results and clear input
+    document.getElementById('opportunitySearchResults').style.display = 'none';
+    document.getElementById('opportunitySearch').value = '';
+}
+
+function unlinkOpportunity() {
+    document.getElementById('airtableOpportunityId').value = '';
+    document.getElementById('airtableContactId').value = '';
+
+    const banner = document.getElementById('linkedOpportunityBanner');
+    banner.classList.add('hidden');
+    banner.style.display = 'none';
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
+}
+
+// ─── Original Functions ─────────────────────────────────────────────────────
 
 function parseFraction(fractionStr) {
     if (!fractionStr || fractionStr.trim() === '') return 0;
@@ -727,8 +909,13 @@ async function saveQuote() {
         return;
     }
 
+    // Read fresh internal comments from textarea (may have changed since calculate)
+    const internalComments = document.getElementById('internalComments')?.value || '';
+
     // Build the quote payload from currentOrderData
     const orderData = window.currentOrderData;
+    orderData.internalComments = internalComments;
+
     const quoteData = {
         id: orderData.id.toString(),
         customerName: orderData.customerName,
@@ -762,7 +949,11 @@ async function saveQuote() {
         comparisonMotor: orderData.comparisonMotor,
         comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
         comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
-        comparisonTotalPrice: orderData.comparisonTotalPrice
+        comparisonTotalPrice: orderData.comparisonTotalPrice,
+        // Airtable integration fields
+        airtableOpportunityId: orderData.airtableOpportunityId || '',
+        airtableContactId: orderData.airtableContactId || '',
+        internalComments: internalComments
     };
 
     try {
@@ -775,7 +966,14 @@ async function saveQuote() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            alert('Quote saved successfully!');
+            let msg = `Quote saved successfully!\nQuote #: ${result.quoteNumber || 'N/A'}`;
+            if (result.airtableSync === false) {
+                msg += '\n\nNote: Airtable sync failed. Quote saved locally only.';
+                if (result.airtableSyncError) {
+                    msg += '\nReason: ' + result.airtableSyncError;
+                }
+            }
+            alert(msg);
             loadSavedQuotes();
         } else {
             alert('Failed to save quote: ' + (result.error || 'Unknown error'));
@@ -811,10 +1009,12 @@ async function loadSavedQuotes() {
             const date = new Date(quote.created_at).toLocaleDateString();
             const screenCount = quote.screen_count || 0;
             const totalPrice = quote.total_price ? formatCurrency(quote.total_price) : 'N/A';
+            const quoteNum = quote.quote_number ? `<p><strong>Quote #:</strong> ${quote.quote_number}</p>` : '';
 
             html += `
                 <div class="quote-card">
                     <h4>${quote.customer_name}</h4>
+                    ${quoteNum}
                     <p><strong>Date:</strong> ${date}</p>
                     <p><strong>Screens:</strong> ${screenCount}</p>
                     <p><strong>Total:</strong> ${totalPrice}</p>
@@ -861,6 +1061,22 @@ async function loadQuote(quoteId) {
         if (quote.companyName || quote.aptSuite || quote.nearestIntersection) {
             document.getElementById('optionalCustomerFields').style.display = 'block';
             document.getElementById('toggleOptionalFields').textContent = '− Hide Addnl Fields';
+        }
+
+        // Restore Airtable link state
+        if (quote.airtableOpportunityId) {
+            document.getElementById('airtableOpportunityId').value = quote.airtableOpportunityId;
+            document.getElementById('airtableContactId').value = quote.airtableContactId || '';
+            const banner = document.getElementById('linkedOpportunityBanner');
+            banner.classList.remove('hidden');
+            banner.style.display = 'flex';
+            document.getElementById('linkedOpportunityText').textContent = 'Linked to Airtable Opportunity';
+        } else {
+            document.getElementById('airtableOpportunityId').value = '';
+            document.getElementById('airtableContactId').value = '';
+            const banner = document.getElementById('linkedOpportunityBanner');
+            banner.classList.add('hidden');
+            banner.style.display = 'none';
         }
 
         // Restore screens into the order
@@ -983,7 +1199,11 @@ async function finalizeProjectDetails() {
                 comparisonMotor: orderData.comparisonMotor,
                 comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
                 comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
-                comparisonTotalPrice: orderData.comparisonTotalPrice
+                comparisonTotalPrice: orderData.comparisonTotalPrice,
+                // Airtable integration fields
+                airtableOpportunityId: orderData.airtableOpportunityId || '',
+                airtableContactId: orderData.airtableContactId || '',
+                internalComments: document.getElementById('internalComments')?.value || ''
             })
         });
 
@@ -1035,6 +1255,19 @@ function resetForm() {
     document.getElementById('discountPercent').value = '0';
     updateAccessories();
     editingScreenIndex = null;
+
+    // Clear Airtable state
+    document.getElementById('airtableOpportunityId').value = '';
+    document.getElementById('airtableContactId').value = '';
+    document.getElementById('opportunitySearch').value = '';
+    document.getElementById('opportunitySearchResults').style.display = 'none';
+    const banner = document.getElementById('linkedOpportunityBanner');
+    banner.classList.add('hidden');
+    banner.style.display = 'none';
+
+    // Clear internal comments
+    const commentsEl = document.getElementById('internalComments');
+    if (commentsEl) commentsEl.value = '';
 }
 
 // Multi-screen order functions
@@ -1545,6 +1778,11 @@ function calculateOrderQuote() {
     const state = document.getElementById('state').value;
     const zipCode = document.getElementById('zipCode').value;
 
+    // Get Airtable integration fields
+    const airtableOpportunityId = document.getElementById('airtableOpportunityId').value;
+    const airtableContactId = document.getElementById('airtableContactId').value;
+    const internalComments = document.getElementById('internalComments')?.value || '';
+
     // Display order quote summary
     displayOrderQuoteSummary({
         id: Date.now(),
@@ -1579,7 +1817,10 @@ function calculateOrderQuote() {
         comparisonMotor,
         comparisonTotalMaterialsPrice,
         comparisonDiscountedMaterialsPrice,
-        comparisonTotalPrice
+        comparisonTotalPrice,
+        airtableOpportunityId,
+        airtableContactId,
+        internalComments
     });
 }
 
@@ -1837,6 +2078,14 @@ function displayOrderQuoteSummary(orderData) {
 
     internalInfo.innerHTML = internalHTML;
     quoteSummary.classList.remove('hidden');
+
+    // Restore internal comments if present on the order data
+    setTimeout(() => {
+        const commentsEl = document.getElementById('internalComments');
+        if (commentsEl && orderData.internalComments) {
+            commentsEl.value = orderData.internalComments;
+        }
+    }, 0);
 
     // Scroll to quote
     quoteSummary.scrollIntoView({ behavior: 'smooth' });
