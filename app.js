@@ -59,7 +59,10 @@
  *   comparisonMotor: string,
  *   comparisonTotalMaterialsPrice: number,
  *   comparisonDiscountedMaterialsPrice: number,
- *   comparisonTotalPrice: number
+ *   comparisonTotalPrice: number,
+ *   salesRepName: string,
+ *   salesRepEmail: string,
+ *   salesRepPhone: string
  * }
  */
 
@@ -281,6 +284,13 @@ function selectOpportunity(opp) {
         }
     }
 
+    // Populate Sales Rep fields if available
+    if (opp.salesRep) {
+        document.getElementById('salesRepName').value = opp.salesRep.name || '';
+        document.getElementById('salesRepEmail').value = opp.salesRep.email || '';
+        document.getElementById('salesRepPhone').value = opp.salesRep.phone || '';
+    }
+
     // Show linked banner
     const banner = document.getElementById('linkedOpportunityBanner');
     banner.classList.remove('hidden');
@@ -293,9 +303,12 @@ function selectOpportunity(opp) {
 }
 
 function selectManualEntry() {
-    // Clear Airtable IDs
+    // Clear Airtable IDs and Sales Rep
     document.getElementById('airtableOpportunityId').value = '';
     document.getElementById('airtableContactId').value = '';
+    document.getElementById('salesRepName').value = '';
+    document.getElementById('salesRepEmail').value = '';
+    document.getElementById('salesRepPhone').value = '';
 
     // Hide linked banner
     const banner = document.getElementById('linkedOpportunityBanner');
@@ -310,6 +323,9 @@ function selectManualEntry() {
 function unlinkOpportunity() {
     document.getElementById('airtableOpportunityId').value = '';
     document.getElementById('airtableContactId').value = '';
+    document.getElementById('salesRepName').value = '';
+    document.getElementById('salesRepEmail').value = '';
+    document.getElementById('salesRepPhone').value = '';
 
     const banner = document.getElementById('linkedOpportunityBanner');
     banner.classList.add('hidden');
@@ -377,7 +393,7 @@ function getClientFacingOperatorName(operatorType, operatorTypeName) {
         return 'Solar Motor';
     }
     if (operatorType === 'somfy-rts') {
-        return 'Somfy Remote-Operated Motor';
+        return 'Remote-Operated Motor';
     }
     return operatorTypeName;
 }
@@ -433,7 +449,7 @@ function updateComparisonOptions() {
             motorOptions.push({value: 'gaposa-solar', label: 'Solar Motor'});
         }
         if (operatorType !== 'somfy-rts') {
-            motorOptions.push({value: 'somfy-rts', label: 'Somfy Remote-Operated Motor'});
+            motorOptions.push({value: 'somfy-rts', label: 'Somfy RTS Motor'});
         }
     }
 
@@ -965,7 +981,11 @@ async function saveQuote() {
             // Airtable integration fields
             airtableOpportunityId: orderData.airtableOpportunityId || '',
             airtableContactId: orderData.airtableContactId || '',
-            internalComments: internalComments
+            internalComments: internalComments,
+            // Sales Rep info
+            salesRepName: orderData.salesRepName || '',
+            salesRepEmail: orderData.salesRepEmail || '',
+            salesRepPhone: orderData.salesRepPhone || ''
         };
 
         const response = await fetch(`${WORKER_URL}/api/save-quote`, {
@@ -1093,6 +1113,11 @@ async function loadQuote(quoteId) {
             banner.classList.add('hidden');
             banner.style.display = 'none';
         }
+
+        // Restore Sales Rep info
+        document.getElementById('salesRepName').value = quote.salesRepName || '';
+        document.getElementById('salesRepEmail').value = quote.salesRepEmail || '';
+        document.getElementById('salesRepPhone').value = quote.salesRepPhone || '';
 
         // Restore screens into the order
         if (quote.screens && quote.screens.length > 0) {
@@ -1812,6 +1837,11 @@ function calculateOrderQuote() {
     const airtableContactId = document.getElementById('airtableContactId').value;
     const internalComments = document.getElementById('internalComments')?.value || '';
 
+    // Get Sales Rep info
+    const salesRepName = document.getElementById('salesRepName').value;
+    const salesRepEmail = document.getElementById('salesRepEmail').value;
+    const salesRepPhone = document.getElementById('salesRepPhone').value;
+
     // Display order quote summary
     displayOrderQuoteSummary({
         id: Date.now(),
@@ -1849,7 +1879,10 @@ function calculateOrderQuote() {
         comparisonTotalPrice,
         airtableOpportunityId,
         airtableContactId,
-        internalComments
+        internalComments,
+        salesRepName,
+        salesRepEmail,
+        salesRepPhone
     });
 }
 

@@ -197,7 +197,7 @@ async function handleOpportunitySearch(request, env) {
     const formula = `AND(SEARCH(LOWER("${sanitizedQuery}"), LOWER({Name})), {Status} != "Closed Lost")`;
 
     // Airtable needs fields[] as repeated params
-    const fieldParams = ['Name', 'Contacts', 'Status', 'Date & Time', 'Sales Rep']
+    const fieldParams = ['Name', 'Contacts', 'Status', 'Date & Time', 'Sales Rep', 'Sales Rep Name', 'Sales Rep Email']
       .map(f => `fields%5B%5D=${encodeURIComponent(f)}`)
       .join('&');
 
@@ -244,17 +244,53 @@ async function handleOpportunitySearch(request, env) {
       });
     }
 
-    // Build response with nested Contact data
+    // Collect Sales Rep record IDs for phone lookup
+    const salesRepIds = new Set();
+    opportunities.forEach(opp => {
+      const reps = opp.fields['Sales Rep'] || [];
+      reps.forEach(id => salesRepIds.add(id));
+    });
+
+    // Batch-fetch Sales Rep records for phone numbers
+    const salesRepMap = {};
+    if (salesRepIds.size > 0) {
+      const repFormula = `OR(${[...salesRepIds].map(id => `RECORD_ID()='${id}'`).join(',')})`;
+      const repFields = ['Name', 'Email', 'Phone']
+        .map(f => `fields%5B%5D=${encodeURIComponent(f)}`)
+        .join('&');
+
+      const repPath = `/tblBtKFE2ZM5CE3MD?filterByFormula=${encodeURIComponent(repFormula)}&${repFields}`;
+      const repResult = await airtableFetch(env, repPath);
+
+      (repResult.records || []).forEach(rec => {
+        salesRepMap[rec.id] = {
+          phone: rec.fields['Phone'] || ''
+        };
+      });
+    }
+
+    // Build response with nested Contact and Sales Rep data
     const results = opportunities.map(opp => {
       const oppContactIds = opp.fields['Contacts'] || [];
       const contact = oppContactIds.length > 0 ? (contactMap[oppContactIds[0]] || null) : null;
+
+      // Sales Rep info from lookup fields + phone from Sales Rep record
+      const salesRepRecordIds = opp.fields['Sales Rep'] || [];
+      const salesRepNameArr = opp.fields['Sales Rep Name'] || [];
+      const salesRepEmailArr = opp.fields['Sales Rep Email'] || [];
+      const salesRepPhone = salesRepRecordIds.length > 0 ? (salesRepMap[salesRepRecordIds[0]]?.phone || '') : '';
 
       return {
         id: opp.id,
         name: opp.fields['Name'] || '',
         status: opp.fields['Status'] || '',
         dateTime: opp.fields['Date & Time'] || '',
-        contact: contact
+        contact: contact,
+        salesRep: salesRepNameArr.length > 0 ? {
+          name: salesRepNameArr[0] || '',
+          email: salesRepEmailArr[0] || '',
+          phone: salesRepPhone
+        } : null
       };
     });
 
