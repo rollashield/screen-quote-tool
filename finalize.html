@@ -366,10 +366,49 @@
             });
         }
 
+        // Store quoted dimensions in inches for comparison with final measurements
+        let quotedWidthInches = 0;
+        let quotedHeightInches = 0;
+
+        function parseFraction(fractionStr) {
+            if (!fractionStr || fractionStr.trim() === '') return 0;
+            const parts = fractionStr.trim().split('/');
+            if (parts.length === 2) {
+                const numerator = parseFloat(parts[0]);
+                const denominator = parseFloat(parts[1]);
+                if (denominator !== 0 && !isNaN(numerator) && !isNaN(denominator)) {
+                    return numerator / denominator;
+                }
+            }
+            return 0;
+        }
+
+        function getMeasurement(id) {
+            const whole = parseFloat(document.getElementById(id).value) || 0;
+            const frac = parseFraction(document.getElementById(id + 'Frac')?.value);
+            return whole + frac;
+        }
+
+        // Extract whole-inch part for display (strips fraction portion if saved as combined value)
+        function wholeInches(saved, key) {
+            if (!saved[key]) return '';
+            const fracKey = key + 'Frac';
+            // If fraction string is stored, subtract it from the combined value to get whole inches
+            if (saved[fracKey]) {
+                return Math.floor(saved[key]) || '';
+            }
+            // Legacy data: no fraction stored, show as-is
+            return saved[key];
+        }
+
         function displayMeasurementForm(index) {
             const form = document.getElementById('measurementForm');
             const screen = orderData.screens[index];
             const saved = finalMeasurements[index] || {};
+
+            // Store quoted dimensions for validation comparison
+            quotedWidthInches = screen.totalWidthInches || 0;
+            quotedHeightInches = screen.totalHeightInches || 0;
 
             form.innerHTML = `
                 <h2 style="color: #0056A3; margin-bottom: 15px;">Screen ${index + 1} - Final Measurements</h2>
@@ -386,24 +425,38 @@
                         <div class="form-group">
                             <label>Top Width *</label>
                             <div class="measurement-group">
-                                <input type="number" id="widthTop" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.widthTop || ''}" required>
+                                <div style="display: flex; gap: 6px; align-items: center; flex: 1;">
+                                    <input type="number" id="widthTop" class="measurement-input" placeholder="Inches" step="1" value="${wholeInches(saved, 'widthTop')}" required>
+                                    <input type="text" id="widthTopFrac" class="fraction-input" placeholder="e.g. 3/8" value="${saved.widthTopFrac || ''}" style="flex: 0 0 80px; padding: 8px 6px; border: 2px solid #ddd; border-radius: 4px; font-size: 0.85rem; text-align: center;">
+                                </div>
                                 <span class="checkmark-indicator" id="checkWidthTop">✓</span>
                             </div>
                         </div>
                         <div class="form-group">
                             <label>Middle Width *</label>
                             <div class="measurement-group">
-                                <input type="number" id="widthMiddle" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.widthMiddle || ''}" required>
+                                <div style="display: flex; gap: 6px; align-items: center; flex: 1;">
+                                    <input type="number" id="widthMiddle" class="measurement-input" placeholder="Inches" step="1" value="${wholeInches(saved, 'widthMiddle')}" required>
+                                    <input type="text" id="widthMiddleFrac" class="fraction-input" placeholder="e.g. 3/8" value="${saved.widthMiddleFrac || ''}" style="flex: 0 0 80px; padding: 8px 6px; border: 2px solid #ddd; border-radius: 4px; font-size: 0.85rem; text-align: center;">
+                                </div>
                                 <span class="checkmark-indicator" id="checkWidthMiddle">✓</span>
                             </div>
                         </div>
                         <div class="form-group">
                             <label>Bottom Width *</label>
                             <div class="measurement-group">
-                                <input type="number" id="widthBottom" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.widthBottom || ''}" required>
+                                <div style="display: flex; gap: 6px; align-items: center; flex: 1;">
+                                    <input type="number" id="widthBottom" class="measurement-input" placeholder="Inches" step="1" value="${wholeInches(saved, 'widthBottom')}" required>
+                                    <input type="text" id="widthBottomFrac" class="fraction-input" placeholder="e.g. 3/8" value="${saved.widthBottomFrac || ''}" style="flex: 0 0 80px; padding: 8px 6px; border: 2px solid #ddd; border-radius: 4px; font-size: 0.85rem; text-align: center;">
+                                </div>
                                 <span class="checkmark-indicator" id="checkWidthBottom">✓</span>
                             </div>
                         </div>
+                    </div>
+                    <div id="widthSpreadWarning" style="display: none; color: #b45309; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 0.85rem; font-weight: 500;">
+                        Width measurements differ by more than 2". Double-check your entry.
+                    </div>
+                    <div id="widthQuoteWarning" style="display: none; color: #b45309; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 0.85rem; font-weight: 500;">
                     </div>
                 </div>
 
@@ -414,24 +467,38 @@
                         <div class="form-group">
                             <label>Left Height *</label>
                             <div class="measurement-group">
-                                <input type="number" id="heightLeft" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.heightLeft || ''}" required>
+                                <div style="display: flex; gap: 6px; align-items: center; flex: 1;">
+                                    <input type="number" id="heightLeft" class="measurement-input" placeholder="Inches" step="1" value="${wholeInches(saved, 'heightLeft')}" required>
+                                    <input type="text" id="heightLeftFrac" class="fraction-input" placeholder="e.g. 3/8" value="${saved.heightLeftFrac || ''}" style="flex: 0 0 80px; padding: 8px 6px; border: 2px solid #ddd; border-radius: 4px; font-size: 0.85rem; text-align: center;">
+                                </div>
                                 <span class="checkmark-indicator" id="checkHeightLeft">✓</span>
                             </div>
                         </div>
                         <div class="form-group">
                             <label>Middle Height *</label>
                             <div class="measurement-group">
-                                <input type="number" id="heightMiddle" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.heightMiddle || ''}" required>
+                                <div style="display: flex; gap: 6px; align-items: center; flex: 1;">
+                                    <input type="number" id="heightMiddle" class="measurement-input" placeholder="Inches" step="1" value="${wholeInches(saved, 'heightMiddle')}" required>
+                                    <input type="text" id="heightMiddleFrac" class="fraction-input" placeholder="e.g. 3/8" value="${saved.heightMiddleFrac || ''}" style="flex: 0 0 80px; padding: 8px 6px; border: 2px solid #ddd; border-radius: 4px; font-size: 0.85rem; text-align: center;">
+                                </div>
                                 <span class="checkmark-indicator" id="checkHeightMiddle">✓</span>
                             </div>
                         </div>
                         <div class="form-group">
                             <label>Right Height *</label>
                             <div class="measurement-group">
-                                <input type="number" id="heightRight" class="measurement-input" placeholder="Inches" step="0.01" value="${saved.heightRight || ''}" required>
+                                <div style="display: flex; gap: 6px; align-items: center; flex: 1;">
+                                    <input type="number" id="heightRight" class="measurement-input" placeholder="Inches" step="1" value="${wholeInches(saved, 'heightRight')}" required>
+                                    <input type="text" id="heightRightFrac" class="fraction-input" placeholder="e.g. 3/8" value="${saved.heightRightFrac || ''}" style="flex: 0 0 80px; padding: 8px 6px; border: 2px solid #ddd; border-radius: 4px; font-size: 0.85rem; text-align: center;">
+                                </div>
                                 <span class="checkmark-indicator" id="checkHeightRight">✓</span>
                             </div>
                         </div>
+                    </div>
+                    <div id="heightSpreadWarning" style="display: none; color: #b45309; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 0.85rem; font-weight: 500;">
+                        Height measurements differ by more than 2". Double-check your entry.
+                    </div>
+                    <div id="heightQuoteWarning" style="display: none; color: #b45309; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 0.85rem; font-weight: 500;">
                     </div>
                 </div>
 
@@ -591,34 +658,64 @@
 
             form.classList.add('active');
 
-            // Add event listeners for auto-selection
+            // Add event listeners for auto-selection (whole + fraction inputs)
             updateWidthSelection();
             updateHeightSelection();
 
             document.getElementById('widthTop').addEventListener('input', updateWidthSelection);
             document.getElementById('widthMiddle').addEventListener('input', updateWidthSelection);
             document.getElementById('widthBottom').addEventListener('input', updateWidthSelection);
+            document.getElementById('widthTopFrac').addEventListener('input', updateWidthSelection);
+            document.getElementById('widthMiddleFrac').addEventListener('input', updateWidthSelection);
+            document.getElementById('widthBottomFrac').addEventListener('input', updateWidthSelection);
             document.getElementById('heightLeft').addEventListener('input', updateHeightSelection);
             document.getElementById('heightMiddle').addEventListener('input', updateHeightSelection);
             document.getElementById('heightRight').addEventListener('input', updateHeightSelection);
+            document.getElementById('heightLeftFrac').addEventListener('input', updateHeightSelection);
+            document.getElementById('heightMiddleFrac').addEventListener('input', updateHeightSelection);
+            document.getElementById('heightRightFrac').addEventListener('input', updateHeightSelection);
         }
 
         function updateWidthSelection() {
-            const top = parseFloat(document.getElementById('widthTop').value) || Infinity;
-            const middle = parseFloat(document.getElementById('widthMiddle').value) || Infinity;
-            const bottom = parseFloat(document.getElementById('widthBottom').value) || Infinity;
+            const top = getMeasurement('widthTop') || Infinity;
+            const middle = getMeasurement('widthMiddle') || Infinity;
+            const bottom = getMeasurement('widthBottom') || Infinity;
 
             const min = Math.min(top, middle, bottom);
 
             document.getElementById('checkWidthTop').classList.toggle('selected', top === min && top !== Infinity);
             document.getElementById('checkWidthMiddle').classList.toggle('selected', middle === min && middle !== Infinity);
             document.getElementById('checkWidthBottom').classList.toggle('selected', bottom === min && bottom !== Infinity);
+
+            // Spread warning: >2" difference among the three measurements
+            const widthValues = [top, middle, bottom].filter(v => v !== Infinity);
+            const spreadWarning = document.getElementById('widthSpreadWarning');
+            if (widthValues.length >= 2) {
+                const spread = Math.max(...widthValues) - Math.min(...widthValues);
+                spreadWarning.style.display = spread > 2 ? 'block' : 'none';
+            } else {
+                spreadWarning.style.display = 'none';
+            }
+
+            // Quote comparison warning: selected width vs quoted width
+            const quoteWarning = document.getElementById('widthQuoteWarning');
+            if (min !== Infinity && quotedWidthInches > 0) {
+                const diff = Math.abs(min - quotedWidthInches);
+                if (diff > 2) {
+                    quoteWarning.textContent = `Final width differs by more than 2" from quoted dimensions (${quotedWidthInches}"). Please verify.`;
+                    quoteWarning.style.display = 'block';
+                } else {
+                    quoteWarning.style.display = 'none';
+                }
+            } else {
+                quoteWarning.style.display = 'none';
+            }
         }
 
         function updateHeightSelection() {
-            const left = parseFloat(document.getElementById('heightLeft').value) || -Infinity;
-            const middle = parseFloat(document.getElementById('heightMiddle').value) || -Infinity;
-            const right = parseFloat(document.getElementById('heightRight').value) || -Infinity;
+            const left = getMeasurement('heightLeft') || -Infinity;
+            const middle = getMeasurement('heightMiddle') || -Infinity;
+            const right = getMeasurement('heightRight') || -Infinity;
 
             const max = Math.max(left, middle, right);
 
@@ -629,20 +726,43 @@
             // Auto-adjust brush size based on height slope
             const values = [left, middle, right].filter(v => v !== -Infinity);
             const brushSelect = document.getElementById('hemBarBrush');
-            const warning = document.getElementById('brushSlopeWarning');
-            if (values.length >= 2 && brushSelect && warning) {
+            const slopeWarning = document.getElementById('brushSlopeWarning');
+            if (values.length >= 2 && brushSelect && slopeWarning) {
                 const heightMax = Math.max(...values);
                 const heightMin = Math.min(...values);
                 const diff = heightMax - heightMin;
                 if (diff > 1) {
                     brushSelect.value = '1.5';
-                    warning.style.display = 'inline';
+                    slopeWarning.style.display = 'inline';
                 } else if (diff > 0.5) {
                     brushSelect.value = '1';
-                    warning.style.display = 'inline';
+                    slopeWarning.style.display = 'inline';
                 } else {
-                    warning.style.display = 'none';
+                    slopeWarning.style.display = 'none';
                 }
+            }
+
+            // Spread warning: >2" difference among the three measurements
+            const spreadWarning = document.getElementById('heightSpreadWarning');
+            if (values.length >= 2) {
+                const spread = Math.max(...values) - Math.min(...values);
+                spreadWarning.style.display = spread > 2 ? 'block' : 'none';
+            } else {
+                spreadWarning.style.display = 'none';
+            }
+
+            // Quote comparison warning: selected height vs quoted height
+            const quoteWarning = document.getElementById('heightQuoteWarning');
+            if (max !== -Infinity && quotedHeightInches > 0) {
+                const diff = Math.abs(max - quotedHeightInches);
+                if (diff > 2) {
+                    quoteWarning.textContent = `Final height differs by more than 2" from quoted dimensions (${quotedHeightInches}"). Please verify.`;
+                    quoteWarning.style.display = 'block';
+                } else {
+                    quoteWarning.style.display = 'none';
+                }
+            } else {
+                quoteWarning.style.display = 'none';
             }
         }
 
@@ -651,23 +771,30 @@
 
             const screen = orderData.screens[currentScreenIndex];
 
-            // Gather all measurements
+            // Gather all measurements (combined whole + fraction values)
             const measurements = {
-                widthTop: parseFloat(document.getElementById('widthTop').value),
-                widthMiddle: parseFloat(document.getElementById('widthMiddle').value),
-                widthBottom: parseFloat(document.getElementById('widthBottom').value),
-                heightLeft: parseFloat(document.getElementById('heightLeft').value),
-                heightMiddle: parseFloat(document.getElementById('heightMiddle').value),
-                heightRight: parseFloat(document.getElementById('heightRight').value),
+                widthTop: getMeasurement('widthTop'),
+                widthMiddle: getMeasurement('widthMiddle'),
+                widthBottom: getMeasurement('widthBottom'),
+                heightLeft: getMeasurement('heightLeft'),
+                heightMiddle: getMeasurement('heightMiddle'),
+                heightRight: getMeasurement('heightRight'),
+                // Store fraction strings for form restoration
+                widthTopFrac: document.getElementById('widthTopFrac').value,
+                widthMiddleFrac: document.getElementById('widthMiddleFrac').value,
+                widthBottomFrac: document.getElementById('widthBottomFrac').value,
+                heightLeftFrac: document.getElementById('heightLeftFrac').value,
+                heightMiddleFrac: document.getElementById('heightMiddleFrac').value,
+                heightRightFrac: document.getElementById('heightRightFrac').value,
                 selectedWidth: Math.min(
-                    parseFloat(document.getElementById('widthTop').value) || Infinity,
-                    parseFloat(document.getElementById('widthMiddle').value) || Infinity,
-                    parseFloat(document.getElementById('widthBottom').value) || Infinity
+                    getMeasurement('widthTop') || Infinity,
+                    getMeasurement('widthMiddle') || Infinity,
+                    getMeasurement('widthBottom') || Infinity
                 ),
                 selectedHeight: Math.max(
-                    parseFloat(document.getElementById('heightLeft').value) || -Infinity,
-                    parseFloat(document.getElementById('heightMiddle').value) || -Infinity,
-                    parseFloat(document.getElementById('heightRight').value) || -Infinity
+                    getMeasurement('heightLeft') || -Infinity,
+                    getMeasurement('heightMiddle') || -Infinity,
+                    getMeasurement('heightRight') || -Infinity
                 ),
                 operatorSide: document.getElementById('operatorSide').value,
                 mountType: document.getElementById('mountType').value,

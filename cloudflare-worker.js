@@ -270,7 +270,7 @@ async function handleOpportunitySearch(request, env) {
 }
 
 // ─── Airtable Save (Create Quote + Update/Create Contact/Opportunity) ──────────
-async function handleAirtableSave(env, quoteData, quoteNumber, quoteId) {
+async function handleAirtableSave(env, quoteData, quoteNumber, quoteId, existingAirtableQuoteId) {
   let airtableOpportunityId = quoteData.airtableOpportunityId;
   let airtableContactId = quoteData.airtableContactId;
   let airtableQuoteId = null;
@@ -316,7 +316,7 @@ async function handleAirtableSave(env, quoteData, quoteNumber, quoteId) {
     airtableOpportunityId = oppResult.id;
   }
 
-  // ── Create Quote record in Airtable ──
+  // ── Create or update Quote record in Airtable ──
   const quoteFields = {
     [AT_FIELDS.quotes.opportunity]: [airtableOpportunityId],
     [AT_FIELDS.quotes.totalAmount]: quoteData.orderTotalPrice || 0,
@@ -329,17 +329,35 @@ async function handleAirtableSave(env, quoteData, quoteNumber, quoteId) {
     [AT_FIELDS.quotes.notes]: buildQuoteNotes(quoteData)
   };
 
-  const quoteResult = await airtableFetch(env, `/${AT_TABLES.quotes}`, {
-    method: 'POST',
-    body: JSON.stringify({ fields: quoteFields })
-  });
-  airtableQuoteId = quoteResult.id;
+  if (existingAirtableQuoteId) {
+    // PATCH existing Quote record instead of creating a duplicate
+    const quoteResult = await airtableFetch(env, `/${AT_TABLES.quotes}/${existingAirtableQuoteId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ fields: quoteFields })
+    });
+    airtableQuoteId = quoteResult.id;
+  } else {
+    // Create new Quote record
+    const quoteResult = await airtableFetch(env, `/${AT_TABLES.quotes}`, {
+      method: 'POST',
+      body: JSON.stringify({ fields: quoteFields })
+    });
+    airtableQuoteId = quoteResult.id;
+  }
 
   // ── Update Contact (sync-back editable fields) ──
   // Only if we have a Contact ID and there was an existing opportunity
   // (for manual entry, Contact was already created with current data above)
   if (airtableContactId && quoteData.airtableOpportunityId) {
     const updateFields = {};
+
+    // Split customer name into first/last for Airtable
+    if (quoteData.customerName) {
+      const nameParts = quoteData.customerName.trim().split(/\s+/);
+      updateFields[AT_FIELDS.contacts.firstName] = nameParts[0] || '';
+      updateFields[AT_FIELDS.contacts.lastName] = nameParts.slice(1).join(' ') || '';
+    }
+
     if (quoteData.streetAddress) updateFields[AT_FIELDS.contacts.streetAddress] = quoteData.streetAddress;
     if (quoteData.city) updateFields[AT_FIELDS.contacts.city] = quoteData.city;
     if (quoteData.state) updateFields[AT_FIELDS.contacts.state] = quoteData.state;
@@ -438,6 +456,20 @@ async function handleSaveQuote(request, env) {
     const quoteId = quoteData.id || Date.now().toString();
     const timestamp = new Date().toISOString();
 
+    // Check if this quote already has an Airtable Quote record (idempotency)
+    // Must happen BEFORE INSERT OR REPLACE which resets airtable_quote_id to null
+    let existingAirtableQuoteId = null;
+    try {
+      const existingRow = await env.DB.prepare(
+        'SELECT airtable_quote_id, quote_number FROM quotes WHERE id = ?'
+      ).bind(quoteId).first();
+      if (existingRow && existingRow.airtable_quote_id) {
+        existingAirtableQuoteId = existingRow.airtable_quote_id;
+      }
+    } catch (lookupErr) {
+      console.error('Error checking existing Airtable quote ID:', lookupErr);
+    }
+
     // Generate quote number
     let quoteNumber = null;
     try {
@@ -505,7 +537,7 @@ async function handleSaveQuote(request, env) {
     let airtableSyncError = null;
 
     try {
-      const atResult = await handleAirtableSave(env, quoteData, quoteNumber, quoteId);
+      const atResult = await handleAirtableSave(env, quoteData, quoteNumber, quoteId, existingAirtableQuoteId);
       airtableSync = atResult.success;
     } catch (atError) {
       console.error('Airtable sync failed:', atError);

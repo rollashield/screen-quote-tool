@@ -274,8 +274,8 @@ function selectOpportunity(opp) {
         document.getElementById('zipCode').value = c.zipCode || '';
         document.getElementById('companyName').value = c.companyName || '';
 
-        // Show optional fields if company name has a value
-        if (c.companyName) {
+        // Show optional fields if any optional field has a value
+        if (c.companyName || c.aptSuite || c.nearestIntersection) {
             document.getElementById('optionalCustomerFields').style.display = 'block';
             document.getElementById('toggleOptionalFields').textContent = '− Hide Addnl Fields';
         }
@@ -327,6 +327,9 @@ function escapeAttr(text) {
     if (!text) return '';
     return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
 }
+
+// ─── Save Guard ─────────────────────────────────────────────────────────────
+let isSaving = false;
 
 // ─── Original Functions ─────────────────────────────────────────────────────
 
@@ -898,6 +901,8 @@ function displayQuoteSummary(quote) {
 }
 
 async function saveQuote() {
+    if (isSaving) return;
+
     if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
         alert('Please calculate a quote first');
         return;
@@ -909,54 +914,60 @@ async function saveQuote() {
         return;
     }
 
-    // Read fresh internal comments from textarea (may have changed since calculate)
-    const internalComments = document.getElementById('internalComments')?.value || '';
-
-    // Build the quote payload from currentOrderData
-    const orderData = window.currentOrderData;
-    orderData.internalComments = internalComments;
-
-    const quoteData = {
-        id: orderData.id.toString(),
-        customerName: orderData.customerName,
-        companyName: orderData.companyName || '',
-        customerEmail: orderData.customerEmail || '',
-        customerPhone: orderData.customerPhone || '',
-        streetAddress: orderData.streetAddress || '',
-        aptSuite: orderData.aptSuite || '',
-        nearestIntersection: orderData.nearestIntersection || '',
-        city: orderData.city || '',
-        state: orderData.state || '',
-        zipCode: orderData.zipCode || '',
-        screens: orderData.screens,
-        orderTotalPrice: orderData.orderTotalPrice,
-        orderTotalMaterialsPrice: orderData.orderTotalMaterialsPrice,
-        orderTotalInstallationPrice: orderData.orderTotalInstallationPrice,
-        orderTotalInstallationCost: orderData.orderTotalInstallationCost,
-        orderTotalCost: orderData.orderTotalCost,
-        totalProfit: orderData.totalProfit,
-        marginPercent: orderData.marginPercent,
-        hasCableScreen: orderData.hasCableScreen,
-        totalScreenCosts: orderData.totalScreenCosts,
-        totalMotorCosts: orderData.totalMotorCosts,
-        totalAccessoriesCosts: orderData.totalAccessoriesCosts,
-        totalCableSurcharge: orderData.totalCableSurcharge,
-        discountPercent: orderData.discountPercent,
-        discountLabel: orderData.discountLabel,
-        discountAmount: orderData.discountAmount,
-        discountedMaterialsPrice: orderData.discountedMaterialsPrice,
-        enableComparison: orderData.enableComparison,
-        comparisonMotor: orderData.comparisonMotor,
-        comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
-        comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
-        comparisonTotalPrice: orderData.comparisonTotalPrice,
-        // Airtable integration fields
-        airtableOpportunityId: orderData.airtableOpportunityId || '',
-        airtableContactId: orderData.airtableContactId || '',
-        internalComments: internalComments
-    };
+    isSaving = true;
+    const saveBtn = document.querySelector('button[onclick="saveQuote()"]');
+    const finalizeBtn = document.querySelector('button[onclick="finalizeProjectDetails()"]');
+    if (saveBtn) saveBtn.disabled = true;
+    if (finalizeBtn) finalizeBtn.disabled = true;
 
     try {
+        // Read fresh internal comments from textarea (may have changed since calculate)
+        const internalComments = document.getElementById('internalComments')?.value || '';
+
+        // Build the quote payload from currentOrderData
+        const orderData = window.currentOrderData;
+        orderData.internalComments = internalComments;
+
+        const quoteData = {
+            id: orderData.id.toString(),
+            customerName: orderData.customerName,
+            companyName: orderData.companyName || '',
+            customerEmail: orderData.customerEmail || '',
+            customerPhone: orderData.customerPhone || '',
+            streetAddress: orderData.streetAddress || '',
+            aptSuite: orderData.aptSuite || '',
+            nearestIntersection: orderData.nearestIntersection || '',
+            city: orderData.city || '',
+            state: orderData.state || '',
+            zipCode: orderData.zipCode || '',
+            screens: orderData.screens,
+            orderTotalPrice: orderData.orderTotalPrice,
+            orderTotalMaterialsPrice: orderData.orderTotalMaterialsPrice,
+            orderTotalInstallationPrice: orderData.orderTotalInstallationPrice,
+            orderTotalInstallationCost: orderData.orderTotalInstallationCost,
+            orderTotalCost: orderData.orderTotalCost,
+            totalProfit: orderData.totalProfit,
+            marginPercent: orderData.marginPercent,
+            hasCableScreen: orderData.hasCableScreen,
+            totalScreenCosts: orderData.totalScreenCosts,
+            totalMotorCosts: orderData.totalMotorCosts,
+            totalAccessoriesCosts: orderData.totalAccessoriesCosts,
+            totalCableSurcharge: orderData.totalCableSurcharge,
+            discountPercent: orderData.discountPercent,
+            discountLabel: orderData.discountLabel,
+            discountAmount: orderData.discountAmount,
+            discountedMaterialsPrice: orderData.discountedMaterialsPrice,
+            enableComparison: orderData.enableComparison,
+            comparisonMotor: orderData.comparisonMotor,
+            comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
+            comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
+            comparisonTotalPrice: orderData.comparisonTotalPrice,
+            // Airtable integration fields
+            airtableOpportunityId: orderData.airtableOpportunityId || '',
+            airtableContactId: orderData.airtableContactId || '',
+            internalComments: internalComments
+        };
+
         const response = await fetch(`${WORKER_URL}/api/save-quote`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -981,6 +992,10 @@ async function saveQuote() {
     } catch (error) {
         console.error('Error saving quote:', error);
         alert('Failed to save quote. Please check your internet connection.\n\nError: ' + error.message);
+    } finally {
+        isSaving = false;
+        if (saveBtn) saveBtn.disabled = false;
+        if (finalizeBtn) finalizeBtn.disabled = false;
     }
 }
 
@@ -1152,11 +1167,19 @@ function generatePDF() {
 }
 
 async function finalizeProjectDetails() {
+    if (isSaving) return;
+
     // Check if order has been calculated
     if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
         alert('Please calculate an order quote first before finalizing project details.');
         return;
     }
+
+    isSaving = true;
+    const saveBtn = document.querySelector('button[onclick="saveQuote()"]');
+    const finalizeBtn = document.querySelector('button[onclick="finalizeProjectDetails()"]');
+    if (saveBtn) saveBtn.disabled = true;
+    if (finalizeBtn) finalizeBtn.disabled = true;
 
     const orderData = window.currentOrderData;
     const orderId = orderData.id || Date.now();
@@ -1218,6 +1241,10 @@ async function finalizeProjectDetails() {
     } catch (error) {
         console.error('Error saving quote for finalize:', error);
         alert('Failed to save quote. Please check your internet connection.\n\nError: ' + error.message);
+    } finally {
+        isSaving = false;
+        if (saveBtn) saveBtn.disabled = false;
+        if (finalizeBtn) finalizeBtn.disabled = false;
     }
 }
 
@@ -1496,6 +1523,8 @@ function calculateScreenData() {
         frameColorName,
         width,
         height,
+        totalWidthInches,
+        totalHeightInches,
         actualWidthDisplay,
         actualHeightDisplay,
         noTracks,
