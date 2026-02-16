@@ -60,14 +60,58 @@
  *   comparisonTotalMaterialsPrice: number,
  *   comparisonDiscountedMaterialsPrice: number,
  *   comparisonTotalPrice: number,
+ *   salesRepId: string,             // Airtable Sales Rep record ID
  *   salesRepName: string,
  *   salesRepEmail: string,
  *   salesRepPhone: string
  * }
  */
 
+// ─── Sales Rep Management ─────────────────────────────────────────────────────
+let salesRepsList = []; // Cached list of all sales reps from Airtable
+let originalSalesRepId = ''; // Track original rep for change detection
+
+async function loadSalesReps() {
+    try {
+        const response = await fetch(`${WORKER_URL}/api/airtable/sales-reps`);
+        const result = await response.json();
+        if (result.success && result.salesReps) {
+            salesRepsList = result.salesReps;
+            const select = document.getElementById('salesRepSelect');
+            select.innerHTML = '<option value="">-- Select Sales Rep --</option>';
+            salesRepsList.forEach(rep => {
+                select.innerHTML += `<option value="${rep.id}" data-email="${rep.email || ''}" data-phone="${rep.phone || ''}">${rep.name}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load sales reps:', error);
+    }
+}
+
+function updateSalesRepInfo() {
+    const select = document.getElementById('salesRepSelect');
+    const infoDiv = document.getElementById('salesRepInfo');
+    const selectedOption = select.selectedOptions[0];
+
+    if (select.value && selectedOption) {
+        const email = selectedOption.dataset.email || '';
+        const phone = selectedOption.dataset.phone || '';
+        const parts = [];
+        if (email) parts.push(email);
+        if (phone) parts.push(phone);
+        infoDiv.textContent = parts.join(' • ');
+        infoDiv.style.display = parts.length > 0 ? 'block' : 'none';
+    } else {
+        infoDiv.style.display = 'none';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     loadSavedQuotes();
+    loadSalesReps();
+
+    // Sales rep dropdown change handler
+    document.getElementById('salesRepSelect').addEventListener('change', updateSalesRepInfo);
 
     // Toggle optional customer fields
     document.getElementById('toggleOptionalFields').addEventListener('click', function() {
@@ -284,11 +328,12 @@ function selectOpportunity(opp) {
         }
     }
 
-    // Populate Sales Rep fields if available
-    if (opp.salesRep) {
-        document.getElementById('salesRepName').value = opp.salesRep.name || '';
-        document.getElementById('salesRepEmail').value = opp.salesRep.email || '';
-        document.getElementById('salesRepPhone').value = opp.salesRep.phone || '';
+    // Populate Sales Rep dropdown if available
+    if (opp.salesRep && opp.salesRep.id) {
+        const select = document.getElementById('salesRepSelect');
+        select.value = opp.salesRep.id;
+        originalSalesRepId = opp.salesRep.id;
+        updateSalesRepInfo();
     }
 
     // Show linked banner
@@ -306,9 +351,9 @@ function selectManualEntry() {
     // Clear Airtable IDs and Sales Rep
     document.getElementById('airtableOpportunityId').value = '';
     document.getElementById('airtableContactId').value = '';
-    document.getElementById('salesRepName').value = '';
-    document.getElementById('salesRepEmail').value = '';
-    document.getElementById('salesRepPhone').value = '';
+    document.getElementById('salesRepSelect').value = '';
+    originalSalesRepId = '';
+    updateSalesRepInfo();
 
     // Hide linked banner
     const banner = document.getElementById('linkedOpportunityBanner');
@@ -323,9 +368,9 @@ function selectManualEntry() {
 function unlinkOpportunity() {
     document.getElementById('airtableOpportunityId').value = '';
     document.getElementById('airtableContactId').value = '';
-    document.getElementById('salesRepName').value = '';
-    document.getElementById('salesRepEmail').value = '';
-    document.getElementById('salesRepPhone').value = '';
+    document.getElementById('salesRepSelect').value = '';
+    originalSalesRepId = '';
+    updateSalesRepInfo();
 
     const banner = document.getElementById('linkedOpportunityBanner');
     banner.classList.add('hidden');
@@ -983,10 +1028,30 @@ async function saveQuote() {
             airtableContactId: orderData.airtableContactId || '',
             internalComments: internalComments,
             // Sales Rep info
+            salesRepId: orderData.salesRepId || '',
             salesRepName: orderData.salesRepName || '',
             salesRepEmail: orderData.salesRepEmail || '',
             salesRepPhone: orderData.salesRepPhone || ''
         };
+
+        // If sales rep changed and opportunity is linked, update Airtable
+        const currentRepId = orderData.salesRepId || '';
+        if (currentRepId && originalSalesRepId && currentRepId !== originalSalesRepId && orderData.airtableOpportunityId) {
+            try {
+                await fetch(`${WORKER_URL}/api/airtable/opportunities/update-rep`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        opportunityId: orderData.airtableOpportunityId,
+                        salesRepId: currentRepId
+                    })
+                });
+                originalSalesRepId = currentRepId; // Update tracked ID after successful change
+            } catch (repError) {
+                console.error('Failed to update sales rep on Airtable:', repError);
+                // Non-blocking — quote still saves
+            }
+        }
 
         const response = await fetch(`${WORKER_URL}/api/save-quote`, {
             method: 'POST',
@@ -1114,10 +1179,25 @@ async function loadQuote(quoteId) {
             banner.style.display = 'none';
         }
 
-        // Restore Sales Rep info
-        document.getElementById('salesRepName').value = quote.salesRepName || '';
-        document.getElementById('salesRepEmail').value = quote.salesRepEmail || '';
-        document.getElementById('salesRepPhone').value = quote.salesRepPhone || '';
+        // Restore Sales Rep dropdown
+        if (quote.salesRepId) {
+            document.getElementById('salesRepSelect').value = quote.salesRepId;
+            originalSalesRepId = quote.salesRepId;
+        } else if (quote.salesRepName) {
+            // Legacy fallback: match by name if no ID saved
+            const select = document.getElementById('salesRepSelect');
+            for (const option of select.options) {
+                if (option.textContent === quote.salesRepName) {
+                    select.value = option.value;
+                    originalSalesRepId = option.value;
+                    break;
+                }
+            }
+        } else {
+            document.getElementById('salesRepSelect').value = '';
+            originalSalesRepId = '';
+        }
+        updateSalesRepInfo();
 
         // Restore screens into the order
         if (quote.screens && quote.screens.length > 0) {
@@ -1837,10 +1917,13 @@ function calculateOrderQuote() {
     const airtableContactId = document.getElementById('airtableContactId').value;
     const internalComments = document.getElementById('internalComments')?.value || '';
 
-    // Get Sales Rep info
-    const salesRepName = document.getElementById('salesRepName').value;
-    const salesRepEmail = document.getElementById('salesRepEmail').value;
-    const salesRepPhone = document.getElementById('salesRepPhone').value;
+    // Get Sales Rep info from dropdown
+    const salesRepSelect = document.getElementById('salesRepSelect');
+    const salesRepSelectedOption = salesRepSelect.selectedOptions[0];
+    const salesRepId = salesRepSelect.value || '';
+    const salesRepName = salesRepSelectedOption && salesRepSelect.value ? salesRepSelectedOption.textContent : '';
+    const salesRepEmail = salesRepSelectedOption && salesRepSelect.value ? (salesRepSelectedOption.dataset.email || '') : '';
+    const salesRepPhone = salesRepSelectedOption && salesRepSelect.value ? (salesRepSelectedOption.dataset.phone || '') : '';
 
     // Display order quote summary
     displayOrderQuoteSummary({
@@ -1880,6 +1963,7 @@ function calculateOrderQuote() {
         airtableOpportunityId,
         airtableContactId,
         internalComments,
+        salesRepId,
         salesRepName,
         salesRepEmail,
         salesRepPhone

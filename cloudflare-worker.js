@@ -95,6 +95,16 @@ export default {
       return await handleOpportunitySearch(request, env);
     }
 
+    // Route: List all Sales Reps
+    if (url.pathname === '/api/airtable/sales-reps' && request.method === 'GET') {
+      return await handleListSalesReps(env);
+    }
+
+    // Route: Update Opportunity Sales Rep
+    if (url.pathname === '/api/airtable/opportunities/update-rep' && request.method === 'POST') {
+      return await handleUpdateOpportunitySalesRep(request, env);
+    }
+
     return new Response('Not Found', { status: 404 });
   }
 };
@@ -287,6 +297,7 @@ async function handleOpportunitySearch(request, env) {
         dateTime: opp.fields['Date & Time'] || '',
         contact: contact,
         salesRep: salesRepNameArr.length > 0 ? {
+          id: salesRepRecordIds[0] || '',
           name: salesRepNameArr[0] || '',
           email: salesRepEmailArr[0] || '',
           phone: salesRepPhone
@@ -302,6 +313,57 @@ async function handleOpportunitySearch(request, env) {
       success: false,
       error: 'Airtable is temporarily unavailable. You can enter customer information manually.'
     }, 503);
+  }
+}
+
+// ─── List All Sales Reps ──────────────────────────────────────────────────────
+async function handleListSalesReps(env) {
+  try {
+    const repFields = ['Name', 'Email', 'Phone']
+      .map(f => `fields%5B%5D=${encodeURIComponent(f)}`)
+      .join('&');
+
+    const repPath = `/tblBtKFE2ZM5CE3MD?${repFields}&sort%5B0%5D%5Bfield%5D=Name&sort%5B0%5D%5Bdirection%5D=asc`;
+    const repResult = await airtableFetch(env, repPath);
+
+    const reps = (repResult.records || []).map(rec => ({
+      id: rec.id,
+      name: rec.fields['Name'] || '',
+      email: rec.fields['Email'] || '',
+      phone: rec.fields['Phone'] || ''
+    }));
+
+    return jsonResponse({ success: true, salesReps: reps });
+  } catch (error) {
+    console.error('Error listing sales reps:', error);
+    return jsonResponse({ success: false, error: 'Failed to load sales reps' }, 500);
+  }
+}
+
+// ─── Update Opportunity Sales Rep ─────────────────────────────────────────────
+async function handleUpdateOpportunitySalesRep(request, env) {
+  try {
+    const body = await request.json();
+    const { opportunityId, salesRepId } = body;
+
+    if (!opportunityId || !salesRepId) {
+      return jsonResponse({ error: 'opportunityId and salesRepId are required' }, 400);
+    }
+
+    // Update the Opportunity's Sales Rep linked record field
+    await airtableFetch(env, `/${AT_TABLES.opportunities}/${opportunityId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        fields: {
+          [AT_FIELDS.opportunities.salesRep]: [salesRepId]
+        }
+      })
+    });
+
+    return jsonResponse({ success: true });
+  } catch (error) {
+    console.error('Error updating opportunity sales rep:', error);
+    return jsonResponse({ success: false, error: 'Failed to update sales rep' }, 500);
   }
 }
 
