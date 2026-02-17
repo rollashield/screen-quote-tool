@@ -8,4 +8,9 @@ database_name = "rollashield_quotes"
 database_id = "fc1e7cfe-2140-430f-a65d-7444d98e71a5"
 
 [vars]
-# Non-sensitive environment variables can go here if needed
+PAYMENT_ACH_BANK = "Zions Bancorporation DBA National Bank of Arizona"
+PAYMENT_ACH_HOLDER = "Roll A Shield, LLC"
+PAYMENT_CHECK_ADDRESS = "2680 S. Industrial Park Ave, Tempe, AZ 85282"
+PAYMENT_ZELLE_USERNAME = "ap@rollashield.com"
+# Sensitive vars (routing/account numbers) are set via: wrangler secret put PAYMENT_ACH_ROUTING
+# and: wrangler secret put PAYMENT_ACH_ACCOUNT

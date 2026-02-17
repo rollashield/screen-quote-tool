@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review & Sign Your Quote - Roll-A-Shield</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: #f0f4f8;
+            color: #2a2d2c;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .loading-screen, .error-screen, .expired-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .loading-screen h2 { color: #004a95; margin-bottom: 10px; font-family: 'Montserrat', sans-serif; }
+        .error-screen h2 { color: #dc3545; margin-bottom: 10px; font-family: 'Montserrat', sans-serif; }
+        .expired-screen h2 { color: #856404; margin-bottom: 10px; font-family: 'Montserrat', sans-serif; }
+
+        .sign-container {
+            max-width: 8.5in;
+            margin: 20px auto;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        /* Quote content rendered by generateQuotePDF — styles come from the template itself */
+        #quoteContent .page { box-shadow: none; }
+
+        /* Signature Section */
+        .signature-section {
+            padding: 32px;
+            border-top: 3px solid #004a95;
+            background: #f9fafb;
+        }
+
+        .signature-section h2 {
+            font-family: 'Montserrat', sans-serif;
+            color: #004a95;
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .acceptance-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+
+        .acceptance-row input[type="checkbox"] {
+            margin-top: 4px;
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            accent-color: #004a95;
+        }
+
+        .acceptance-row label {
+            font-size: 14px;
+            line-height: 1.5;
+            cursor: pointer;
+        }
+
+        .signer-name-row {
+            margin-bottom: 24px;
+        }
+
+        .signer-name-row label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .signer-name-row input {
+            width: 100%;
+            max-width: 400px;
+            padding: 10px 14px;
+            font-size: 16px;
+            border: 2px solid #d1d5db;
+            border-radius: 6px;
+            font-family: inherit;
+        }
+
+        .signer-name-row input:focus {
+            outline: none;
+            border-color: #004a95;
+        }
+
+        .canvas-wrapper {
+            margin-bottom: 16px;
+        }
+
+        .canvas-wrapper label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .canvas-container {
+            position: relative;
+            border: 2px solid #d1d5db;
+            border-radius: 6px;
+            background: white;
+            max-width: 600px;
+        }
+
+        .canvas-container canvas {
+            display: block;
+            width: 100%;
+            height: 200px;
+            touch-action: none;
+            cursor: crosshair;
+        }
+
+        .canvas-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #9ca3af;
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        .canvas-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .canvas-actions button {
+            padding: 6px 14px;
+            font-size: 13px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .canvas-actions button:hover { background: #f3f4f6; }
+
+        .submit-row {
+            margin-top: 24px;
+        }
+
+        .btn-sign {
+            padding: 14px 40px;
+            font-size: 18px;
+            font-weight: 700;
+            font-family: 'Montserrat', sans-serif;
+            color: white;
+            background: #004a95;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-sign:hover:not(:disabled) { background: #003870; }
+        .btn-sign:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Confirmation Screen */
+        .confirmation-screen {
+            padding: 60px 32px;
+            text-align: center;
+        }
+
+        .confirmation-screen h2 {
+            font-family: 'Montserrat', sans-serif;
+            color: #004a95;
+            font-size: 28px;
+            margin-bottom: 16px;
+        }
+
+        .confirmation-screen p { font-size: 16px; margin-bottom: 12px; color: #4d4d4d; }
+
+        .confirmation-links {
+            margin-top: 30px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .confirmation-links a {
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .link-primary {
+            background: #004a95;
+            color: white;
+        }
+
+        .link-primary:hover { background: #003870; }
+
+        .link-secondary {
+            background: #e5e7eb;
+            color: #2a2d2c;
+        }
+
+        .link-secondary:hover { background: #d1d5db; }
+
+        /* Already Signed (Read-Only) */
+        .signed-badge {
+            display: inline-block;
+            background: #dcfce7;
+            color: #166534;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .signature-display {
+            max-width: 400px;
+            margin: 16px auto;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: white;
+        }
+
+        .signature-display img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sign-container { margin: 0; }
+            .signature-section { padding: 20px 16px; }
+            .btn-sign { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading State -->
+    <div id="loadingScreen" class="loading-screen">
+        <h2>Loading your quote...</h2>
+        <p>Please wait while we retrieve your quote details.</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="errorScreen" class="error-screen" style="display: none;">
+        <h2>Something went wrong</h2>
+        <p id="errorMessage">Unable to load the quote.</p>
+    </div>
+
+    <!-- Expired State -->
+    <div id="expiredScreen" class="expired-screen" style="display: none;">
+        <h2>Link Expired</h2>
+        <p>This signing link has expired. Please contact your sales representative for a new link.</p>
+    </div>
+
+    <!-- Main Signing Container -->
+    <div id="signContainer" class="sign-container" style="display: none;">
+        <!-- Quote content rendered here by generateQuotePDF -->
+        <div id="quoteContent"></div>
+
+        <!-- Interactive Signature Section (hidden when already signed) -->
+        <div id="signatureSection" class="signature-section">
+            <h2>Customer Acceptance & Signature</h2>
+
+            <div class="acceptance-row">
+                <input type="checkbox" id="acceptCheckbox">
+                <label for="acceptCheckbox">
+                    I have read and accept this quote and authorize Roll-A-Shield to perform the work as described above.
+                    I understand that a 50% deposit is due at signing and the balance is due upon completion of installation.
+                </label>
+            </div>
+
+            <div class="signer-name-row">
+                <label for="signerName">Your Full Name</label>
+                <input type="text" id="signerName" placeholder="Type your full name">
+            </div>
+
+            <div class="canvas-wrapper">
+                <label>Your Signature</label>
+                <div class="canvas-container">
+                    <canvas id="signatureCanvas"></canvas>
+                    <div id="canvasPlaceholder" class="canvas-placeholder">Draw your signature here</div>
+                </div>
+                <div class="canvas-actions">
+                    <button type="button" onclick="clearSignature()">Clear</button>
+                    <button type="button" onclick="undoSignature()">Undo</button>
+                </div>
+            </div>
+
+            <div class="submit-row">
+                <button type="button" id="submitBtn" class="btn-sign" disabled onclick="submitSignature()">
+                    Accept & Sign
+                </button>
+            </div>
+        </div>
+
+        <!-- Already Signed Read-Only View -->
+        <div id="signedView" style="display: none; padding: 32px; text-align: center; border-top: 3px solid #16a34a; background: #f0fdf4;">
+            <div class="signed-badge">Signed</div>
+            <p><strong id="signedByName"></strong> signed this quote on <strong id="signedOnDate"></strong></p>
+            <div id="signedSignatureDisplay" class="signature-display"></div>
+        </div>
+
+        <!-- Confirmation Screen (shown after signing) -->
+        <div id="confirmationScreen" class="confirmation-screen" style="display: none;">
+            <h2>Thank You!</h2>
+            <p>Your signature has been recorded successfully.</p>
+            <p>A confirmation will be sent to your sales representative.</p>
+            <div id="confirmationLinks" class="confirmation-links" style="display: none;">
+                <a href="index.html" class="link-secondary">Back to Quote Tool</a>
+                <a id="finalizeLink" href="#" class="link-primary">Proceed to Finalize</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const WORKER_URL = 'https://rollashield-quote-worker.derek-44b.workers.dev';
+    </script>
+    <script src="pdf-template.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.2.0/dist/signature_pad.umd.min.js"></script>
+    <script src="sign.js"></script>
+</body>
+</html>

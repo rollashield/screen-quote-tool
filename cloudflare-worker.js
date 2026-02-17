@@ -78,6 +78,41 @@ export default {
       return await handleGetQuotes(request, env);
     }
 
+    // Route: Payment info (static payment instructions)
+    if (url.pathname === '/api/payment-info' && request.method === 'GET') {
+      return await handleGetPaymentInfo(env);
+    }
+
+    // Route: Send quote for remote signature (must come before generic /api/quote/ GET)
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/send-for-signature$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleSendForSignature(quoteId, request, env);
+    }
+
+    // Route: Customer view of quote (stripped of internal data)
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/customer-view$/) && request.method === 'GET') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleCustomerView(quoteId, env);
+    }
+
+    // Route: In-person signature submission
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/sign-in-person$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleSignInPerson(quoteId, request, env);
+    }
+
+    // Route: Remote signing - GET (validate token, return quote data)
+    if (url.pathname.match(/^\/api\/sign\/[^/]+$/) && request.method === 'GET') {
+      const token = url.pathname.split('/')[3];
+      return await handleGetSigningPage(token, env);
+    }
+
+    // Route: Remote signing - POST (submit signature)
+    if (url.pathname.match(/^\/api\/sign\/[^/]+$/) && request.method === 'POST') {
+      const token = url.pathname.split('/')[3];
+      return await handleSubmitRemoteSignature(token, request, env);
+    }
+
     // Route: Get specific quote
     if (url.pathname.startsWith('/api/quote/') && request.method === 'GET') {
       const quoteId = url.pathname.split('/')[3];
@@ -554,18 +589,45 @@ async function handleSaveQuote(request, env) {
     const quoteId = quoteData.id || Date.now().toString();
     const timestamp = new Date().toISOString();
 
-    // Check if this quote already has an Airtable Quote record (idempotency)
-    // Must happen BEFORE INSERT OR REPLACE which resets airtable_quote_id to null
+    // Check if this quote already exists (preserve Airtable ID + signature/payment data)
+    // Must happen BEFORE INSERT OR REPLACE which resets columns to null
     let existingAirtableQuoteId = null;
+    let existingSignatureData = {};
     try {
       const existingRow = await env.DB.prepare(
-        'SELECT airtable_quote_id, quote_number FROM quotes WHERE id = ?'
+        `SELECT airtable_quote_id, quote_number,
+                quote_status, signing_token, signing_token_expires_at,
+                signature_data, signed_at, signer_name, signer_ip,
+                signing_method, signature_sent_at,
+                payment_status, payment_method, payment_amount, payment_date,
+                clover_payment_link, stripe_payment_intent_id, clover_checkout_id
+         FROM quotes WHERE id = ?`
       ).bind(quoteId).first();
-      if (existingRow && existingRow.airtable_quote_id) {
-        existingAirtableQuoteId = existingRow.airtable_quote_id;
+      if (existingRow) {
+        if (existingRow.airtable_quote_id) {
+          existingAirtableQuoteId = existingRow.airtable_quote_id;
+        }
+        existingSignatureData = {
+          quote_status: existingRow.quote_status || 'draft',
+          signing_token: existingRow.signing_token,
+          signing_token_expires_at: existingRow.signing_token_expires_at,
+          signature_data: existingRow.signature_data,
+          signed_at: existingRow.signed_at,
+          signer_name: existingRow.signer_name,
+          signer_ip: existingRow.signer_ip,
+          signing_method: existingRow.signing_method,
+          signature_sent_at: existingRow.signature_sent_at,
+          payment_status: existingRow.payment_status || 'unpaid',
+          payment_method: existingRow.payment_method,
+          payment_amount: existingRow.payment_amount,
+          payment_date: existingRow.payment_date,
+          clover_payment_link: existingRow.clover_payment_link,
+          stripe_payment_intent_id: existingRow.stripe_payment_intent_id,
+          clover_checkout_id: existingRow.clover_checkout_id,
+        };
       }
     } catch (lookupErr) {
-      console.error('Error checking existing Airtable quote ID:', lookupErr);
+      console.error('Error checking existing quote data:', lookupErr);
     }
 
     // Generate quote number
@@ -581,7 +643,7 @@ async function handleSaveQuote(request, env) {
     // Store quote number on the data object for the Airtable notes builder
     quoteData.quoteNumber = quoteNumber;
 
-    // Insert into D1 database
+    // Insert into D1 database (preserving signature/payment columns on re-save)
     await env.DB.prepare(`
       INSERT OR REPLACE INTO quotes (
         id,
@@ -604,8 +666,24 @@ async function handleSaveQuote(request, env) {
         airtable_contact_id,
         airtable_quote_id,
         quote_number,
-        internal_comments
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        internal_comments,
+        quote_status,
+        signing_token,
+        signing_token_expires_at,
+        signature_data,
+        signed_at,
+        signer_name,
+        signer_ip,
+        signing_method,
+        signature_sent_at,
+        payment_status,
+        payment_method,
+        payment_amount,
+        payment_date,
+        clover_payment_link,
+        stripe_payment_intent_id,
+        clover_checkout_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       quoteId,
       quoteData.customerName,
@@ -627,7 +705,23 @@ async function handleSaveQuote(request, env) {
       quoteData.airtableContactId || null,
       null,
       quoteNumber,
-      quoteData.internalComments || null
+      quoteData.internalComments || null,
+      existingSignatureData.quote_status || 'draft',
+      existingSignatureData.signing_token || null,
+      existingSignatureData.signing_token_expires_at || null,
+      existingSignatureData.signature_data || null,
+      existingSignatureData.signed_at || null,
+      existingSignatureData.signer_name || null,
+      existingSignatureData.signer_ip || null,
+      existingSignatureData.signing_method || null,
+      existingSignatureData.signature_sent_at || null,
+      existingSignatureData.payment_status || 'unpaid',
+      existingSignatureData.payment_method || null,
+      existingSignatureData.payment_amount || null,
+      existingSignatureData.payment_date || null,
+      existingSignatureData.clover_payment_link || null,
+      existingSignatureData.stripe_payment_intent_id || null,
+      existingSignatureData.clover_checkout_id || null
     ).run();
 
     // Attempt Airtable sync (non-fatal if it fails)
@@ -709,8 +803,10 @@ async function handleGetQuote(quoteId, env) {
       return jsonResponse({ error: 'Quote not found' }, 404);
     }
 
-    // Parse the full quote data
+    // Parse the full quote data and include signature/payment status
     const quoteData = JSON.parse(result.quote_data);
+    quoteData.quote_status = result.quote_status || 'draft';
+    quoteData.payment_status = result.payment_status || 'unpaid';
 
     return jsonResponse({
       success: true,
@@ -753,6 +849,397 @@ async function handleDeleteQuote(quoteId, env) {
       error: error.message
     }, 500);
   }
+}
+
+// ─── Data Stripping Helper ────────────────────────────────────────────────────
+// Removes internal cost/margin data from quote_data before sending to customers
+function stripInternalData(quoteData) {
+  const stripped = JSON.parse(JSON.stringify(quoteData));
+  delete stripped.orderTotalCost;
+  delete stripped.orderTotalInstallationCost;
+  delete stripped.totalProfit;
+  delete stripped.marginPercent;
+  delete stripped.totalScreenCosts;
+  delete stripped.totalMotorCosts;
+  delete stripped.totalAccessoriesCosts;
+  delete stripped.totalCableSurcharge;
+  delete stripped.internalComments;
+  if (stripped.screens) {
+    stripped.screens.forEach(screen => {
+      delete screen.screenCostOnly;
+      delete screen.motorCost;
+      delete screen.installationCost;
+      delete screen.totalCost;
+    });
+  }
+  return stripped;
+}
+
+// ─── Token Generation Helper ─────────────────────────────────────────────────
+function generateSigningToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── Send Quote for Remote Signature ─────────────────────────────────────────
+async function handleSendForSignature(quoteId, request, env) {
+  try {
+    const row = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!row) {
+      return jsonResponse({ error: 'Quote not found' }, 404);
+    }
+
+    const quoteData = JSON.parse(row.quote_data);
+    const customerEmail = quoteData.customerEmail || row.customer_email;
+
+    if (!customerEmail) {
+      return jsonResponse({ error: 'Customer email is required to send for signature' }, 400);
+    }
+
+    // Generate signing token and expiry (30 days)
+    const token = generateSigningToken();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const sentAt = new Date().toISOString();
+
+    // Update D1 with token and status
+    await env.DB.prepare(`
+      UPDATE quotes SET
+        signing_token = ?,
+        signing_token_expires_at = ?,
+        signature_sent_at = ?,
+        quote_status = CASE WHEN quote_status = 'draft' THEN 'sent' ELSE quote_status END,
+        updated_at = ?
+      WHERE id = ?
+    `).bind(token, expiresAt, sentAt, sentAt, quoteId).run();
+
+    // Build signing URL (GitHub Pages base)
+    const signingUrl = `https://rollashield.github.io/screen-quote-tool/sign.html?token=${token}`;
+
+    // Build and send email via Resend
+    const customerName = quoteData.customerName || row.customer_name || 'Customer';
+    const quoteNumber = row.quote_number || 'Quote';
+    const totalPrice = quoteData.orderTotalPrice || row.total_price || 0;
+    const depositAmount = totalPrice / 2;
+    const screenCount = quoteData.screens?.length || row.screen_count || 0;
+    const salesRepName = quoteData.salesRepName || 'Roll-A-Shield';
+    const salesRepEmail = quoteData.salesRepEmail || '';
+    const salesRepPhone = quoteData.salesRepPhone || '(480) 921-0200';
+
+    const htmlEmail = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #004a95 0%, #0071bc 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+          <h1 style="margin: 0; font-size: 24px;">Roll-A-Shield</h1>
+          <p style="margin: 10px 0 0 0; opacity: 0.9;">Your Quote is Ready for Review</p>
+        </div>
+        <div style="background: white; padding: 30px; border: 1px solid #e0e0e0; border-top: none;">
+          <p>Dear ${customerName},</p>
+          <p>Your custom rolling screen quote is ready for your review and signature.</p>
+          <div style="background: #f0f4f8; padding: 15px; border-radius: 6px; margin: 20px 0;">
+            <p style="margin: 0;"><strong>Quote:</strong> ${quoteNumber}</p>
+            <p style="margin: 5px 0;"><strong>Screens:</strong> ${screenCount}</p>
+            <p style="margin: 5px 0;"><strong>Total:</strong> $${totalPrice.toFixed(2)}</p>
+            <p style="margin: 5px 0;"><strong>Deposit (50%):</strong> $${depositAmount.toFixed(2)}</p>
+          </div>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${signingUrl}" style="background: #004a95; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: bold; display: inline-block;">Review &amp; Sign Your Quote</a>
+          </div>
+          <p style="color: #666; font-size: 13px;">This link is valid for 30 days. If you have questions, contact ${salesRepName} at ${salesRepPhone}${salesRepEmail ? ` or ${salesRepEmail}` : ''}.</p>
+        </div>
+        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 12px;">
+          <p>Roll-A-Shield | Custom Rolling Screens | (480) 921-0200</p>
+        </div>
+      </div>
+    `;
+
+    const textEmail = `Dear ${customerName},\n\nYour custom rolling screen quote (${quoteNumber}) is ready for review and signature.\n\nTotal: $${totalPrice.toFixed(2)}\nDeposit (50%): $${depositAmount.toFixed(2)}\n\nReview and sign here: ${signingUrl}\n\nThis link is valid for 30 days.\n\nRoll-A-Shield\n(480) 921-0200`;
+
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'Roll-A-Shield Quotes <onboarding@resend.dev>',
+        to: [customerEmail],
+        cc: salesRepEmail ? [salesRepEmail] : [],
+        subject: `Review & Sign Your Roll-A-Shield Quote - ${quoteNumber}`,
+        html: htmlEmail,
+        text: textEmail
+      })
+    });
+
+    return jsonResponse({
+      success: true,
+      message: `Signing link sent to ${customerEmail}`,
+      signingUrl: signingUrl
+    });
+  } catch (error) {
+    console.error('Error in handleSendForSignature:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Customer View (Stripped Quote Data) ─────────────────────────────────────
+async function handleCustomerView(quoteId, env) {
+  try {
+    const row = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!row) {
+      return jsonResponse({ error: 'Quote not found' }, 404);
+    }
+
+    const quoteData = JSON.parse(row.quote_data);
+    const stripped = stripInternalData(quoteData);
+
+    return jsonResponse({
+      success: true,
+      quote: stripped,
+      quoteNumber: row.quote_number,
+      quoteStatus: row.quote_status || 'draft',
+      signedAt: row.signed_at,
+      signerName: row.signer_name,
+      signatureData: row.signature_data
+    });
+  } catch (error) {
+    console.error('Error in handleCustomerView:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Remote Signing: GET (Validate Token, Return Quote) ──────────────────────
+async function handleGetSigningPage(token, env) {
+  try {
+    const row = await env.DB.prepare(
+      'SELECT * FROM quotes WHERE signing_token = ?'
+    ).bind(token).first();
+
+    if (!row) {
+      return jsonResponse({ error: 'Invalid signing link' }, 404);
+    }
+
+    // Check expiry
+    if (row.signing_token_expires_at && new Date(row.signing_token_expires_at) < new Date()) {
+      return jsonResponse({ error: 'This signing link has expired. Please contact your sales representative for a new link.' }, 410);
+    }
+
+    const quoteData = JSON.parse(row.quote_data);
+    const stripped = stripInternalData(quoteData);
+
+    // If already signed, return read-only with signature
+    if (row.quote_status === 'signed' || row.quote_status === 'finalized') {
+      return jsonResponse({
+        success: true,
+        quote: stripped,
+        quoteNumber: row.quote_number,
+        quoteStatus: row.quote_status,
+        alreadySigned: true,
+        signedAt: row.signed_at,
+        signerName: row.signer_name,
+        signatureData: row.signature_data
+      });
+    }
+
+    // Mark as viewed if still just sent
+    if (row.quote_status === 'sent') {
+      await env.DB.prepare(
+        "UPDATE quotes SET quote_status = 'viewed', updated_at = ? WHERE id = ?"
+      ).bind(new Date().toISOString(), row.id).run();
+    }
+
+    return jsonResponse({
+      success: true,
+      quote: stripped,
+      quoteNumber: row.quote_number,
+      quoteStatus: 'viewed',
+      alreadySigned: false
+    });
+  } catch (error) {
+    console.error('Error in handleGetSigningPage:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Remote Signing: POST (Submit Signature) ─────────────────────────────────
+async function handleSubmitRemoteSignature(token, request, env) {
+  try {
+    const row = await env.DB.prepare(
+      'SELECT * FROM quotes WHERE signing_token = ?'
+    ).bind(token).first();
+
+    if (!row) {
+      return jsonResponse({ error: 'Invalid signing link' }, 404);
+    }
+
+    // Check expiry
+    if (row.signing_token_expires_at && new Date(row.signing_token_expires_at) < new Date()) {
+      return jsonResponse({ error: 'This signing link has expired' }, 410);
+    }
+
+    // Check if already signed
+    if (row.quote_status === 'signed' || row.quote_status === 'finalized') {
+      return jsonResponse({ error: 'This quote has already been signed' }, 409);
+    }
+
+    const body = await request.json();
+    const { signatureData, signerName } = body;
+
+    if (!signatureData || !signerName) {
+      return jsonResponse({ error: 'Signature and name are required' }, 400);
+    }
+
+    const signerIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const signedAt = new Date().toISOString();
+
+    // Update D1 with signature
+    await env.DB.prepare(`
+      UPDATE quotes SET
+        signature_data = ?,
+        signer_name = ?,
+        signer_ip = ?,
+        signed_at = ?,
+        signing_method = 'remote',
+        quote_status = 'signed',
+        updated_at = ?
+      WHERE id = ?
+    `).bind(signatureData, signerName, signerIp, signedAt, signedAt, row.id).run();
+
+    // Send confirmation email to sales rep (non-fatal)
+    try {
+      const quoteData = JSON.parse(row.quote_data);
+      const salesRepEmail = quoteData.salesRepEmail;
+      const customerName = quoteData.customerName || row.customer_name;
+
+      if (salesRepEmail) {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'Roll-A-Shield Quotes <onboarding@resend.dev>',
+            to: [salesRepEmail],
+            subject: `${customerName} has signed Quote ${row.quote_number}`,
+            html: `<p><strong>${customerName}</strong> has signed quote <strong>${row.quote_number}</strong>.</p><p><strong>Signed:</strong> ${new Date(signedAt).toLocaleString('en-US', { timeZone: 'America/Phoenix' })}</p><p><strong>Method:</strong> Remote (email link)</p><p><strong>Signer name:</strong> ${signerName}</p>`,
+            text: `${customerName} has signed quote ${row.quote_number}.\nSigned: ${signedAt}\nMethod: Remote\nSigner: ${signerName}`
+          })
+        });
+      }
+    } catch (emailError) {
+      console.error('Failed to send signature confirmation email:', emailError);
+    }
+
+    // Update Airtable quote status to "Accepted" (non-fatal)
+    if (row.airtable_quote_id) {
+      try {
+        await airtableFetch(env, `/${AT_TABLES.quotes}/${row.airtable_quote_id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fields: { [AT_FIELDS.quotes.status]: 'Accepted' }
+          })
+        });
+      } catch (atError) {
+        console.error('Failed to update Airtable quote status:', atError);
+      }
+    }
+
+    return jsonResponse({
+      success: true,
+      message: 'Quote signed successfully'
+    });
+  } catch (error) {
+    console.error('Error in handleSubmitRemoteSignature:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── In-Person Signature Submission ──────────────────────────────────────────
+async function handleSignInPerson(quoteId, request, env) {
+  try {
+    const row = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!row) {
+      return jsonResponse({ error: 'Quote not found' }, 404);
+    }
+
+    // Check if already signed
+    if (row.quote_status === 'signed' || row.quote_status === 'finalized') {
+      return jsonResponse({ error: 'This quote has already been signed' }, 409);
+    }
+
+    const body = await request.json();
+    const { signatureData, signerName } = body;
+
+    if (!signatureData || !signerName) {
+      return jsonResponse({ error: 'Signature and name are required' }, 400);
+    }
+
+    const signerIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const signedAt = new Date().toISOString();
+
+    await env.DB.prepare(`
+      UPDATE quotes SET
+        signature_data = ?,
+        signer_name = ?,
+        signer_ip = ?,
+        signed_at = ?,
+        signing_method = 'in-person',
+        quote_status = 'signed',
+        updated_at = ?
+      WHERE id = ?
+    `).bind(signatureData, signerName, signerIp, signedAt, signedAt, quoteId).run();
+
+    // Update Airtable quote status to "Accepted" (non-fatal)
+    if (row.airtable_quote_id) {
+      try {
+        await airtableFetch(env, `/${AT_TABLES.quotes}/${row.airtable_quote_id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fields: { [AT_FIELDS.quotes.status]: 'Accepted' }
+          })
+        });
+      } catch (atError) {
+        console.error('Failed to update Airtable quote status:', atError);
+      }
+    }
+
+    return jsonResponse({
+      success: true,
+      message: 'Quote signed successfully'
+    });
+  } catch (error) {
+    console.error('Error in handleSignInPerson:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Payment Info (Static Config) ────────────────────────────────────────────
+async function handleGetPaymentInfo(env) {
+  return jsonResponse({
+    success: true,
+    paymentInfo: {
+      ach: {
+        bank: env.PAYMENT_ACH_BANK || 'Zions Bancorporation DBA National Bank of Arizona',
+        accountHolder: env.PAYMENT_ACH_HOLDER || 'Roll A Shield, LLC',
+        routing: env.PAYMENT_ACH_ROUTING || '',
+        account: env.PAYMENT_ACH_ACCOUNT || ''
+      },
+      check: {
+        payableTo: 'Roll-A-Shield',
+        address: env.PAYMENT_CHECK_ADDRESS || '2680 S. Industrial Park Ave, Tempe, AZ 85282',
+        warning: 'Paying by check may cause delays in releasing your order.'
+      },
+      zelle: {
+        username: env.PAYMENT_ZELLE_USERNAME || 'ap@rollashield.com',
+        limitNote: 'Typically $2.5-3.5k max, depending on your bank'
+      },
+      clover: {
+        permanentPaymentLink: 'https://link.clover.com/urlshortener/rbRB6n',
+        creditCardFee: '3% processing fee applies to credit card payments',
+        debitCardFee: 'No fee for debit card payments'
+      }
+    }
+  });
 }
 
 // ─── JSON Response Helper ──────────────────────────────────────────────────────

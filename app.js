@@ -1062,6 +1062,10 @@ async function saveQuote() {
         const result = await response.json();
 
         if (response.ok && result.success) {
+            // Write quoteNumber back so PDFs generated after saving show the real number
+            if (result.quoteNumber) {
+                window.currentOrderData.quoteNumber = result.quoteNumber;
+            }
             let msg = `Quote saved successfully!\nQuote #: ${result.quoteNumber || 'N/A'}`;
             if (result.airtableSync === false) {
                 msg += '\n\nNote: Airtable sync failed. Quote saved locally only.';
@@ -1249,26 +1253,219 @@ async function deleteQuote(quoteId) {
     }
 }
 
-function generatePDF() {
+// ─── Data Mapping: currentOrderData → PDF template format ────────────────────
+function mapOrderDataToTemplate(orderData) {
+    const address = [
+        orderData.streetAddress,
+        orderData.aptSuite,
+        [orderData.city, orderData.state, orderData.zipCode].filter(Boolean).join(', ')
+    ].filter(Boolean).join(', ');
+
+    const screens = (orderData.screens || []).map((screen, i) => ({
+        name: screen.screenName || `Screen ${i + 1}`,
+        track: getClientFacingTrackName(screen.trackTypeName),
+        operator: getClientFacingOperatorName(screen.operatorType, screen.operatorTypeName),
+        fabric: screen.fabricColorName || '',
+        frame: screen.frameColorName || '',
+        width: screen.actualWidthDisplay || '',
+        height: screen.actualHeightDisplay || '',
+        price1: (screen.customerPrice || 0) - (screen.installationPrice || 0),
+        price2: screen.comparisonMaterialPrice || null
+    }));
+
+    const materialsPrice = orderData.orderTotalMaterialsPrice || 0;
+    const installationPrice = orderData.orderTotalInstallationPrice || 0;
+    const discountPercent = orderData.discountPercent || 0;
+    const discountAmount = orderData.discountAmount || 0;
+    const subtotal = (discountPercent > 0 ? orderData.discountedMaterialsPrice : materialsPrice) + installationPrice;
+    const total = orderData.orderTotalPrice || 0;
+
+    const data = {
+        customer: {
+            name: orderData.customerName || '',
+            company: orderData.companyName || undefined,
+            address: address,
+            email: orderData.customerEmail || '',
+            phone: orderData.customerPhone || ''
+        },
+        salesRep: {
+            name: orderData.salesRepName || '',
+            email: orderData.salesRepEmail || '',
+            phone: orderData.salesRepPhone || ''
+        },
+        quote: {
+            number: orderData.quoteNumber || 'DRAFT',
+            date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+            validThrough: '30 Days'
+        },
+        screens: screens,
+        pricing: {
+            materials: materialsPrice,
+            installation: installationPrice,
+            discountPercent: discountPercent,
+            discountAmount: discountAmount,
+            subtotal: subtotal,
+            tax: 0,
+            total: total,
+            deposit: total / 2,
+            balance: total / 2
+        },
+        comparisonPricing: null
+    };
+
+    // Build comparison pricing if enabled
+    if (orderData.enableComparison) {
+        const compMaterials = orderData.comparisonTotalMaterialsPrice || 0;
+        const compDiscounted = orderData.comparisonDiscountedMaterialsPrice || compMaterials;
+        const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice;
+        const compTotal = orderData.comparisonTotalPrice || 0;
+
+        // Find the first motorized screen's operator to use as label
+        const firstMotorScreen = (orderData.screens || []).find(s => s.operatorType && s.operatorType !== 'gear');
+        const option1Label = firstMotorScreen
+            ? getClientFacingOperatorName(firstMotorScreen.operatorType, firstMotorScreen.operatorTypeName)
+            : 'Option 1';
+        const option2Label = orderData.comparisonMotor
+            ? getClientFacingOperatorName(orderData.comparisonMotor, orderData.comparisonMotor)
+            : 'Option 2';
+
+        data.comparisonPricing = {
+            option1Label: option1Label,
+            option2Label: option2Label,
+            materials2: compMaterials,
+            discountAmount2: discountPercent > 0 ? compMaterials - compDiscounted : 0,
+            subtotal2: compSubtotal,
+            total2: compTotal,
+            deposit2: compTotal / 2,
+            balance2: compTotal / 2
+        };
+    }
+
+    return data;
+}
+
+async function generatePDF() {
     const quoteSummary = document.getElementById('quoteSummary');
     if (quoteSummary.classList.contains('hidden')) {
         alert('Please calculate a quote first');
         return;
     }
 
-    // Hide internal info temporarily
-    const internalInfo = document.querySelector('.internal-info');
-    const buttonGroup = document.querySelector('.button-group');
-    internalInfo.style.display = 'none';
-    buttonGroup.style.display = 'none';
+    // Fallback if html2pdf not loaded
+    if (typeof html2pdf === 'undefined' || typeof generateQuotePDF === 'undefined') {
+        console.warn('html2pdf or pdf-template not loaded, falling back to window.print()');
+        const internalInfo = document.querySelector('.internal-info');
+        const buttonGroup = document.querySelector('.button-group');
+        internalInfo.style.display = 'none';
+        buttonGroup.style.display = 'none';
+        window.print();
+        setTimeout(() => {
+            internalInfo.style.display = 'block';
+            buttonGroup.style.display = 'flex';
+        }, 1000);
+        return;
+    }
 
-    window.print();
+    const pdfBtn = document.querySelector('button[onclick="generatePDF()"]');
+    if (pdfBtn) {
+        pdfBtn.disabled = true;
+        pdfBtn.textContent = 'Generating...';
+    }
 
-    // Restore
-    setTimeout(() => {
-        internalInfo.style.display = 'block';
-        buttonGroup.style.display = 'flex';
-    }, 1000);
+    try {
+        const templateData = mapOrderDataToTemplate(window.currentOrderData);
+        const htmlString = generateQuotePDF(templateData);
+
+        // Create offscreen container
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.left = '-9999px';
+        container.style.top = '0';
+        container.innerHTML = htmlString;
+        document.body.appendChild(container);
+
+        // Wait for fonts to load
+        await document.fonts.ready;
+
+        const quoteNum = window.currentOrderData.quoteNumber || 'DRAFT';
+        const customerName = (window.currentOrderData.customerName || 'Customer').replace(/[^a-zA-Z0-9]/g, '-');
+        const filename = `RAS-Quote-${quoteNum}-${customerName}.pdf`;
+
+        await html2pdf().set({
+            margin: 0,
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        }).from(container.querySelector('.page') || container).save();
+
+        document.body.removeChild(container);
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        alert('Failed to generate PDF. Falling back to print view.');
+        window.print();
+    } finally {
+        if (pdfBtn) {
+            pdfBtn.disabled = false;
+            pdfBtn.textContent = 'Download PDF';
+        }
+    }
+}
+
+// ─── Signature Functions ─────────────────────────────────────────────────────
+async function presentForSignature() {
+    if (!window.currentOrderData || !window.currentOrderData.id) {
+        alert('Please save the quote first before presenting for signature.');
+        return;
+    }
+    window.location.href = `sign.html?quoteId=${window.currentOrderData.id}&mode=in-person`;
+}
+
+async function sendForSignature() {
+    if (!window.currentOrderData || !window.currentOrderData.id) {
+        alert('Please save the quote first before sending for signature.');
+        return;
+    }
+
+    const customerEmail = window.currentOrderData.customerEmail || document.getElementById('customerEmail')?.value;
+    if (!customerEmail) {
+        alert('Please enter a customer email address before sending for signature.');
+        return;
+    }
+
+    if (!confirm(`Send signing link to ${customerEmail}?`)) {
+        return;
+    }
+
+    const btn = document.querySelector('button[onclick="sendForSignature()"]');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+    }
+
+    try {
+        const response = await fetch(`${WORKER_URL}/api/quote/${window.currentOrderData.id}/send-for-signature`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            alert(`Signing link sent to ${customerEmail}!`);
+        } else {
+            alert('Failed to send signing link: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error sending for signature:', error);
+        alert('Failed to send signing link. Please check your internet connection.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Send for Signature';
+        }
+    }
 }
 
 async function finalizeProjectDetails() {

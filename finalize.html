@@ -255,10 +255,22 @@
         document.addEventListener('DOMContentLoaded', async function() {
             await loadOrderData();
             if (!orderData) return; // loadOrderData handles redirect
+            checkSignatureStatus();
             loadSavedMeasurements();
             displayProjectInfo();
             displayScreenList();
         });
+
+        function checkSignatureStatus() {
+            // Show warning if quote hasn't been signed yet
+            if (!orderData.quote_status || orderData.quote_status !== 'signed') {
+                const container = document.querySelector('.container') || document.body;
+                const warning = document.createElement('div');
+                warning.className = 'unsigned-warning';
+                warning.innerHTML = '<p>This quote has not been signed by the customer yet. You may still proceed with finalization.</p><button class="dismiss-btn" onclick="this.parentElement.remove()">&times;</button>';
+                container.insertBefore(warning, container.firstChild);
+            }
+        }
 
         async function loadOrderData() {
             const urlParams = new URLSearchParams(window.location.search);

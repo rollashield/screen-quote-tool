@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roll-A-Shield Screen Quote Tool</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <style>
         .form-section {
             margin-bottom: 20px;
@@ -805,7 +808,9 @@
                     <button class="btn-success" onclick="saveQuote()">Save Quote</button>
                     <button class="btn-secondary" onclick="generatePDF()">Download PDF</button>
                     <button class="btn-secondary" onclick="emailQuote()">Email Quote</button>
-                    <button class="btn-primary" onclick="finalizeProjectDetails()" style="background: #28a745; margin-top: 10px; width: 100%; font-weight: 600;">🎯 Finalize Project Details</button>
+                    <button class="btn-success" onclick="presentForSignature()">Present for Signature</button>
+                    <button class="btn-primary" onclick="sendForSignature()">Send for Signature</button>
+                    <button class="btn-primary" onclick="finalizeProjectDetails()" style="background: #28a745; margin-top: 10px; width: 100%; font-weight: 600;">Finalize Project Details</button>
                 </div>
             </div>
 
@@ -821,7 +826,9 @@
     <script>
         const WORKER_URL = 'https://rollashield-quote-worker.derek-44b.workers.dev';
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="pricing-data.js"></script>
+    <script src="pdf-template.js"></script>
     <script src="app.js"></script>
     <script src="email-templates.js"></script>
 </body>

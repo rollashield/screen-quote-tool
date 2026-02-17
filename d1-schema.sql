@@ -22,7 +22,25 @@ CREATE TABLE IF NOT EXISTS quotes (
   airtable_contact_id TEXT,
   airtable_quote_id TEXT,
   quote_number TEXT,
-  internal_comments TEXT
+  internal_comments TEXT,
+  -- Signature fields
+  quote_status TEXT DEFAULT 'draft',
+  signing_token TEXT,
+  signing_token_expires_at TEXT,
+  signature_data TEXT,
+  signed_at TEXT,
+  signer_name TEXT,
+  signer_ip TEXT,
+  signing_method TEXT,
+  signature_sent_at TEXT,
+  -- Payment fields
+  payment_status TEXT DEFAULT 'unpaid',
+  payment_method TEXT,
+  payment_amount REAL,
+  payment_date TEXT,
+  clover_payment_link TEXT,
+  stripe_payment_intent_id TEXT,
+  clover_checkout_id TEXT
 );
 
 -- Create indexes for common queries
@@ -30,3 +48,5 @@ CREATE INDEX IF NOT EXISTS idx_quotes_customer_email ON quotes(customer_email);
 CREATE INDEX IF NOT EXISTS idx_quotes_created_at ON quotes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_quotes_customer_name ON quotes(customer_name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_quote_number ON quotes(quote_number);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_signing_token ON quotes(signing_token);
+CREATE INDEX IF NOT EXISTS idx_quotes_quote_status ON quotes(quote_status);

@@ -33,6 +33,16 @@ Web application for generating custom rolling screen quotes with email integrati
 - Backend: `wrangler deploy` from this directory
 - Secrets: `wrangler secret put RESEND_API_KEY`
 
+## Planned Features
+- **PDF Quote Template**: Design doc in `docs/pdf-template-plan.md`
+  - Figma-designed professional PDF replacing `window.print()` — uses `html2pdf.js` (CDN)
+  - Figma export in `figma-export/` directory (`pdfTemplate.js`, example usage, logo asset)
+  - Prerequisite for signature feature (signing page reuses same template for quote display)
+- **Customer Signature & Payment**: Full design doc in `docs/signature-feature-plan.md`
+  - E-signature step (in-person on iPad + remote via email link) — replaces PandaDoc
+  - Multi-method payment collection (Clover CC, Stripe bank transfer, ACH/check/Zelle instructions)
+  - QR code generation for in-person payments (customer scans, pays on their phone)
+
 ## Important Notes
 - This is a vanilla JS project. Do NOT suggest adding npm, webpack, React, or any framework.
 - All pricing logic is in `pricing-data.js`. If pricing changes, update ONLY that file.
