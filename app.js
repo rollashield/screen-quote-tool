@@ -1412,16 +1412,27 @@ async function generatePDF() {
         const customerName = (window.currentOrderData.customerName || 'Customer').replace(/[^a-zA-Z0-9]/g, '-');
         const filename = `RAS-Quote-${quoteNum}-${customerName}.pdf`;
 
-        await html2pdf().set({
+        // Generate PDF as blob then trigger download manually.
+        // html2pdf's .save() can produce blank files in some browser/extension
+        // configurations, so we use .outputPdf('blob') + blob URL instead.
+        const pdfBlob = await html2pdf().set({
             margin: [0.4, 0.4, 0.5, 0.4],
-            filename: filename,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, logging: false },
             jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
             pagebreak: { mode: ['css', 'legacy'] }
-        }).from(pageEl || container).save();
+        }).from(pageEl || container).outputPdf('blob');
 
         document.body.removeChild(container);
+
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = blobUrl;
+        downloadLink.download = filename;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
     } catch (error) {
         console.error('Error generating PDF:', error);
         alert('Failed to generate PDF. Falling back to print view.');
