@@ -803,8 +803,9 @@ async function handleGetQuote(quoteId, env) {
       return jsonResponse({ error: 'Quote not found' }, 404);
     }
 
-    // Parse the full quote data and include signature/payment status
+    // Parse the full quote data and include metadata from D1 columns
     const quoteData = JSON.parse(result.quote_data);
+    quoteData.quoteNumber = result.quote_number || null;
     quoteData.quote_status = result.quote_status || 'draft';
     quoteData.payment_status = result.payment_status || 'unpaid';
 
