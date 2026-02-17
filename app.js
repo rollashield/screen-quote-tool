@@ -1376,13 +1376,25 @@ async function generatePDF() {
         const templateData = mapOrderDataToTemplate(window.currentOrderData);
         const htmlString = generateQuotePDF(templateData);
 
-        // Create offscreen container
+        // Create container positioned in viewport but hidden behind content.
+        // html2canvas cannot capture elements at left:-9999px (renders blank).
         const container = document.createElement('div');
-        container.style.position = 'absolute';
-        container.style.left = '-9999px';
+        container.style.position = 'fixed';
+        container.style.left = '0';
         container.style.top = '0';
+        container.style.zIndex = '-1';
+        container.style.opacity = '0';
+        container.style.pointerEvents = 'none';
         container.innerHTML = htmlString;
         document.body.appendChild(container);
+
+        // Override min-height so .page shrinks to content height.
+        // The template sets min-height:11in for on-screen preview, but
+        // html2pdf needs the element to be content-sized for proper pagination.
+        const pageEl = container.querySelector('.page');
+        if (pageEl) {
+            pageEl.style.minHeight = 'auto';
+        }
 
         // Wait for fonts to load
         await document.fonts.ready;
@@ -1397,8 +1409,8 @@ async function generatePDF() {
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, logging: false },
             jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        }).from(container.querySelector('.page') || container).save();
+            pagebreak: { mode: ['css', 'legacy'] }
+        }).from(pageEl || container).save();
 
         document.body.removeChild(container);
     } catch (error) {
