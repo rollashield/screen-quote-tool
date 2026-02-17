@@ -1379,14 +1379,18 @@ async function generatePDF() {
         const templateData = mapOrderDataToTemplate(window.currentOrderData);
         const htmlString = generateQuotePDF(templateData);
 
-        // Create container positioned in viewport but hidden behind content.
-        // html2canvas cannot capture elements at left:-9999px (renders blank).
+        // Create container for html2canvas rendering.
+        // IMPORTANT: html2canvas cannot capture elements that are:
+        //   - positioned at left:-9999px (outside viewport → blank canvas)
+        //   - opacity:0 (fully transparent → blank canvas)
+        // Solution: position in viewport with near-zero opacity (0.01).
+        // This is effectively invisible but html2canvas still renders content.
         const container = document.createElement('div');
         container.style.position = 'fixed';
         container.style.left = '0';
         container.style.top = '0';
         container.style.zIndex = '-1';
-        container.style.opacity = '0';
+        container.style.opacity = '0.01';
         container.style.pointerEvents = 'none';
         container.innerHTML = htmlString;
         document.body.appendChild(container);
