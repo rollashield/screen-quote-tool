@@ -360,17 +360,19 @@ function generateQuotePDF(data) {
         </div>
         <div style="margin-bottom: 4px;">50% deposit due at signing. Balance due upon completion of installation.</div>
         <div style="font-weight: 600; margin-bottom: 4px;">Accepted Methods:</div>
-        <div>Check, ACH, Credit Card</div>
-        <div style="font-size: 11px; color: #4d4d4d;">(3% processing fee applies to credit card payments)</div>
+        <div>Credit/Debit Card, Bank Transfer, ACH, Zelle</div>
       </div>
 
       <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-        <div style="width: 120px; height: 120px; border: 2px dashed #0071bc; background-color: #f0f9ff; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
-          <div style="text-align: center; font-size: 11px; color: #0071bc;">
-            <div style="font-weight: 700; margin-bottom: 4px;">QR CODE</div>
-            <div style="font-size: 8pt;">Placeholder</div>
-          </div>
-        </div>
+        ${data.signingUrl
+          ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(data.signingUrl)}" alt="Scan to sign" style="width: 120px; height: 120px; margin-bottom: 8px;" />`
+          : `<div style="width: 120px; height: 120px; border: 2px dashed #0071bc; background-color: #f0f9ff; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+              <div style="text-align: center; font-size: 11px; color: #0071bc;">
+                <div style="font-weight: 700;">QR CODE</div>
+                <div style="font-size: 8pt;">Save quote first</div>
+              </div>
+            </div>`
+        }
         <div style="font-size: 11px; text-align: center; font-weight: 600; color: #004a95;">
           E-Sign and Pay Now
         </div>

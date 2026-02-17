@@ -1296,8 +1296,11 @@ function mapOrderDataToTemplate(orderData) {
         quote: {
             number: orderData.quoteNumber || 'DRAFT',
             date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-            validThrough: '30 Days'
+            validThrough: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
         },
+        signingUrl: orderData.id
+            ? `https://rollashield.github.io/screen-quote-tool/sign.html?quoteId=${orderData.id}&mode=in-person`
+            : null,
         screens: screens,
         pricing: {
             materials: materialsPrice,
@@ -1404,7 +1407,7 @@ async function generatePDF() {
         const filename = `RAS-Quote-${quoteNum}-${customerName}.pdf`;
 
         await html2pdf().set({
-            margin: 0,
+            margin: [0.4, 0.4, 0.5, 0.4],
             filename: filename,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, logging: false },
