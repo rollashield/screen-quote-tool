@@ -125,8 +125,8 @@ function generateQuotePDF(data) {
       </div>
       <div style="text-align: right; font-size: 11px; line-height: 1.6;">
         <div>2680 S. Industrial Park Ave, Tempe, AZ 85282</div>
-        <div>(480) 921-0200 â€¢ rollashield.com</div>
-        <div>Established 1979 â€¢ AZ ROC #342265</div>
+        <div>(480) 921-0200 • rollashield.com</div>
+        <div>Established 1979 • AZ ROC #342265</div>
       </div>
     </div>
 
@@ -150,7 +150,7 @@ function generateQuotePDF(data) {
           ${data.salesRep.name}
         </div>
         <div style="font-size: 14px; color: #4d4d4d;">
-          ${data.salesRep.email} â€¢ ${data.salesRep.phone}
+          ${data.salesRep.email} • ${data.salesRep.phone}
         </div>
       </div>
     </div>
@@ -342,10 +342,10 @@ function generateQuotePDF(data) {
     <!-- Limited Warranty -->
     <div style="padding: 12px 32px; border-top: 1px solid #e5e7eb;">
       <div style="font-size: 11px; font-weight: 700; margin-bottom: 4px; font-family: 'Montserrat', sans-serif; color: #004a95;">
-        LIMITED WARRANTY â€” ROLLING SCREENS
+        LIMITED WARRANTY — ROLLING SCREENS
       </div>
       <div style="font-size: 9pt; margin-bottom: 4px; color: #2a2d2c;">
-        <strong>Coverage:</strong> Installation/Labor: 1 Year â€¢ Fabric: 10 Years (fading) â€¢ Motor: 5 Years â€¢ Electronics: 2 Years â€¢ Extrusions/Parts: 5 Year Manufacturer Warranty
+        <strong>Coverage:</strong> Installation/Labor: 1 Year • Fabric: 10 Years (fading) • Motor: 5 Years • Electronics: 2 Years • Extrusions/Parts: 5 Year Manufacturer Warranty
       </div>
       <div style="font-size: 9pt; line-height: 1.3; color: #4d4d4d;">
         This warranty does not cover damage resulting from wind-related issues, closing on objects, unauthorized modification, misuse, neglect, accident, failure to provide necessary maintenance, normal wear and tear, or acts of God. Warranty is made to the original purchaser only and is not transferable. This warranty is exclusive and in lieu of any other warranties, express or implied, including implied warranties of merchantability or fitness for a particular purpose. Warranty is void if products are installed or repaired by anyone other than an authorized Roll-A-Shield agent.
@@ -397,16 +397,16 @@ function generateQuotePDF(data) {
         <strong>PURCHASE AGREEMENT:</strong> Signer of this agreement agrees to buy from Roll-A-Shield ("Seller") and Seller agrees to sell to, and if quoted herein, install for purchaser at the prices indicated. I understand that seventy-two (72) hours from the date of signing, the deposit shall not be refundable. I agree to pay the balance due upon completion of installation unless otherwise noted above. I accept the above proposal and authorize Roll-A-Shield to perform work as specified.
       </div>
       <div style="margin-bottom: 4px;">
-        <strong>LEAD TIME:</strong> Estimated 4â€“6 weeks from order confirmation to installation. Exact scheduling will be coordinated once order is placed. â€¢ <strong>CHANGE ORDERS:</strong> Any modifications to the original scope must be agreed upon in writing. Additional charges may apply for changes requested after the order has been placed. â€¢ <strong>ACCESS & SITE CONDITIONS:</strong> Customer shall provide clear access to the work area. Any pre-existing conditions (structural, electrical, stucco, etc.) that impact installation are the customer's responsibility unless included in this scope. â€¢ <strong>CANCELLATION:</strong> Orders cancelled after placement are subject to a restocking fee of up to 25% of the materials cost. Custom-fabricated products are non-refundable.
+        <strong>LEAD TIME:</strong> Estimated 4-6 weeks from order confirmation to installation. Exact scheduling will be coordinated once order is placed. • <strong>CHANGE ORDERS:</strong> Any modifications to the original scope must be agreed upon in writing. Additional charges may apply for changes requested after the order has been placed. • <strong>ACCESS & SITE CONDITIONS:</strong> Customer shall provide clear access to the work area. Any pre-existing conditions (structural, electrical, stucco, etc.) that impact installation are the customer's responsibility unless included in this scope. • <strong>CANCELLATION:</strong> Orders cancelled after placement are subject to a restocking fee of up to 25% of the materials cost. Custom-fabricated products are non-refundable.
       </div>
       <div>
-        <strong>LIMITATION OF LIABILITY:</strong> Except where the law requires a different standard, in no event shall Roll-A-Shield be liable for any loss, damage or injury or for any direct, indirect, special, incidental, exemplary, or consequential damages (including without limitation, lost profits) arising out of or in connection with the services or products included in this agreement. Products are provided on an "as is" "where is" basis. To the fullest extent permitted by law, Roll-A-Shield disclaims all representations, warranties and conditions of any kind (express, implied, statutory or otherwise, including but not limited to the warranties of merchantability and fitness for a particular purpose) as to the services and products included in this agreement. â€¢ <strong>GOVERNING LAW:</strong> This agreement shall be governed by the laws of the State of Arizona. Any disputes shall be resolved in Maricopa County courts.
+        <strong>LIMITATION OF LIABILITY:</strong> Except where the law requires a different standard, in no event shall Roll-A-Shield be liable for any loss, damage or injury or for any direct, indirect, special, incidental, exemplary, or consequential damages (including without limitation, lost profits) arising out of or in connection with the services or products included in this agreement. Products are provided on an "as is" "where is" basis. To the fullest extent permitted by law, Roll-A-Shield disclaims all representations, warranties and conditions of any kind (express, implied, statutory or otherwise, including but not limited to the warranties of merchantability and fitness for a particular purpose) as to the services and products included in this agreement. • <strong>GOVERNING LAW:</strong> This agreement shall be governed by the laws of the State of Arizona. Any disputes shall be resolved in Maricopa County courts.
       </div>
     </div>
 
     <!-- Footer Bar -->
     <div style="padding: 12px 32px; text-align: center; font-size: 11px; color: white; margin-top: 16px; background-color: #004a95;">
-      Roll-A-Shield â€¢ 2680 S. Industrial Park Ave, Tempe, AZ 85282 â€¢ (480) 921-0200 â€¢ rollashield.com â€¢ Protecting Arizona since 1979
+      Roll-A-Shield • 2680 S. Industrial Park Ave, Tempe, AZ 85282 • (480) 921-0200 • rollashield.com • Protecting Arizona since 1979
     </div>
   </div>
 </body>
