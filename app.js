@@ -1391,12 +1391,14 @@ async function generatePDF() {
         container.innerHTML = htmlString;
         document.body.appendChild(container);
 
-        // Override min-height so .page shrinks to content height.
-        // The template sets min-height:11in for on-screen preview, but
-        // html2pdf needs the element to be content-sized for proper pagination.
+        // Override template dimensions for PDF generation.
+        // The template sets width:8.5in and min-height:11in for on-screen preview,
+        // but html2pdf adds its own margins, so the content must fit within the
+        // remaining space (letter width minus left+right margins).
         const pageEl = container.querySelector('.page');
         if (pageEl) {
             pageEl.style.minHeight = 'auto';
+            pageEl.style.width = '7.7in';
         }
 
         // Wait for fonts to load
