@@ -998,6 +998,7 @@ async function handleCustomerView(quoteId, env) {
       quote: stripped,
       quoteNumber: row.quote_number,
       quoteStatus: row.quote_status || 'draft',
+      alreadySigned: row.quote_status === 'signed',
       signedAt: row.signed_at,
       signerName: row.signer_name,
       signatureData: row.signature_data
