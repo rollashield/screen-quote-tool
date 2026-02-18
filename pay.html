@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deposit Payment - Roll-A-Shield</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background: #f0f4f8;
+            color: #2a2d2c;
+        }
+
+        .loading-screen, .error-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .loading-screen h2 { color: #004a95; margin-bottom: 10px; font-family: 'Montserrat', sans-serif; }
+        .error-screen h2 { color: #dc3545; margin-bottom: 10px; font-family: 'Montserrat', sans-serif; }
+
+        /* ─── Main Container ─── */
+        .pay-container {
+            max-width: 680px;
+            margin: 20px auto;
+            padding: 0 16px;
+        }
+
+        /* ─── Header Card ─── */
+        .pay-header {
+            background: #004a95;
+            color: white;
+            padding: 28px 32px;
+            border-radius: 10px 10px 0 0;
+            text-align: center;
+        }
+
+        .pay-header h1 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .pay-header .deposit-amount {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 36px;
+            font-weight: 800;
+            margin: 8px 0;
+        }
+
+        .pay-header .quote-ref {
+            font-size: 14px;
+            opacity: 0.85;
+        }
+
+        /* ─── Payment Body ─── */
+        .pay-body {
+            background: white;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 24px 32px 32px;
+        }
+
+        .pay-body p.intro {
+            font-size: 15px;
+            color: #4d4d4d;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        /* ─── Payment Method Cards ─── */
+        .method-group-label {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #004a95;
+            margin-bottom: 10px;
+            margin-top: 24px;
+        }
+
+        .method-group-label:first-of-type { margin-top: 0; }
+
+        .method-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .method-card:hover {
+            border-color: #0071bc;
+            box-shadow: 0 1px 4px rgba(0,113,188,0.12);
+        }
+
+        .method-card h3 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .method-card .method-icon {
+            font-size: 20px;
+            width: 28px;
+            text-align: center;
+        }
+
+        .method-card p {
+            font-size: 14px;
+            color: #4d4d4d;
+            margin-bottom: 4px;
+            line-height: 1.5;
+        }
+
+        .method-card .fee-tag {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 4px;
+        }
+
+        .fee-tag.no-fee {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .fee-tag.has-fee {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .method-card .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 14px;
+            border-bottom: 1px dotted #e5e7eb;
+        }
+
+        .method-card .detail-row:last-child { border-bottom: none; }
+        .method-card .detail-label { color: #6b7280; }
+        .method-card .detail-value { font-weight: 600; font-family: 'Courier New', monospace; }
+
+        .method-card .warning-text {
+            font-size: 13px;
+            color: #92400e;
+            background: #fffbeb;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+
+        .method-card .limit-text {
+            font-size: 13px;
+            color: #6b7280;
+            font-style: italic;
+            margin-top: 4px;
+        }
+
+        .btn-pay {
+            display: block;
+            width: 100%;
+            padding: 14px 20px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Montserrat', sans-serif;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            margin-top: 12px;
+            transition: background 0.2s;
+        }
+
+        .btn-pay-primary { background: #004a95; }
+        .btn-pay-primary:hover { background: #003870; }
+
+        .btn-pay-clover { background: #2e7d32; }
+        .btn-pay-clover:hover { background: #1b5e20; }
+
+        /* ─── QR Modal ─── */
+        .qr-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-modal-overlay.active { display: flex; }
+
+        .qr-modal {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .qr-modal h3 {
+            font-family: 'Montserrat', sans-serif;
+            color: #004a95;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .qr-modal p {
+            font-size: 14px;
+            color: #4d4d4d;
+            margin-bottom: 16px;
+        }
+
+        .qr-modal .qr-code-container {
+            display: inline-block;
+            padding: 16px;
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .qr-modal .qr-code-container img {
+            display: block;
+            width: 250px;
+            height: 250px;
+        }
+
+        .qr-modal .btn-close {
+            padding: 10px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            background: #e5e7eb;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .qr-modal .btn-close:hover { background: #d1d5db; }
+
+        /* ─── Divider ─── */
+        .methods-divider {
+            display: flex;
+            align-items: center;
+            margin: 28px 0 4px;
+            gap: 12px;
+        }
+
+        .methods-divider::before,
+        .methods-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e5e7eb;
+        }
+
+        .methods-divider span {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #9ca3af;
+        }
+
+        /* ─── Footer ─── */
+        .pay-footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .pay-footer a { color: #0071bc; text-decoration: none; }
+        .pay-footer a:hover { text-decoration: underline; }
+
+        /* ─── Responsive ─── */
+        @media (max-width: 640px) {
+            .pay-container { padding: 0; margin: 0; }
+            .pay-header { border-radius: 0; padding: 24px 20px; }
+            .pay-body { border-radius: 0; padding: 20px 16px 28px; }
+            .pay-header .deposit-amount { font-size: 30px; }
+            .method-card .detail-row { flex-direction: column; gap: 2px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading State -->
+    <div id="loadingScreen" class="loading-screen">
+        <h2>Loading payment options...</h2>
+        <p>Please wait while we prepare your payment details.</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="errorScreen" class="error-screen" style="display: none;">
+        <h2>Something went wrong</h2>
+        <p id="errorMessage">Unable to load payment information.</p>
+    </div>
+
+    <!-- Main Payment Container -->
+    <div id="payContainer" class="pay-container" style="display: none;">
+        <!-- Header -->
+        <div class="pay-header">
+            <h1>DEPOSIT PAYMENT</h1>
+            <div class="deposit-amount" id="depositAmount">$0.00</div>
+            <div class="quote-ref">
+                Quote <span id="quoteNumber">---</span> | <span id="customerName">---</span>
+            </div>
+        </div>
+
+        <!-- Payment Methods -->
+        <div class="pay-body">
+            <p class="intro">Choose your preferred payment method below. Your 50% deposit secures your order.</p>
+
+            <!-- Card Payments -->
+            <div class="method-group-label">Card Payment</div>
+
+            <div class="method-card" id="cardMethodCard">
+                <h3><span class="method-icon">&#x1F4B3;</span> Credit or Debit Card</h3>
+                <p>Pay securely through our payment portal.</p>
+                <span class="fee-tag has-fee">3% surcharge on credit cards</span>
+                <span class="fee-tag no-fee" style="margin-left: 4px;">No fee for debit</span>
+                <a id="cloverPayLink" href="#" target="_blank" class="btn-pay btn-pay-clover">
+                    Pay with Card
+                </a>
+                <button id="cloverQrBtn" class="btn-pay btn-pay-primary" style="display: none; margin-top: 8px;" onclick="showQrModal()">
+                    Show QR Code (Customer Scans to Pay)
+                </button>
+            </div>
+
+            <!-- Bank Transfer -->
+            <div class="method-group-label">Bank Transfer</div>
+
+            <div class="method-card" id="achMethodCard">
+                <h3><span class="method-icon">&#x1F3E6;</span> ACH / Direct Deposit</h3>
+                <span class="fee-tag no-fee">No fee</span>
+                <div style="margin-top: 10px;">
+                    <div class="detail-row">
+                        <span class="detail-label">Bank</span>
+                        <span class="detail-value" id="achBank">---</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Account Holder</span>
+                        <span class="detail-value" id="achHolder">---</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Routing</span>
+                        <span class="detail-value" id="achRouting">---</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Account</span>
+                        <span class="detail-value" id="achAccount">---</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Reference</span>
+                        <span class="detail-value" id="achReference">---</span>
+                    </div>
+                </div>
+                <p class="limit-text">Contact your bank for maximum transfer amounts.</p>
+            </div>
+
+            <div class="methods-divider"><span>Other Options</span></div>
+
+            <!-- Zelle -->
+            <div class="method-card">
+                <h3><span class="method-icon">&#x26A1;</span> Zelle</h3>
+                <span class="fee-tag no-fee">No fee</span>
+                <div style="margin-top: 10px;">
+                    <div class="detail-row">
+                        <span class="detail-label">Send to</span>
+                        <span class="detail-value" id="zelleUsername">---</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Reference</span>
+                        <span class="detail-value" id="zelleReference">---</span>
+                    </div>
+                </div>
+                <p class="limit-text" id="zelleLimitNote">Typically $2.5-3.5k max, depending on your bank</p>
+            </div>
+
+            <!-- Check -->
+            <div class="method-card">
+                <h3><span class="method-icon">&#x2709;</span> Check</h3>
+                <span class="fee-tag no-fee">No fee</span>
+                <div style="margin-top: 10px;">
+                    <div class="detail-row">
+                        <span class="detail-label">Payable to</span>
+                        <span class="detail-value" id="checkPayableTo">---</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Mail to</span>
+                        <span class="detail-value" id="checkAddress" style="font-family: inherit; font-size: 13px;">---</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Memo</span>
+                        <span class="detail-value" id="checkMemo">---</span>
+                    </div>
+                </div>
+                <div class="warning-text" id="checkWarning">Paying by check may cause delays in releasing your order.</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="pay-footer">
+            <p>Questions? Call <a href="tel:4809210200">(480) 921-0200</a> or email <a href="mailto:info@rollashield.com">info@rollashield.com</a></p>
+            <p style="margin-top: 4px;">Roll-A-Shield &bull; Protecting Arizona since 1979</p>
+        </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div id="qrModalOverlay" class="qr-modal-overlay" onclick="closeQrModal(event)">
+        <div class="qr-modal" onclick="event.stopPropagation()">
+            <h3>Scan to Pay</h3>
+            <p>Point your phone camera at the QR code to open the payment page.</p>
+            <div class="qr-code-container">
+                <img id="qrCodeImage" src="" alt="Payment QR Code">
+            </div>
+            <br>
+            <button class="btn-close" onclick="closeQrModal()">Close</button>
+        </div>
+    </div>
+
+    <script>
+        const WORKER_URL = 'https://rollashield-quote-worker.derek-44b.workers.dev';
+    </script>
+    <script src="pay.js"></script>
+</body>
+</html>

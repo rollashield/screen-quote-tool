@@ -33,6 +33,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!data) return; // Error already shown
 
+        // Capture quoteId from API response (needed for payment link in remote flow)
+        if (data.quoteId) {
+            quoteId = data.quoteId;
+        }
+
         renderQuote(data);
         handleSignedState(data);
         initSignaturePad();
@@ -320,6 +325,10 @@ async function submitSignature() {
         const result = await response.json();
 
         if (response.ok && result.success) {
+            // Capture quoteId from response (remote flow may not have it from URL)
+            if (result.quoteId) {
+                quoteId = result.quoteId;
+            }
             showConfirmation();
         } else {
             alert('Failed to submit signature: ' + (result.error || 'Unknown error'));
@@ -340,7 +349,18 @@ function showConfirmation() {
     const confirmScreen = document.getElementById('confirmationScreen');
     confirmScreen.style.display = 'block';
 
-    // Show navigation links only for in-person mode (sales rep needs them)
+    // Build the payment page URL
+    const paymentUrl = quoteId
+        ? `pay.html?quoteId=${quoteId}${signingMode === 'in-person' ? '&mode=in-person' : ''}`
+        : null;
+
+    // Show payment link for all modes
+    if (paymentUrl) {
+        document.getElementById('paymentLink').href = paymentUrl;
+        document.getElementById('paymentLinkContainer').style.display = 'block';
+    }
+
+    // Show additional navigation links for in-person mode (sales rep needs them)
     if (signingMode === 'in-person' && quoteId) {
         const linksDiv = document.getElementById('confirmationLinks');
         linksDiv.style.display = 'flex';

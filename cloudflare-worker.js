@@ -1033,6 +1033,7 @@ async function handleGetSigningPage(token, env) {
       return jsonResponse({
         success: true,
         quote: stripped,
+        quoteId: row.id,
         quoteNumber: row.quote_number,
         quoteStatus: row.quote_status,
         alreadySigned: true,
@@ -1052,6 +1053,7 @@ async function handleGetSigningPage(token, env) {
     return jsonResponse({
       success: true,
       quote: stripped,
+      quoteId: row.id,
       quoteNumber: row.quote_number,
       quoteStatus: 'viewed',
       alreadySigned: false
@@ -1148,6 +1150,7 @@ async function handleSubmitRemoteSignature(token, request, env) {
 
     return jsonResponse({
       success: true,
+      quoteId: row.id,
       message: 'Quote signed successfully'
     });
   } catch (error) {
@@ -1207,6 +1210,7 @@ async function handleSignInPerson(quoteId, request, env) {
 
     return jsonResponse({
       success: true,
+      quoteId: quoteId,
       message: 'Quote signed successfully'
     });
   } catch (error) {
