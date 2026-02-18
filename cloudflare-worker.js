@@ -1275,8 +1275,33 @@ async function handleCreateEcheckSession(quoteId, env) {
     }
 
     const customerName = quoteData.customerName || 'Customer';
+    const customerEmail = quoteData.customerEmail || '';
     const quoteNumber = row.quote_number || 'Quote';
     const baseUrl = 'https://rollashield.github.io/screen-quote-tool';
+
+    // Create or find Stripe Customer so name + email are pre-populated at checkout
+    let stripeCustomerId = null;
+    if (customerName || customerEmail) {
+      const custParams = new URLSearchParams();
+      if (customerName) custParams.append('name', customerName);
+      if (customerEmail) custParams.append('email', customerEmail);
+      custParams.append('metadata[quoteId]', quoteId);
+      custParams.append('metadata[quoteNumber]', quoteNumber);
+
+      const custResponse = await fetch('https://api.stripe.com/v1/customers', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: custParams.toString()
+      });
+
+      if (custResponse.ok) {
+        const customer = await custResponse.json();
+        stripeCustomerId = customer.id;
+      }
+    }
 
     // Create Stripe Checkout Session with us_bank_account only
     const params = new URLSearchParams();
@@ -1292,8 +1317,10 @@ async function handleCreateEcheckSession(quoteId, env) {
     params.append('payment_intent_data[metadata][quoteId]', quoteId);
     params.append('payment_intent_data[metadata][quoteNumber]', quoteNumber);
 
-    if (quoteData.customerEmail) {
-      params.append('customer_email', quoteData.customerEmail);
+    if (stripeCustomerId) {
+      params.append('customer', stripeCustomerId);
+    } else if (customerEmail) {
+      params.append('customer_email', customerEmail);
     }
 
     const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
