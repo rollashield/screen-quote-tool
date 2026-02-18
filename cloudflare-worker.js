@@ -548,7 +548,7 @@ async function handleSendEmail(request, env) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: emailData.from || 'Roll-A-Shield <onboarding@resend.dev>',
+        from: emailData.from || 'Roll-A-Shield <noreply@updates.rollashield.com>',
         to: Array.isArray(emailData.to) ? emailData.to : [emailData.to],
         cc: emailData.cc || [],
         subject: emailData.subject,
@@ -968,7 +968,7 @@ async function handleSendForSignature(quoteId, request, env) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'Roll-A-Shield Quotes <onboarding@resend.dev>',
+        from: 'Roll-A-Shield Quotes <noreply@updates.rollashield.com>',
         to: [customerEmail],
         cc: salesRepEmail ? [salesRepEmail] : [],
         subject: `Review & Sign Your Roll-A-Shield Quote - ${quoteNumber}`,
@@ -1128,7 +1128,7 @@ async function handleSubmitRemoteSignature(token, request, env) {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            from: 'Roll-A-Shield Quotes <onboarding@resend.dev>',
+            from: 'Roll-A-Shield Quotes <noreply@updates.rollashield.com>',
             to: [salesRepEmail],
             subject: `${customerName} has signed Quote ${row.quote_number}`,
             html: `<p><strong>${customerName}</strong> has signed quote <strong>${row.quote_number}</strong>.</p><p><strong>Signed:</strong> ${new Date(signedAt).toLocaleString('en-US', { timeZone: 'America/Phoenix' })}</p><p><strong>Method:</strong> Remote (email link)</p><p><strong>Signer name:</strong> ${signerName}</p>`,

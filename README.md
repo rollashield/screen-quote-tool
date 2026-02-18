@@ -72,13 +72,13 @@ Push to `main` branch — GitHub Pages deploys automatically.
 ## Email Functionality
 
 ### Customer Quote Email
-- Sent from: `Roll-A-Shield Quotes <onboarding@resend.dev>`
+- Sent from: `Roll-A-Shield Quotes <noreply@updates.rollashield.com>`
 - Sent to: Customer email
 - CC: derek@rollashield.com
 - Contains: Quote summary, pricing, screen details
 
 ### Production Order Email
-- Sent from: `Roll-A-Shield Production <onboarding@resend.dev>`
+- Sent from: `Roll-A-Shield Production <noreply@updates.rollashield.com>`
 - Sent to: derek@rollashield.com
 - Contains: Final measurements, installation details, operator configuration
 

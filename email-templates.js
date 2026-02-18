@@ -145,7 +145,7 @@ async function emailQuote() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                from: 'Roll-A-Shield Quotes <onboarding@resend.dev>',
+                from: 'Roll-A-Shield Quotes <noreply@updates.rollashield.com>',
                 to: [customerEmail],
                 cc: ['derek@rollashield.com'],
                 subject: `Your Roll-A-Shield Screen Quote - ${customerName}`,
