@@ -217,6 +217,20 @@ function handleSignedState(data) {
             img.alt = 'Customer signature';
             document.getElementById('signedSignatureDisplay').appendChild(img);
         }
+
+        // Show payment link for already-signed quotes
+        if (quoteId) {
+            const paymentUrl = `pay.html?quoteId=${quoteId}${signingMode === 'in-person' ? '&mode=in-person' : ''}`;
+            document.getElementById('signedPaymentLink').href = paymentUrl;
+            document.getElementById('signedPaymentLinkContainer').style.display = 'block';
+
+            // Show additional nav for in-person mode
+            if (signingMode === 'in-person') {
+                const linksDiv = document.getElementById('signedConfirmationLinks');
+                linksDiv.style.display = 'flex';
+                document.getElementById('signedFinalizeLink').href = `finalize.html?orderId=${quoteId}`;
+            }
+        }
     }
 }
 
