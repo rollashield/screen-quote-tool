@@ -83,6 +83,12 @@ export default {
       return await handleGetPaymentInfo(env);
     }
 
+    // Route: Create Stripe eCheck checkout session
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/create-echeck-session$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleCreateEcheckSession(quoteId, env);
+    }
+
     // Route: Send quote for remote signature (must come before generic /api/quote/ GET)
     if (url.pathname.match(/^\/api\/quote\/[^/]+\/send-for-signature$/) && request.method === 'POST') {
       const quoteId = url.pathname.split('/')[3];
@@ -1246,6 +1252,75 @@ async function handleGetPaymentInfo(env) {
       }
     }
   });
+}
+
+// ─── Stripe eCheck (ACH) Checkout Session ───────────────────────────────────
+async function handleCreateEcheckSession(quoteId, env) {
+  try {
+    if (!env.STRIPE_SECRET_KEY) {
+      return jsonResponse({ error: 'Stripe is not configured' }, 500);
+    }
+
+    const row = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!row) {
+      return jsonResponse({ error: 'Quote not found' }, 404);
+    }
+
+    const quoteData = JSON.parse(row.quote_data);
+    const totalPrice = quoteData.orderTotalPrice || 0;
+    const depositAmount = Math.round((totalPrice / 2) * 100); // cents
+
+    if (depositAmount <= 0) {
+      return jsonResponse({ error: 'Invalid deposit amount' }, 400);
+    }
+
+    const customerName = quoteData.customerName || 'Customer';
+    const quoteNumber = row.quote_number || 'Quote';
+    const baseUrl = 'https://rollashield.github.io/screen-quote-tool';
+
+    // Create Stripe Checkout Session with us_bank_account only
+    const params = new URLSearchParams();
+    params.append('mode', 'payment');
+    params.append('payment_method_types[0]', 'us_bank_account');
+    params.append('line_items[0][price_data][currency]', 'usd');
+    params.append('line_items[0][price_data][product_data][name]', `Roll-A-Shield Deposit — ${quoteNumber}`);
+    params.append('line_items[0][price_data][unit_amount]', depositAmount.toString());
+    params.append('line_items[0][quantity]', '1');
+    params.append('success_url', `${baseUrl}/pay.html?quoteId=${quoteId}&payment=success`);
+    params.append('cancel_url', `${baseUrl}/pay.html?quoteId=${quoteId}&payment=cancelled`);
+    params.append('payment_intent_data[description]', `Deposit for ${quoteNumber} — ${customerName}`);
+    params.append('payment_intent_data[metadata][quoteId]', quoteId);
+    params.append('payment_intent_data[metadata][quoteNumber]', quoteNumber);
+
+    if (quoteData.customerEmail) {
+      params.append('customer_email', quoteData.customerEmail);
+    }
+
+    const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params.toString()
+    });
+
+    const session = await response.json();
+
+    if (!response.ok) {
+      console.error('Stripe error:', JSON.stringify(session));
+      return jsonResponse({ error: session.error?.message || 'Failed to create checkout session' }, 500);
+    }
+
+    return jsonResponse({
+      success: true,
+      checkoutUrl: session.url,
+      sessionId: session.id
+    });
+  } catch (error) {
+    console.error('Error creating eCheck session:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
 }
 
 // ─── JSON Response Helper ──────────────────────────────────────────────────────

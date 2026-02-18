@@ -79,9 +79,10 @@ function populatePage(quoteResult, paymentInfo) {
     const cloverPayLink = document.getElementById('cloverPayLink');
     cloverPayLink.href = cloverLink;
 
-    // Show QR button for in-person mode (sales rep iPad flow)
+    // Show QR buttons for in-person mode (sales rep iPad flow)
     if (paymentMode === 'in-person') {
         document.getElementById('cloverQrBtn').style.display = 'block';
+        document.getElementById('echeckQrBtn').style.display = 'block';
     }
 
     // ACH details
@@ -107,7 +108,90 @@ function populatePage(quoteResult, paymentInfo) {
     document.getElementById('payContainer').style.display = 'block';
 }
 
-// ─── QR Code Modal ──────────────────────────────────────────────────────────
+// ─── eCheck (Stripe ACH) ────────────────────────────────────────────────────
+let echeckSessionUrl = null; // cached after first creation
+
+async function handleEcheckPay() {
+    const btn = document.getElementById('echeckPayBtn');
+    const errorEl = document.getElementById('echeckError');
+    errorEl.style.display = 'none';
+
+    // If we already have a session URL, just open it
+    if (echeckSessionUrl) {
+        window.open(echeckSessionUrl, '_blank');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Creating payment link...';
+
+    try {
+        const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}/create-echeck-session`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to create eCheck session');
+        }
+
+        echeckSessionUrl = result.checkoutUrl;
+        window.open(echeckSessionUrl, '_blank');
+        btn.textContent = 'Pay with eCheck';
+        btn.disabled = false;
+
+    } catch (error) {
+        console.error('eCheck error:', error);
+        errorEl.textContent = error.message || 'Unable to create payment link. Please try another method.';
+        errorEl.style.display = 'block';
+        btn.textContent = 'Pay with eCheck';
+        btn.disabled = false;
+    }
+}
+
+async function showEcheckQrModal() {
+    const btn = document.getElementById('echeckQrBtn');
+    const errorEl = document.getElementById('echeckError');
+    errorEl.style.display = 'none';
+
+    // Create session if we don't have one yet
+    if (!echeckSessionUrl) {
+        btn.disabled = true;
+        btn.textContent = 'Creating payment link...';
+
+        try {
+            const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}/create-echeck-session`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to create eCheck session');
+            }
+
+            echeckSessionUrl = result.checkoutUrl;
+            btn.textContent = 'Show QR Code (Customer Scans to Pay)';
+            btn.disabled = false;
+
+        } catch (error) {
+            console.error('eCheck QR error:', error);
+            errorEl.textContent = error.message || 'Unable to create payment link.';
+            errorEl.style.display = 'block';
+            btn.textContent = 'Show QR Code (Customer Scans to Pay)';
+            btn.disabled = false;
+            return;
+        }
+    }
+
+    // Show QR modal with the eCheck URL
+    const qrImg = document.getElementById('qrCodeImage');
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(echeckSessionUrl)}`;
+    document.getElementById('qrModalOverlay').classList.add('active');
+}
+
+// ─── QR Code Modal (Clover) ─────────────────────────────────────────────────
 function showQrModal() {
     const cloverLink = document.getElementById('cloverPayLink').href;
     const qrImg = document.getElementById('qrCodeImage');

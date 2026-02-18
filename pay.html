@@ -200,6 +200,10 @@
         .btn-pay-clover { background: #2e7d32; }
         .btn-pay-clover:hover { background: #1b5e20; }
 
+        .btn-pay-stripe { background: #635bff; }
+        .btn-pay-stripe:hover { background: #4f46e5; }
+        .btn-pay-stripe:disabled { background: #a5b4fc; cursor: wait; }
+
         /* ─── QR Modal ─── */
         .qr-modal-overlay {
             display: none;
@@ -352,6 +356,22 @@
                 <button id="cloverQrBtn" class="btn-pay btn-pay-primary" style="display: none; margin-top: 8px;" onclick="showQrModal()">
                     Show QR Code (Customer Scans to Pay)
                 </button>
+            </div>
+
+            <!-- eCheck (Stripe ACH) -->
+            <div class="method-group-label">eCheck</div>
+
+            <div class="method-card" id="echeckMethodCard">
+                <h3><span class="method-icon">&#x1F4CB;</span> eCheck</h3>
+                <p>Pay directly from your bank account through our secure payment portal.</p>
+                <span class="fee-tag no-fee">No fee</span>
+                <button id="echeckPayBtn" class="btn-pay btn-pay-stripe" onclick="handleEcheckPay()">
+                    Pay with eCheck
+                </button>
+                <button id="echeckQrBtn" class="btn-pay btn-pay-primary" style="display: none; margin-top: 8px;" onclick="showEcheckQrModal()">
+                    Show QR Code (Customer Scans to Pay)
+                </button>
+                <p id="echeckError" style="display: none; color: #dc3545; font-size: 13px; margin-top: 8px;"></p>
             </div>
 
             <!-- Bank Transfer -->
