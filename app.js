@@ -1446,17 +1446,103 @@ async function generatePDF() {
 }
 
 // ─── Signature Functions ─────────────────────────────────────────────────────
+
+/**
+ * Ensure the current quote is saved to D1 before navigating away.
+ * If already saved (has a quote_number from D1), does nothing.
+ * Returns true if save succeeded, false otherwise.
+ */
+async function ensureQuoteSaved() {
+    const orderData = window.currentOrderData;
+    if (!orderData) return false;
+
+    // Read fresh internal comments
+    const internalComments = document.getElementById('internalComments')?.value || '';
+    orderData.internalComments = internalComments;
+
+    const response = await fetch(`${WORKER_URL}/api/save-quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: orderData.id.toString(),
+            customerName: orderData.customerName,
+            companyName: orderData.companyName || '',
+            customerEmail: orderData.customerEmail || '',
+            customerPhone: orderData.customerPhone || '',
+            streetAddress: orderData.streetAddress || '',
+            aptSuite: orderData.aptSuite || '',
+            nearestIntersection: orderData.nearestIntersection || '',
+            city: orderData.city || '',
+            state: orderData.state || '',
+            zipCode: orderData.zipCode || '',
+            screens: orderData.screens,
+            orderTotalPrice: orderData.orderTotalPrice,
+            orderTotalMaterialsPrice: orderData.orderTotalMaterialsPrice,
+            orderTotalInstallationPrice: orderData.orderTotalInstallationPrice,
+            orderTotalInstallationCost: orderData.orderTotalInstallationCost,
+            orderTotalCost: orderData.orderTotalCost,
+            totalProfit: orderData.totalProfit,
+            marginPercent: orderData.marginPercent,
+            hasCableScreen: orderData.hasCableScreen,
+            totalScreenCosts: orderData.totalScreenCosts,
+            totalMotorCosts: orderData.totalMotorCosts,
+            totalAccessoriesCosts: orderData.totalAccessoriesCosts,
+            totalCableSurcharge: orderData.totalCableSurcharge,
+            discountPercent: orderData.discountPercent,
+            discountLabel: orderData.discountLabel,
+            discountAmount: orderData.discountAmount,
+            discountedMaterialsPrice: orderData.discountedMaterialsPrice,
+            enableComparison: orderData.enableComparison,
+            comparisonMotor: orderData.comparisonMotor,
+            comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
+            comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
+            comparisonTotalPrice: orderData.comparisonTotalPrice,
+            airtableOpportunityId: orderData.airtableOpportunityId || '',
+            airtableContactId: orderData.airtableContactId || '',
+            internalComments: internalComments,
+            salesRepId: orderData.salesRepId || '',
+            salesRepName: orderData.salesRepName || '',
+            salesRepEmail: orderData.salesRepEmail || '',
+            salesRepPhone: orderData.salesRepPhone || ''
+        })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+        return true;
+    } else {
+        alert('Failed to save quote: ' + (result.error || 'Unknown error'));
+        return false;
+    }
+}
+
 async function presentForSignature() {
-    if (!window.currentOrderData || !window.currentOrderData.id) {
-        alert('Please save the quote first before presenting for signature.');
+    if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
+        alert('Please calculate a quote first before presenting for signature.');
         return;
     }
-    window.location.href = `sign.html?quoteId=${window.currentOrderData.id}&mode=in-person`;
+
+    const btn = document.querySelector('button[onclick="presentForSignature()"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+    try {
+        const saved = await ensureQuoteSaved();
+        if (!saved) {
+            if (btn) { btn.disabled = false; btn.textContent = 'Present for Signature'; }
+            return;
+        }
+        window.location.href = `sign.html?quoteId=${window.currentOrderData.id}&mode=in-person`;
+    } catch (error) {
+        console.error('Error saving quote for signature:', error);
+        alert('Failed to save quote. Please check your internet connection.\n\nError: ' + error.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Present for Signature'; }
+    }
 }
 
 async function sendForSignature() {
-    if (!window.currentOrderData || !window.currentOrderData.id) {
-        alert('Please save the quote first before sending for signature.');
+    if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
+        alert('Please calculate a quote first before sending for signature.');
         return;
     }
 
@@ -1473,10 +1559,16 @@ async function sendForSignature() {
     const btn = document.querySelector('button[onclick="sendForSignature()"]');
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Sending...';
+        btn.textContent = 'Saving & Sending...';
     }
 
     try {
+        const saved = await ensureQuoteSaved();
+        if (!saved) {
+            if (btn) { btn.disabled = false; btn.textContent = 'Send for Signature'; }
+            return;
+        }
+
         const response = await fetch(`${WORKER_URL}/api/quote/${window.currentOrderData.id}/send-for-signature`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
