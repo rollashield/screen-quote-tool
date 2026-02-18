@@ -494,6 +494,13 @@
                                placeholder="Search opportunities by name..." autocomplete="off">
                         <div id="opportunitySearchResults" class="opp-search-results"></div>
                     </div>
+                    <div class="form-group" style="flex-shrink: 0; margin: 0; min-width: 180px;">
+                        <label for="salesRepSelect" style="font-size: 0.8rem; margin-bottom: 2px;">Sales Rep</label>
+                        <select id="salesRepSelect" style="padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;">
+                            <option value="">-- Select Sales Rep --</option>
+                        </select>
+                        <div id="salesRepInfo" style="display: none; font-size: 0.75rem; color: #4d4d4d; margin-top: 2px;"></div>
+                    </div>
                 </div>
 
                 <!-- Linked Opportunity Banner (hidden by default) -->
@@ -506,17 +513,10 @@
                 <input type="hidden" id="airtableOpportunityId">
                 <input type="hidden" id="airtableContactId">
 
-                <div class="form-row" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="form-row">
                     <div class="form-group">
                         <label for="customerName">Customer Name *</label>
                         <input type="text" id="customerName" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="salesRepSelect">Sales Rep</label>
-                        <select id="salesRepSelect" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem;">
-                            <option value="">-- Select Sales Rep --</option>
-                        </select>
-                        <div id="salesRepInfo" style="display: none; font-size: 0.8rem; color: #4d4d4d; margin-top: 4px;"></div>
                     </div>
                     <div class="form-group">
                         <label for="customerEmail">Email</label>
