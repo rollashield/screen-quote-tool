@@ -6,11 +6,16 @@ Web application for generating custom rolling screen quotes with email integrati
 ## Architecture
 - **Frontend**: Vanilla HTML/CSS/JavaScript (NO build tools, NO framework)
   - `index.html` - Quote generation UI (main page)
+  - `sign.html` - Customer signature page
+  - `pay.html` - Payment instructions page
   - `finalize.html` - Final measurements and production order form
   - `styles.css` - Shared styles
-  - `app.js` - Core application logic (~1,760 lines)
+  - `app.js` - Core application logic
+  - `sign.js` - Signature page logic
+  - `pay.js` - Payment page logic
   - `pricing-data.js` - Pricing tables and product constants
   - `email-templates.js` - Email HTML template generation
+  - `pdf-template.js` - PDF quote template (html2pdf.js, converted from Figma)
 - **Backend**: Cloudflare Worker (`cloudflare-worker.js`)
   - Deployed as `rollashield-quote-worker`
   - Secrets managed via `wrangler secret put` (never in code)
@@ -22,6 +27,12 @@ Web application for generating custom rolling screen quotes with email integrati
 - POST /api/save-quote - Save quote to D1
 - GET /api/quotes - List all quotes
 - GET /api/quote/:id - Get specific quote
+- GET /api/quote/:id/customer-view - Public quote data for sign/pay pages
+- POST /api/quote/:id/sign - Submit signature (in-person)
+- POST /api/send-for-signature - Send signing link email to customer
+- POST /api/quote/:id/submit-remote-signature - Submit remote signature (via token)
+- GET /api/payment-info - Static payment method details (ACH, check, Zelle, Clover)
+- POST /api/quote/:id/create-echeck-session - Create Stripe Checkout session for eCheck/ACH
 
 ## Development
 - No build step. Open HTML files directly or use a local server.
@@ -31,17 +42,44 @@ Web application for generating custom rolling screen quotes with email integrati
 ## Deployment
 - Frontend: Push to `main` -> GitHub Pages deploys automatically
 - Backend: `wrangler deploy` from this directory
-- Secrets: `wrangler secret put RESEND_API_KEY`
+- Secrets (via `wrangler secret put`):
+  - `RESEND_API_KEY` — Resend transactional email
+  - `STRIPE_SECRET_KEY` — Stripe eCheck/ACH payments
 
-## Planned Features
-- **PDF Quote Template**: Design doc in `docs/pdf-template-plan.md`
-  - Figma-designed professional PDF replacing `window.print()` — uses `html2pdf.js` (CDN)
-  - Figma export in `figma-export/` directory (`pdfTemplate.js`, example usage, logo asset)
-  - Prerequisite for signature feature (signing page reuses same template for quote display)
-- **Customer Signature & Payment**: Full design doc in `docs/signature-feature-plan.md`
-  - E-signature step (in-person on iPad + remote via email link) — replaces PandaDoc
-  - Multi-method payment collection (Clover CC, Stripe bank transfer, ACH/check/Zelle instructions)
-  - QR code generation for in-person payments (customer scans, pays on their phone)
+## Email (Resend)
+Transactional email sent via [Resend](https://resend.com) API through the Cloudflare Worker.
+
+- **Sending domain**: `updates.rollashield.com` (SPF, DKIM, MX verified)
+- **From address**: `noreply@updates.rollashield.com`
+- **Worker secret**: `RESEND_API_KEY` (set via `wrangler secret put RESEND_API_KEY`)
+- **Dashboard**: https://resend.com/domains — domain verification, delivery logs
+
+### Email sending locations
+| File | Function/Context | Display Name | Purpose |
+|------|-----------------|--------------|---------|
+| `cloudflare-worker.js` | `handleSendEmail()` | Roll-A-Shield | Quote PDF email to customer |
+| `cloudflare-worker.js` | `handleSendForSignature()` | Roll-A-Shield | Signing link email to customer |
+| `cloudflare-worker.js` | `handleSubmitRemoteSignature()` | Roll-A-Shield | Signature confirmation to sales rep |
+| `email-templates.js` | `buildEmailPayload()` | Roll-A-Shield Quotes | Quote email (called by app.js) |
+| `finalize.html` | inline `sendProductionEmail()` | Roll-A-Shield Production | Production order email |
+
+## Pages & Flows
+- `index.html` — Quote builder (sales rep tool)
+- `sign.html` — Customer signature page (in-person via `?quoteId=&mode=in-person`, remote via `?token=`)
+- `pay.html` — Payment instructions page (multi-method: Clover CC, Stripe eCheck, ACH, Zelle, check)
+- `finalize.html` — Final measurements and production order form
+
+### Design docs
+- PDF template: `docs/pdf-template-plan.md`
+- Signature & payment feature: `docs/signature-feature-plan.md`
+
+## Payments
+- **Clover**: Credit card via static permanent payment link (configured in `/api/payment-info`)
+- **Stripe**: eCheck/ACH via Checkout Sessions (`us_bank_account` payment method)
+  - Worker secret: `STRIPE_SECRET_KEY` (set via `wrangler secret put STRIPE_SECRET_KEY`)
+  - Creates Stripe Customer with name/email for pre-population
+  - Endpoint: `POST /api/quote/:id/create-echeck-session`
+- **ACH / Zelle / Check**: Static payment instructions displayed on pay.html (no API integration)
 
 ## Important Notes
 - This is a vanilla JS project. Do NOT suggest adding npm, webpack, React, or any framework.

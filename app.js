@@ -477,16 +477,19 @@ function updateComparisonOptions() {
     const trackType = document.getElementById('trackType').value;
     const comparisonMotor = document.getElementById('comparisonMotor');
 
-    comparisonMotor.innerHTML = '<option value="">-- Select Motor to Compare --</option>';
+    comparisonMotor.innerHTML = '<option value="">-- Select Option to Compare --</option>';
 
-    if (!trackType || !operatorType || operatorType === 'gear') {
+    if (!trackType || !operatorType) {
         return;
     }
 
-    // Build list of alternative motors based on current selection
+    // Build list of alternative operators based on current selection
     const motorOptions = [];
 
     if (trackType === 'sunair-zipper' || trackType === 'sunair-cable') {
+        if (operatorType !== 'gear') {
+            motorOptions.push({value: 'gear', label: 'Manual Gear Operation'});
+        }
         if (operatorType !== 'gaposa-rts') {
             motorOptions.push({value: 'gaposa-rts', label: 'Remote-Operated Motor'});
         }
@@ -504,7 +507,7 @@ function updateComparisonOptions() {
 }
 
 function calculateScreenWithAlternateMotor(screen, alternateMotorType) {
-    // Calculate what the screen would cost with a different motor
+    // Calculate what the screen would cost with a different motor/operator
     let alternateMotorCost = 0;
 
     if (alternateMotorType === 'gaposa-rts') {
@@ -514,6 +517,7 @@ function calculateScreenWithAlternateMotor(screen, alternateMotorType) {
     } else if (alternateMotorType === 'somfy-rts') {
         alternateMotorCost = motorCosts['somfy-rts'];
     }
+    // gear: alternateMotorCost stays 0
 
     // Start with screen-only cost (no motor)
     let screenOnlyCost = screen.screenCostOnly;
@@ -522,12 +526,6 @@ function calculateScreenWithAlternateMotor(screen, alternateMotorType) {
     if (screen.trackDeduction) {
         screenOnlyCost += screen.trackDeduction;
     }
-
-    // Add accessories cost
-    let accessoriesCost = 0;
-    screen.accessories.forEach(acc => {
-        accessoriesCost += acc.cost;
-    });
 
     // Calculate customer price with alternate motor
     let customerPrice = screenOnlyCost * CUSTOMER_MARKUP;
@@ -538,14 +536,17 @@ function calculateScreenWithAlternateMotor(screen, alternateMotorType) {
         customerPrice += screen.trackDeduction;
     }
 
-    // Add accessories with their proper markup
-    screen.accessories.forEach(acc => {
-        if (acc.needsMarkup) {
-            customerPrice += acc.cost * CUSTOMER_MARKUP;
-        } else {
-            customerPrice += acc.cost;
-        }
-    });
+    // For gear comparison, skip motor-specific accessories (remotes, keypads, etc.)
+    // For motor comparisons, include accessories as-is
+    if (alternateMotorType !== 'gear') {
+        screen.accessories.forEach(acc => {
+            if (acc.needsMarkup) {
+                customerPrice += acc.cost * CUSTOMER_MARKUP;
+            } else {
+                customerPrice += acc.cost;
+            }
+        });
+    }
 
     // Add installation (same for all motor types with same size/type)
     customerPrice += screen.installationPrice;
@@ -1323,10 +1324,10 @@ function mapOrderDataToTemplate(orderData) {
         const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice;
         const compTotal = orderData.comparisonTotalPrice || 0;
 
-        // Find the first motorized screen's operator to use as label
-        const firstMotorScreen = (orderData.screens || []).find(s => s.operatorType && s.operatorType !== 'gear');
-        const option1Label = firstMotorScreen
-            ? getClientFacingOperatorName(firstMotorScreen.operatorType, firstMotorScreen.operatorTypeName)
+        // Get the first screen's operator to use as label
+        const firstScreen = (orderData.screens || [])[0];
+        const option1Label = firstScreen
+            ? getClientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName)
             : 'Option 1';
         const option2Label = orderData.comparisonMotor
             ? getClientFacingOperatorName(orderData.comparisonMotor, orderData.comparisonMotor)
@@ -2197,8 +2198,8 @@ function calculateOrderQuote() {
 
     if (enableComparison && comparisonMotor) {
         screensInOrder.forEach(screen => {
-            // Only compare motorized screens
-            if (screen.operatorType !== 'gear') {
+            // Compare all screens (motorized or gear) against the selected alternative
+            if (screen.operatorType !== comparisonMotor) {
                 const comparisonData = calculateScreenWithAlternateMotor(screen, comparisonMotor);
                 comparisonScreens.push({
                     ...screen,
@@ -2207,6 +2208,7 @@ function calculateOrderQuote() {
                 });
                 comparisonTotalMaterialsPrice += comparisonData.materialPrice;
             } else {
+                // Screen already uses the comparison operator — pass through same price
                 comparisonScreens.push({
                     ...screen,
                     comparisonPrice: screen.customerPrice,
@@ -2299,15 +2301,15 @@ function displayOrderQuoteSummary(orderData) {
     const internalInfo = document.getElementById('internalInfo');
     const quoteSummary = document.getElementById('quoteSummary');
 
-    // Get motor names for comparison if enabled
+    // Get operator names for comparison if enabled
     let comparisonMotorName = '';
     let clientMotorName = '';
     if (orderData.enableComparison && orderData.comparisonMotor && orderData.screens.length > 0) {
         comparisonMotorName = getClientFacingOperatorName(orderData.comparisonMotor, '');
-        // Get the first screen's motor name for the header
-        const firstMotorizedScreen = orderData.screens.find(s => s.operatorType !== 'gear');
-        if (firstMotorizedScreen) {
-            clientMotorName = getClientFacingOperatorName(firstMotorizedScreen.operatorType, firstMotorizedScreen.operatorTypeName);
+        // Get the first screen's operator name for the header
+        const firstScreen = orderData.screens[0];
+        if (firstScreen) {
+            clientMotorName = getClientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName);
         }
     }
 
