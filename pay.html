@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="nav-steps.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -322,6 +323,8 @@
 
     <!-- Main Payment Container -->
     <div id="payContainer" class="pay-container" style="display: none;">
+        <div id="stepNav"></div>
+
         <!-- Header -->
         <div class="pay-header">
             <h1>DEPOSIT PAYMENT</h1>
@@ -446,6 +449,7 @@
     <script>
         const WORKER_URL = 'https://rollashield-quote-worker.derek-44b.workers.dev';
     </script>
+    <script src="nav-steps.js"></script>
     <script src="pay.js"></script>
 </body>
 </html>

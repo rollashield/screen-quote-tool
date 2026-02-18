@@ -1,0 +1,126 @@
+/* ─── Step Navigation Bar ─────────────────────────────────────────────────── */
+/* Shared across sign.html, pay.html, finalize.html                           */
+
+.step-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 20px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    gap: 0;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.step-nav__step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: #9ca3af;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: color 0.2s;
+    cursor: pointer;
+}
+
+.step-nav__step:hover {
+    color: #004a95;
+}
+
+/* Circle indicator */
+.step-nav__circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid #d1d5db;
+    background: white;
+    font-size: 12px;
+    font-weight: 700;
+    color: #9ca3af;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+/* Connector line between steps */
+.step-nav__connector {
+    width: 40px;
+    height: 2px;
+    background: #e5e7eb;
+    flex-shrink: 0;
+    margin: 0 8px;
+}
+
+/* ─── Active State ─── */
+.step-nav__step--active {
+    color: #004a95;
+    cursor: default;
+}
+
+.step-nav__step--active:hover {
+    color: #004a95;
+}
+
+.step-nav__step--active .step-nav__circle {
+    background: #004a95;
+    border-color: #004a95;
+    color: white;
+}
+
+/* ─── Completed State ─── */
+.step-nav__step--completed .step-nav__circle {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: white;
+}
+
+.step-nav__step--completed {
+    color: #16a34a;
+}
+
+.step-nav__step--completed:hover {
+    color: #15803d;
+}
+
+/* Connector turns green when previous step is completed */
+.step-nav__connector--completed {
+    background: #16a34a;
+}
+
+/* ─── Disabled State (no link) ─── */
+.step-nav__step--disabled {
+    color: #d1d5db;
+    cursor: default;
+    pointer-events: none;
+}
+
+.step-nav__step--disabled .step-nav__circle {
+    border-color: #e5e7eb;
+    color: #d1d5db;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 640px) {
+    .step-nav {
+        padding: 12px 12px;
+    }
+
+    .step-nav__label {
+        display: none;
+    }
+
+    .step-nav__connector {
+        width: 24px;
+        margin: 0 4px;
+    }
+
+    .step-nav__circle {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+}

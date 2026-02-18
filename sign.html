@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="nav-steps.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -283,6 +284,8 @@
 
     <!-- Main Signing Container -->
     <div id="signContainer" class="sign-container" style="display: none;">
+        <div id="stepNav"></div>
+
         <!-- Quote content rendered here by generateQuotePDF -->
         <div id="quoteContent"></div>
 
@@ -352,6 +355,7 @@
     </script>
     <script src="pdf-template.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.2.0/dist/signature_pad.umd.min.js"></script>
+    <script src="nav-steps.js"></script>
     <script src="sign.js"></script>
 </body>
 </html>
