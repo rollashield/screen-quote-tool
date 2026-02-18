@@ -61,18 +61,12 @@ async function init() {
 
 // ─── Populate Page ──────────────────────────────────────────────────────────
 function populatePage(quoteResult, paymentInfo) {
-    // Parse the quote data from the JSON blob
-    const quote = quoteResult.quote;
-    let orderData;
-    try {
-        orderData = typeof quote.quote_data === 'string' ? JSON.parse(quote.quote_data) : quote.quote_data;
-    } catch (e) {
-        orderData = {};
-    }
+    // quoteResult.quote is the parsed order data (already stripped of internal fields)
+    const orderData = quoteResult.quote;
 
-    const totalPrice = orderData.orderTotalPrice || quote.total_price || 0;
+    const totalPrice = orderData.orderTotalPrice || 0;
     const depositAmount = totalPrice / 2;
-    const customerName = quote.customer_name || orderData.customerName || 'Customer';
+    const customerName = orderData.customerName || 'Customer';
     const quoteNumber = quoteResult.quoteNumber || orderData.quoteNumber || 'N/A';
 
     // Header
