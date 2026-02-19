@@ -222,6 +222,37 @@
         .photo-grid-finalize .photo-thumb .photo-remove:hover {
             background: rgba(200,0,0,0.8);
         }
+
+        /* ─── Mobile Responsive ─── */
+        @media (max-width: 768px) {
+            .container { padding: 10px; }
+            .measurement-form { padding: 12px !important; }
+            .form-section { padding: 12px; }
+            .screen-card { padding: 10px; }
+            .complete-button { font-size: 14px; padding: 12px; }
+        }
+
+        @media (max-width: 480px) {
+            .container { padding: 6px; }
+            .measurement-form { padding: 8px !important; }
+            .form-section { padding: 10px; }
+            h2 { font-size: 1.1rem; }
+            .form-section h3 { font-size: 0.95rem; }
+            /* Stack measurement groups vertically on small screens */
+            .measurement-group {
+                flex-direction: column;
+                gap: 6px;
+                align-items: stretch;
+            }
+            .measurement-group .measurement-input {
+                width: 100%;
+            }
+            /* Fraction inputs: shrink from 80px to 60px */
+            .fraction-input {
+                flex: 0 0 60px !important;
+                font-size: 0.8rem !important;
+            }
+        }
     </style>
 </head>
 <body>

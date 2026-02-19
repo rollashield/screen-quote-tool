@@ -540,6 +540,73 @@
         .photo-thumb .photo-remove:hover {
             background: rgba(200,0,0,0.8);
         }
+
+        /* ─── Mobile Responsive ─── */
+        @media (max-width: 600px) {
+            body { padding: 8px; }
+            .content { padding: 12px; }
+            .header h1 { font-size: 1.2rem; }
+            .header p { font-size: 0.8rem; }
+
+            /* Dimension groups: reduce min-width, stack on narrow */
+            .dimension-group { min-width: 0; }
+
+            /* Fraction input: shrink on mobile */
+            .dimension-group div[style*="flex: 0 0 120px"] {
+                flex: 0 0 85px !important;
+            }
+
+            /* Accessories grid: single column */
+            .accessories-section {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Photo grid: 2 columns */
+            .photo-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+
+            /* Screen card actions: stack */
+            .screen-card-actions {
+                flex-direction: column;
+                gap: 4px;
+            }
+            .screen-card-actions button {
+                width: 100%;
+                text-align: center;
+            }
+
+            /* Button group: stack */
+            .button-group {
+                flex-direction: column;
+            }
+            .button-group button {
+                width: 100%;
+            }
+
+            /* Quote summary adjustments */
+            .quote-summary { padding: 10px; }
+            .summary-row { font-size: 0.8rem; }
+            .summary-row.total { font-size: 1rem; }
+
+            /* Quote card actions */
+            .quote-card-actions {
+                flex-direction: column;
+            }
+            .quote-card-actions button {
+                width: 100%;
+                text-align: center;
+            }
+
+            /* Opportunity search bar */
+            #opportunitySearchBar {
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            #opportunitySearchBar .form-group {
+                min-width: 0 !important;
+            }
+        }
     </style>
 </head>
 <body>

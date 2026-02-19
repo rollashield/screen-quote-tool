@@ -340,11 +340,23 @@
         /* ─── Responsive ─── */
         @media (max-width: 640px) {
             .pay-container { padding: 0; margin: 0; }
-            .pay-header { border-radius: 0; padding: 24px 20px; }
-            .pay-body { border-radius: 0; padding: 20px 16px 28px; }
-            .amount-value { font-size: 22px; }
-            .amount-toggle { max-width: 100%; }
+            .pay-header { border-radius: 0; padding: 20px 12px; }
+            .pay-body { border-radius: 0; padding: 16px 12px 24px; }
+            .amount-toggle { max-width: 100%; gap: 2px; padding: 2px; }
+            .amount-option { padding: 10px 6px; }
+            .amount-label { font-size: 10px; letter-spacing: 0.5px; }
+            .amount-value { font-size: 20px; }
+            .method-card { padding: 14px 12px; }
+            .method-card h3 { font-size: 14px; }
             .method-card .detail-row { flex-direction: column; gap: 2px; }
+            .method-card .detail-value {
+                font-size: 13px;
+                word-break: break-all;
+                overflow-wrap: break-word;
+            }
+            .btn-pay { font-size: 14px; padding: 12px 16px; }
+            .qr-modal { padding: 20px 16px; }
+            .qr-modal .qr-code-container img { width: 200px; height: 200px; }
         }
     </style>
 </head>

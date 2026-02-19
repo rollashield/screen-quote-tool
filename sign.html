@@ -260,6 +260,72 @@
             .sign-container { margin: 0; }
             .signature-section { padding: 20px 16px; }
             .btn-sign { width: 100%; }
+            .confirmation-screen { padding: 40px 16px; }
+            .confirmation-screen h2 { font-size: 22px; }
+        }
+
+        /* Mobile: scale the invoice to fit viewport */
+        @media (max-width: 850px) {
+            #quoteContent {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            #quoteContent .page {
+                width: 100% !important;
+                min-height: auto !important;
+                transform-origin: top left;
+            }
+            /* Scale down inline elements that use fixed px/in widths */
+            #quoteContent .page > div {
+                padding-left: 16px !important;
+                padding-right: 16px !important;
+            }
+            #quoteContent table {
+                font-size: 9px !important;
+            }
+            #quoteContent table th,
+            #quoteContent table td {
+                padding: 5px 4px !important;
+            }
+            /* Hide less-critical columns on narrow screens */
+            #quoteContent table th:nth-child(5),
+            #quoteContent table td:nth-child(5) {
+                display: none;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #quoteContent table {
+                font-size: 8px !important;
+            }
+            #quoteContent table th,
+            #quoteContent table td {
+                padding: 4px 3px !important;
+            }
+            /* Also hide fabric column on very small screens */
+            #quoteContent table th:nth-child(4),
+            #quoteContent table td:nth-child(4) {
+                display: none;
+            }
+            /* Stack customer info grid on narrow screens */
+            #quoteContent .page > div:nth-child(2) {
+                grid-template-columns: 1fr !important;
+                gap: 12px !important;
+            }
+            /* Header bar: stack logo and address */
+            #quoteContent .page > div:first-child {
+                flex-direction: column !important;
+                gap: 8px !important;
+                text-align: center !important;
+                padding: 12px 16px !important;
+            }
+            #quoteContent .page > div:first-child > div:last-child {
+                text-align: center !important;
+            }
+            .signature-section h2 { font-size: 16px; }
+            .acceptance-row { padding: 12px; }
+            .acceptance-row label { font-size: 13px; }
+            .canvas-container canvas { height: 160px; }
         }
     </style>
 </head>
