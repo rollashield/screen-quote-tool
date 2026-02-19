@@ -229,6 +229,23 @@ function generateQuotePDF(data) {
             ` : ''}
           </tr>
 
+          ${data.pricing.wiring > 0 ? `
+          <tr>
+            <td colspan="7"></td>
+            <td style="padding: 8px 12px; text-align: right; color: #4d4d4d;">
+              Electrical Wiring:
+            </td>
+            <td style="padding: 8px 12px; text-align: right; color: #2a2d2c;">
+              $${formatCurrency(data.pricing.wiring)}
+            </td>
+            ${hasComparison ? `
+            <td style="padding: 8px 12px; text-align: right; color: #0071bc;">
+              $${formatCurrency(data.pricing.wiring)}
+            </td>
+            ` : ''}
+          </tr>
+          ` : ''}
+
           ${data.pricing.discountPercent > 0 ? `
           <tr>
             <td colspan="7"></td>

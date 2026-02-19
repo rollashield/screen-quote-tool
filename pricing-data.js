@@ -137,3 +137,9 @@ const installationPricing = {
     'rts-large': 700,
     'solar-large': 600
 };
+
+// Wiring pricing (for RTS motors requiring electrical work)
+// Cost = what we pay the electrician, Price = what customer pays
+// TODO: Replace placeholder values with actual dollar figures from Derek
+const WIRING_COST_PER_INCH = 0;   // placeholder — cost to company per inch
+const WIRING_PRICE_PER_INCH = 0;  // placeholder — customer price per inch

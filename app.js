@@ -178,6 +178,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('operatorType').addEventListener('change', function() {
         updateAccessories();
         updateComparisonOptions();
+        updateWiringVisibility();
+    });
+
+    // Toggle wiring visibility when installation checkbox changes
+    document.getElementById('includeInstallation').addEventListener('change', function() {
+        updateWiringVisibility();
     });
 
     // Update pricing dimensions when measurements change
@@ -558,6 +564,21 @@ function calculateScreenWithAlternateMotor(screen, alternateMotorType) {
     };
 }
 
+function updateWiringVisibility() {
+    const operatorType = document.getElementById('operatorType').value;
+    const includeInstallation = document.getElementById('includeInstallation').checked;
+    const wiringGroup = document.getElementById('wiringGroup');
+
+    // Wiring is only relevant for RTS motors with installation included
+    const isRts = operatorType === 'gaposa-rts' || operatorType === 'somfy-rts';
+    if (isRts && includeInstallation) {
+        wiringGroup.style.display = 'block';
+    } else {
+        wiringGroup.style.display = 'none';
+        document.getElementById('wiringDistance').value = '';
+    }
+}
+
 function updateAccessories() {
     const operatorType = document.getElementById('operatorType').value;
     const accessoriesList = document.getElementById('accessoriesList');
@@ -771,7 +792,21 @@ function calculateQuote() {
         customerPrice += installationPrice;
     }
 
-    const totalProfit = customerPrice - totalCost - installationCost;
+    // Calculate wiring (RTS motors with installation only)
+    let wiringDistance = 0;
+    let wiringCost = 0;
+    let wiringPrice = 0;
+    const isRts = operatorType === 'gaposa-rts' || operatorType === 'somfy-rts';
+    if (includeInstallation && isRts) {
+        wiringDistance = parseInt(document.getElementById('wiringDistance').value) || 0;
+        if (wiringDistance > 0) {
+            wiringCost = wiringDistance * WIRING_COST_PER_INCH;
+            wiringPrice = wiringDistance * WIRING_PRICE_PER_INCH;
+            customerPrice += wiringPrice;
+        }
+    }
+
+    const totalProfit = customerPrice - totalCost - installationCost - wiringCost;
     const marginPercent = (totalProfit / customerPrice) * 100;
 
     // Display quote summary
@@ -793,6 +828,9 @@ function calculateQuote() {
         totalCost,
         installationCost,
         installationPrice,
+        wiringDistance,
+        wiringCost,
+        wiringPrice,
         customerPrice,
         totalProfit,
         marginPercent,
@@ -889,6 +927,15 @@ function displayQuoteSummary(quote) {
         `;
     }
 
+    if (quote.wiringDistance > 0) {
+        customerHTML += `
+            <div class="summary-row">
+                <strong>Wiring (${quote.wiringDistance}"):</strong>
+                <span>$${quote.wiringPrice.toFixed(2)}</span>
+            </div>
+        `;
+    }
+
     customerHTML += `
         <div class="summary-row total">
             <strong>Total Price:</strong>
@@ -941,9 +988,13 @@ function displayQuoteSummary(quote) {
             <strong>Installation Cost:</strong>
             <span>$${quote.installationCost.toFixed(2)}</span>
         </div>
+        ${quote.wiringDistance > 0 ? `<div class="summary-row">
+            <strong>Wiring Cost (${quote.wiringDistance}"):</strong>
+            <span>$${quote.wiringCost.toFixed(2)}</span>
+        </div>` : ''}
         <div class="summary-row">
             <strong>Total Cost:</strong>
-            <span>$${(quote.totalCost + quote.installationCost).toFixed(2)}</span>
+            <span>$${(quote.totalCost + quote.installationCost + quote.wiringCost).toFixed(2)}</span>
         </div>
         <div class="summary-row">
             <strong>Profit:</strong>
@@ -1270,15 +1321,16 @@ function mapOrderDataToTemplate(orderData) {
         frame: screen.frameColorName || '',
         width: screen.actualWidthDisplay || '',
         height: screen.actualHeightDisplay || '',
-        price1: (screen.customerPrice || 0) - (screen.installationPrice || 0),
+        price1: (screen.customerPrice || 0) - (screen.installationPrice || 0) - (screen.wiringPrice || 0),
         price2: screen.comparisonMaterialPrice || null
     }));
 
     const materialsPrice = orderData.orderTotalMaterialsPrice || 0;
     const installationPrice = orderData.orderTotalInstallationPrice || 0;
+    const wiringPrice = orderData.orderTotalWiringPrice || 0;
     const discountPercent = orderData.discountPercent || 0;
     const discountAmount = orderData.discountAmount || 0;
-    const subtotal = (discountPercent > 0 ? orderData.discountedMaterialsPrice : materialsPrice) + installationPrice;
+    const subtotal = (discountPercent > 0 ? orderData.discountedMaterialsPrice : materialsPrice) + installationPrice + wiringPrice;
     const total = orderData.orderTotalPrice || 0;
 
     const data = {
@@ -1306,6 +1358,7 @@ function mapOrderDataToTemplate(orderData) {
         pricing: {
             materials: materialsPrice,
             installation: installationPrice,
+            wiring: wiringPrice,
             discountPercent: discountPercent,
             discountAmount: discountAmount,
             subtotal: subtotal,
@@ -1321,7 +1374,7 @@ function mapOrderDataToTemplate(orderData) {
     if (orderData.enableComparison) {
         const compMaterials = orderData.comparisonTotalMaterialsPrice || 0;
         const compDiscounted = orderData.comparisonDiscountedMaterialsPrice || compMaterials;
-        const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice;
+        const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice + wiringPrice;
         const compTotal = orderData.comparisonTotalPrice || 0;
 
         // Get the first screen's operator to use as label
@@ -1938,6 +1991,20 @@ function calculateScreenData() {
         customerPrice += installationPrice;
     }
 
+    // Calculate wiring (RTS motors with installation only)
+    let wiringDistance = 0;
+    let wiringCost = 0;
+    let wiringPrice = 0;
+    const isRts = operatorType === 'gaposa-rts' || operatorType === 'somfy-rts';
+    if (includeInstallation && isRts) {
+        wiringDistance = parseInt(document.getElementById('wiringDistance').value) || 0;
+        if (wiringDistance > 0) {
+            wiringCost = wiringDistance * WIRING_COST_PER_INCH;
+            wiringPrice = wiringDistance * WIRING_PRICE_PER_INCH;
+            customerPrice += wiringPrice;
+        }
+    }
+
     return {
         screenName: screenName || null,
         trackType,
@@ -1964,6 +2031,9 @@ function calculateScreenData() {
         totalCost,
         installationCost,
         installationPrice,
+        wiringDistance,
+        wiringCost,
+        wiringPrice,
         customerPrice,
         isFenetex,
         trackDeduction
@@ -1983,6 +2053,8 @@ function resetFormForNextScreen() {
     document.getElementById('heightFraction').value = '';
     document.getElementById('noTracks').checked = false;
     document.getElementById('includeInstallation').checked = true;
+    document.getElementById('wiringDistance').value = '';
+    document.getElementById('wiringGroup').style.display = 'none';
     document.getElementById('dimensionsSummary').style.display = 'none';
     updateAccessories();
 }
@@ -2027,6 +2099,7 @@ function renderScreensList() {
                     ${screen.noTracks ? '<strong>Configuration:</strong> No Tracks<br>' : ''}
                     <strong>Accessories:</strong> ${accessoriesText}<br>
                     ${screen.includeInstallation ? '<strong>Installation:</strong> Included<br>' : ''}
+                    ${screen.wiringDistance > 0 ? `<strong>Wiring:</strong> ${screen.wiringDistance}"<br>` : ''}
                     <strong>Price:</strong> ${formatCurrency(screen.customerPrice)}
                 </div>
             </div>
@@ -2047,6 +2120,8 @@ function editScreen(index) {
     document.getElementById('fabricColor').value = screen.fabricColor;
     document.getElementById('noTracks').checked = screen.noTracks;
     document.getElementById('includeInstallation').checked = screen.includeInstallation;
+    document.getElementById('wiringDistance').value = screen.wiringDistance || '';
+    updateWiringVisibility();
 
     // Set dimensions - need to calculate back from display
     // For simplicity, we'll use the pricing dimensions
@@ -2140,6 +2215,8 @@ function calculateOrderQuote() {
     let orderTotalMaterialsPrice = 0;
     let orderTotalInstallationCost = 0;
     let orderTotalInstallationPrice = 0;
+    let orderTotalWiringCost = 0;
+    let orderTotalWiringPrice = 0;
     let hasCableScreen = false;
 
     // Internal cost breakdowns
@@ -2149,8 +2226,8 @@ function calculateOrderQuote() {
     let totalCableSurcharge = 0;
 
     screensInOrder.forEach((screen, index) => {
-        // Materials price (excluding installation)
-        let screenMaterialsPrice = screen.customerPrice - screen.installationPrice;
+        // Materials price (excluding installation and wiring)
+        let screenMaterialsPrice = screen.customerPrice - screen.installationPrice - (screen.wiringPrice || 0);
 
         // Check if this is a cable screen and apply surcharge only to first
         let screenCost = screen.totalCost;
@@ -2169,6 +2246,8 @@ function calculateOrderQuote() {
         orderTotalMaterialsPrice += screenMaterialsPrice;
         orderTotalInstallationCost += screen.installationCost;
         orderTotalInstallationPrice += screen.installationPrice;
+        orderTotalWiringCost += (screen.wiringCost || 0);
+        orderTotalWiringPrice += (screen.wiringPrice || 0);
 
         // Track internal cost breakdowns
         totalScreenCosts += screen.screenCostOnly;
@@ -2182,8 +2261,8 @@ function calculateOrderQuote() {
     const discountAmount = (orderTotalMaterialsPrice * discountPercent) / 100;
     const discountedMaterialsPrice = orderTotalMaterialsPrice - discountAmount;
 
-    const orderTotalPrice = discountedMaterialsPrice + orderTotalInstallationPrice;
-    const totalProfit = orderTotalPrice - orderTotalCost - orderTotalInstallationCost;
+    const orderTotalPrice = discountedMaterialsPrice + orderTotalInstallationPrice + orderTotalWiringPrice;
+    const totalProfit = orderTotalPrice - orderTotalCost - orderTotalInstallationCost - orderTotalWiringCost;
     const marginPercent = orderTotalPrice > 0 ? (totalProfit / orderTotalPrice) * 100 : 0;
 
     // Get comparison information
@@ -2221,7 +2300,7 @@ function calculateOrderQuote() {
         // Apply discount to comparison totals
         const comparisonDiscountAmount = (comparisonTotalMaterialsPrice * discountPercent) / 100;
         comparisonDiscountedMaterialsPrice = comparisonTotalMaterialsPrice - comparisonDiscountAmount;
-        comparisonTotalPrice = comparisonDiscountedMaterialsPrice + orderTotalInstallationPrice;
+        comparisonTotalPrice = comparisonDiscountedMaterialsPrice + orderTotalInstallationPrice + orderTotalWiringPrice;
     }
 
     // Get customer contact/address fields for DB storage
@@ -2265,6 +2344,8 @@ function calculateOrderQuote() {
         orderTotalCost,
         orderTotalMaterialsPrice,
         orderTotalInstallationPrice,
+        orderTotalWiringCost,
+        orderTotalWiringPrice,
         orderTotalPrice,
         orderTotalInstallationCost,
         totalProfit,
@@ -2450,6 +2531,18 @@ function displayOrderQuoteSummary(orderData) {
             `;
         }
 
+        if (orderData.orderTotalWiringPrice > 0) {
+            customerHTML += `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong>Wiring:</strong>
+                    <div style="display: flex; gap: 20px;">
+                        <strong style="min-width: 120px; text-align: right;">${formatCurrency(orderData.orderTotalWiringPrice)}</strong>
+                        <strong style="min-width: 120px; text-align: right; color: #007bff;">${formatCurrency(orderData.orderTotalWiringPrice)}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
         customerHTML += `
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 1.2rem; font-weight: bold; color: #0056A3; margin-top: 8px; padding-top: 12px; border-top: 2px solid #0056A3;">
                 <strong>Grand Total:</strong>
@@ -2486,6 +2579,15 @@ function displayOrderQuoteSummary(orderData) {
                 <div class="summary-row">
                     <strong>Installation:</strong>
                     <strong>${formatCurrency(orderData.orderTotalInstallationPrice)}</strong>
+                </div>
+            `;
+        }
+
+        if (orderData.orderTotalWiringPrice > 0) {
+            customerHTML += `
+                <div class="summary-row">
+                    <strong>Wiring:</strong>
+                    <strong>${formatCurrency(orderData.orderTotalWiringPrice)}</strong>
                 </div>
             `;
         }
@@ -2535,6 +2637,10 @@ function displayOrderQuoteSummary(orderData) {
             <strong>Installation Cost (70% to installer):</strong>
             <span>${formatCurrency(orderData.orderTotalInstallationCost)}</span>
         </div>
+        ${orderData.orderTotalWiringCost > 0 ? `<div class="summary-row">
+            <strong>Wiring Cost:</strong>
+            <span>${formatCurrency(orderData.orderTotalWiringCost)}</span>
+        </div>` : ''}
         <div class="summary-row" style="border-top: 2px solid #856404; padding-top: 8px; margin-top: 8px;">
             <strong>Total Profit:</strong>
             <span style="color: #28a745; font-weight: bold;">${formatCurrency(orderData.totalProfit)}</span>

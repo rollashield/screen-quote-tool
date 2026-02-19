@@ -79,10 +79,18 @@ function populatePage(quoteResult, paymentInfo) {
     const cloverPayLink = document.getElementById('cloverPayLink');
     cloverPayLink.href = cloverLink;
 
-    // Show QR buttons for in-person mode (sales rep iPad flow)
+    // Show QR buttons and navigation for in-person mode (sales rep iPad flow)
     if (paymentMode === 'in-person') {
         document.getElementById('cloverQrBtn').style.display = 'block';
         document.getElementById('echeckQrBtn').style.display = 'block';
+
+        // Show navigation buttons
+        const navButtons = document.getElementById('payNavButtons');
+        if (navButtons) {
+            navButtons.style.display = 'block';
+            document.getElementById('payBackLink').href = `sign.html?quoteId=${quoteId}&mode=in-person`;
+            document.getElementById('payNextLink').href = `finalize.html?orderId=${quoteId}`;
+        }
     }
 
     // ACH details

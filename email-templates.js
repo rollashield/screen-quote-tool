@@ -88,7 +88,17 @@ async function emailQuote() {
                     <div style="display: flex; justify-content: space-between; margin: 10px 0;">
                         <span>Installation:</span>
                         <span style="font-weight: bold;">$${orderData.orderTotalInstallationPrice.toFixed(2)}</span>
-                    </div>
+                    </div>`;
+
+    if (orderData.orderTotalWiringPrice > 0) {
+        htmlBody += `
+                    <div style="display: flex; justify-content: space-between; margin: 10px 0;">
+                        <span>Wiring:</span>
+                        <span style="font-weight: bold;">$${orderData.orderTotalWiringPrice.toFixed(2)}</span>
+                    </div>`;
+    }
+
+    htmlBody += `
                     <div style="border-top: 2px solid white; margin-top: 15px; padding-top: 15px; display: flex; justify-content: space-between; font-size: 24px;">
                         <span>Grand Total:</span>
                         <span style="font-weight: bold;">$${orderData.orderTotalPrice.toFixed(2)}</span>
@@ -128,6 +138,9 @@ async function emailQuote() {
         textBody += `Discounted Materials: $${orderData.discountedMaterialsPrice.toFixed(2)}\n`;
     }
     textBody += `Installation: $${orderData.orderTotalInstallationPrice.toFixed(2)}\n`;
+    if (orderData.orderTotalWiringPrice > 0) {
+        textBody += `Wiring: $${orderData.orderTotalWiringPrice.toFixed(2)}\n`;
+    }
     textBody += `GRAND TOTAL: $${orderData.orderTotalPrice.toFixed(2)}\n\n`;
     textBody += `This quote is valid for 30 days.\n\nBest regards,\nRoll-A-Shield Team`;
 

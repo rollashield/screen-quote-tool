@@ -729,6 +729,17 @@
                     <input type="checkbox" id="includeInstallation" checked>
                     <label for="includeInstallation">Include Installation</label>
                 </div>
+
+                <!-- Wiring Distance (RTS motors with installation only) -->
+                <div id="wiringGroup" style="display: none; margin-top: 10px; padding: 12px; background: #f0f8ff; border-radius: 6px; border: 1px solid #d0e4f5;">
+                    <div class="form-row" style="align-items: end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="wiringDistance" style="font-size: 0.85rem; font-weight: 600;">Wiring Distance (inches from power source to motor)</label>
+                            <input type="number" id="wiringDistance" min="0" step="1" placeholder="0 = no wiring needed" style="max-width: 250px;">
+                        </div>
+                    </div>
+                    <p style="font-size: 0.8rem; color: #666; margin-top: 6px; margin-bottom: 0;">Enter the distance in inches if electrical wiring is needed for the RTS motor. Leave blank or 0 if power is already at the motor location.</p>
+                </div>
             </div>
 
             <!-- Accessories -->
