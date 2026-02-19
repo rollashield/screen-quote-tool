@@ -2262,7 +2262,7 @@ function calculateOrderQuote() {
     const discountedMaterialsPrice = orderTotalMaterialsPrice - discountAmount;
 
     const orderTotalPrice = discountedMaterialsPrice + orderTotalInstallationPrice + orderTotalWiringPrice;
-    const totalProfit = orderTotalPrice - orderTotalCost - orderTotalInstallationCost - orderTotalWiringCost;
+    const totalProfit = orderTotalPrice - orderTotalCost - orderTotalInstallationCost - orderTotalWiringPrice;
     const marginPercent = orderTotalPrice > 0 ? (totalProfit / orderTotalPrice) * 100 : 0;
 
     // Get comparison information
@@ -2637,9 +2637,9 @@ function displayOrderQuoteSummary(orderData) {
             <strong>Installation Cost (70% to installer):</strong>
             <span>${formatCurrency(orderData.orderTotalInstallationCost)}</span>
         </div>
-        ${orderData.orderTotalWiringCost > 0 ? `<div class="summary-row">
-            <strong>Wiring Cost:</strong>
-            <span>${formatCurrency(orderData.orderTotalWiringCost)}</span>
+        ${(orderData.orderTotalWiringCost > 0 || orderData.orderTotalWiringPrice > 0) ? `<div class="summary-row">
+            <strong>Wiring Cost (100% to installer):</strong>
+            <span>${formatCurrency(orderData.orderTotalWiringPrice)}</span>
         </div>` : ''}
         <div class="summary-row" style="border-top: 2px solid #856404; padding-top: 8px; margin-top: 8px;">
             <strong>Total Profit:</strong>
