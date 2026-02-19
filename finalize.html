@@ -251,6 +251,14 @@
                 <!-- Form will be populated dynamically -->
             </div>
 
+            <!-- Difficult Install Flag -->
+            <div class="form-section" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; color: #856404;">
+                    <input type="checkbox" id="difficultInstall">
+                    Difficult Install – Recommend installer visit for remeasure / installation prep
+                </label>
+            </div>
+
             <!-- Production Comments -->
             <div class="form-section">
                 <h3>Production Comments</h3>
@@ -1049,11 +1057,17 @@
 
         async function generateProductionEmail() {
             const productionComments = document.getElementById('productionComments').value;
+            const difficultInstall = document.getElementById('difficultInstall').checked;
 
             // Build HTML email body
             let htmlBody = `
                 <div style="font-family: 'Courier New', monospace; max-width: 800px; margin: 0 auto;">
                     <h1 style="color: #0056A3; border-bottom: 3px solid #0056A3; padding-bottom: 10px;">ROLL-A-SHIELD PRODUCTION ORDER</h1>
+                    ${difficultInstall ? `
+                    <div style="background: #dc3545; color: white; padding: 16px; margin: 15px 0; text-align: center; font-size: 18px; font-weight: bold; border-radius: 4px;">
+                        ⚠ DIFFICULT INSTALL — Recommend installer visit for remeasure / installation prep
+                    </div>
+                    ` : ''}
 
                     <h2 style="color: #0056A3; margin-top: 30px;">CUSTOMER INFORMATION</h2>
                     <p><strong>Customer Name:</strong> ${orderData.customerName}</p>
@@ -1075,6 +1089,10 @@
             // Also build plain text version
             let textBody = `ROLL-A-SHIELD PRODUCTION ORDER\n`;
             textBody += `================================\n\n`;
+
+            if (difficultInstall) {
+                textBody += `⚠⚠⚠ DIFFICULT INSTALL — Recommend installer visit for remeasure / installation prep ⚠⚠⚠\n\n`;
+            }
 
             textBody += `CUSTOMER INFORMATION:\n`;
             textBody += `Customer Name: ${orderData.customerName}\n`;
@@ -1106,16 +1124,35 @@
                         <p><strong>Fabric Color:</strong> ${screen.fabricColorName}</p>
                         <p><strong>Frame Color:</strong> ${screen.frameColorName}</p>
 
-                        <h3 style="color: #333; margin-top: 20px;">FINAL MEASUREMENTS</h3>
+                        <h3 style="color: #333; margin-top: 20px;">FINAL MEASUREMENTS (Opening Only)</h3>
                         <p><strong>Width (Top):</strong> ${meas.widthTop}"</p>
                         <p><strong>Width (Middle):</strong> ${meas.widthMiddle}"</p>
                         <p><strong>Width (Bottom):</strong> ${meas.widthBottom}"</p>
-                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> PRODUCTION WIDTH: ${meas.selectedWidth}"</p>
+                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> OPENING WIDTH: ${meas.selectedWidth}"</p>
 
                         <p style="margin-top: 15px;"><strong>Height (Left):</strong> ${meas.heightLeft}"</p>
                         <p><strong>Height (Middle):</strong> ${meas.heightMiddle}"</p>
                         <p><strong>Height (Right):</strong> ${meas.heightRight}"</p>
-                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> PRODUCTION HEIGHT: ${meas.selectedHeight}"</p>
+                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> OPENING HEIGHT: ${meas.selectedHeight}"</p>
+                ${screen.trackType && screen.trackType.startsWith('sunair') ? `
+                        <h3 style="color: #0056A3; margin-top: 20px;">SUNAIR ORDERING MEASUREMENTS</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 8px;">Opening measurements + headbox/tracks for Sunair ordering</p>
+                        <p style="background: #0056A3; color: white; padding: 10px; font-weight: bold;">
+                            >>> ORDERING WIDTH: ${screen.noTracks ? meas.selectedWidth : (parseFloat(meas.selectedWidth) + 5).toFixed(2)}"
+                            ${screen.noTracks ? '(no tracks)' : '(+5" for tracks)'}
+                        </p>
+                        <p style="background: #0056A3; color: white; padding: 10px; font-weight: bold; margin-top: 4px;">
+                            >>> ORDERING HEIGHT: ${meas.mountType === 'ceiling'
+                                ? (parseFloat(meas.selectedHeight) + 5.25).toFixed(2) + '" (+5.25" ceiling mount incl. box)'
+                                : (parseFloat(meas.selectedHeight) + 7.25).toFixed(2) + '" (+7.25" wall mount incl. box + hem bar)'}
+                        </p>
+                ` : ''}
+                ${screen.trackType === 'fenetex-keder' ? `
+                        <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 12px; margin-top: 15px;">
+                            <p style="color: #856404; font-weight: bold; margin: 0;">⚠ FENETEX SCREEN — Opening measurements only.</p>
+                            <p style="color: #856404; margin: 4px 0 0 0;">Production must add track and headbox measurements before ordering.</p>
+                        </div>
+                ` : ''}
 
                         <h3 style="color: #333; margin-top: 20px;">INSTALLATION DETAILS</h3>
                         <p><strong>Operator Side:</strong> ${meas.operatorSide.toUpperCase()}</p>
@@ -1135,16 +1172,31 @@
                 textBody += `Fabric Color: ${screen.fabricColorName}\n`;
                 textBody += `Frame Color: ${screen.frameColorName}\n\n`;
 
-                textBody += `FINAL MEASUREMENTS:\n`;
+                textBody += `FINAL MEASUREMENTS (Opening Only):\n`;
                 textBody += `Width (Top): ${meas.widthTop}"\n`;
                 textBody += `Width (Middle): ${meas.widthMiddle}"\n`;
                 textBody += `Width (Bottom): ${meas.widthBottom}"\n`;
-                textBody += `>>> PRODUCTION WIDTH: ${meas.selectedWidth}"\n\n`;
+                textBody += `>>> OPENING WIDTH: ${meas.selectedWidth}"\n\n`;
 
                 textBody += `Height (Left): ${meas.heightLeft}"\n`;
                 textBody += `Height (Middle): ${meas.heightMiddle}"\n`;
                 textBody += `Height (Right): ${meas.heightRight}"\n`;
-                textBody += `>>> PRODUCTION HEIGHT: ${meas.selectedHeight}"\n\n`;
+                textBody += `>>> OPENING HEIGHT: ${meas.selectedHeight}"\n\n`;
+
+                if (screen.trackType && screen.trackType.startsWith('sunair')) {
+                    const orderWidth = screen.noTracks ? parseFloat(meas.selectedWidth) : parseFloat(meas.selectedWidth) + 5;
+                    const orderHeight = meas.mountType === 'ceiling'
+                        ? parseFloat(meas.selectedHeight) + 5.25
+                        : parseFloat(meas.selectedHeight) + 7.25;
+                    textBody += `SUNAIR ORDERING MEASUREMENTS:\n`;
+                    textBody += `>>> ORDERING WIDTH: ${orderWidth.toFixed(2)}" ${screen.noTracks ? '(no tracks)' : '(+5" for tracks)'}\n`;
+                    textBody += `>>> ORDERING HEIGHT: ${orderHeight.toFixed(2)}" ${meas.mountType === 'ceiling' ? '(+5.25" ceiling mount incl. box)' : '(+7.25" wall mount incl. box + hem bar)'}\n\n`;
+                }
+
+                if (screen.trackType === 'fenetex-keder') {
+                    textBody += `⚠ FENETEX SCREEN — Opening measurements only.\n`;
+                    textBody += `Production must add track and headbox measurements before ordering.\n\n`;
+                }
 
                 textBody += `INSTALLATION DETAILS:\n`;
                 textBody += `Operator Side: ${meas.operatorSide.toUpperCase()}\n`;
@@ -1294,7 +1346,9 @@
             htmlBody += `</div>`;
 
             // Send email via Cloudflare Worker
-            const subject = `Production Order - ${orderData.customerName}`;
+            const subject = difficultInstall
+                ? `⚠ DIFFICULT INSTALL - Production Order - ${orderData.customerName}`
+                : `Production Order - ${orderData.customerName}`;
             const completeButton = document.getElementById('completeButton');
             
             if (completeButton) {
