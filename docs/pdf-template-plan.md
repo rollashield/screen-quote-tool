@@ -1,6 +1,6 @@
 # Figma PDF Template Integration
 
-> **Status**: Planned (not yet implemented)
+> **Status**: ✅ Completed — implemented in `pdf-template.js`, integrated into `index.html` and `sign.html`
 > **Created**: 2026-02-17
 > **Figma export in repo**: `figma-export/` directory — contains `pdfTemplate.js`, `example-usage.js`, `README.md`, `logo-horizontal-dark.png`
 > **Key file**: `figma-export/pdfTemplate.js` — ES Module function that returns HTML string

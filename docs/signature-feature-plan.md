@@ -1,6 +1,6 @@
 # Customer Signature Step — Implementation Plan
 
-> **Status**: Planned (not yet implemented)
+> **Status**: ✅ Completed — `sign.html`, `sign.js` implemented with in-person + remote signing flows
 > **Created**: 2026-02-16
 > **Replaces**: PandaDoc e-signature workflow
 > **Depends on**: PDF template integration (`docs/pdf-template-plan.md`) — uses same Figma-designed template as the visual foundation
@@ -214,7 +214,7 @@ Signature canvas styling, responsive layout for iPad, acceptance section, confir
 
 ## Future: Payment Collection
 
-> **Status**: Planned (not yet implemented) — build after signature step is complete
+> **Status**: ✅ Completed — `pay.html`, `pay.js` implemented with multi-method payments and deposit/full toggle
 > **Context**: Roll-A-Shield uses Clover for POS. Clover passes the 3% CC surcharge to customers automatically. Stripe has lower ACH/bank transfer fees but doesn't pass CC surcharges. Solution: use both processors for what they're best at.
 
 ### Payment Strategy — Multi-Method
