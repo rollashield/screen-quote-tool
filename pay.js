@@ -12,6 +12,8 @@
 let quoteId = null;
 let quoteData = null;
 let paymentMode = null; // 'in-person' or null (remote)
+let paymentType = 'deposit'; // 'deposit' or 'full'
+let storedTotalPrice = 0; // stored from populatePage for toggle
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
@@ -65,12 +67,14 @@ function populatePage(quoteResult, paymentInfo) {
     const orderData = quoteResult.quote;
 
     const totalPrice = orderData.orderTotalPrice || 0;
+    storedTotalPrice = totalPrice;
     const depositAmount = totalPrice / 2;
     const customerName = orderData.customerName || 'Customer';
     const quoteNumber = quoteResult.quoteNumber || orderData.quoteNumber || 'N/A';
 
-    // Header
-    document.getElementById('depositAmount').textContent = formatCurrency(depositAmount);
+    // Header — populate both toggle buttons
+    document.getElementById('depositAmountBtn').textContent = formatCurrency(depositAmount);
+    document.getElementById('fullAmountBtn').textContent = formatCurrency(totalPrice);
     document.getElementById('quoteNumber').textContent = quoteNumber;
     document.getElementById('customerName').textContent = customerName;
 
@@ -116,6 +120,34 @@ function populatePage(quoteResult, paymentInfo) {
     document.getElementById('payContainer').style.display = 'block';
 }
 
+// ─── Payment Type Toggle ─────────────────────────────────────────────────────
+function setPaymentType(type) {
+    paymentType = type;
+    document.getElementById('depositOption').classList.toggle('active', type === 'deposit');
+    document.getElementById('fullOption').classList.toggle('active', type === 'full');
+    document.getElementById('payIntro').textContent = type === 'deposit'
+        ? 'Choose your preferred payment method below. Your 50% deposit secures your order.'
+        : 'Choose your preferred payment method below to pay the full amount.';
+    // Reset cached eCheck session URL since amount changed
+    echeckSessionUrl = null;
+    // Update reference amounts on static payment methods
+    updateReferenceAmounts();
+}
+
+function updateReferenceAmounts() {
+    const amount = paymentType === 'deposit' ? storedTotalPrice / 2 : storedTotalPrice;
+    const amountStr = formatCurrency(amount);
+    const quoteNumber = document.getElementById('quoteNumber').textContent;
+
+    // Update ACH reference
+    document.getElementById('achReference').textContent = `${quoteNumber} — ${amountStr}`;
+    // Update Zelle reference (if it has a reference element)
+    const zelleRef = document.getElementById('zelleReference');
+    if (zelleRef) zelleRef.textContent = `${quoteNumber} — ${amountStr}`;
+    // Update Check memo
+    document.getElementById('checkMemo').textContent = `${quoteNumber} — ${amountStr}`;
+}
+
 // ─── eCheck (Stripe ACH) ────────────────────────────────────────────────────
 let echeckSessionUrl = null; // cached after first creation
 
@@ -135,7 +167,9 @@ async function handleEcheckPay() {
 
     try {
         const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}/create-echeck-session`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentType })
         });
 
         const result = await response.json();
@@ -170,7 +204,9 @@ async function showEcheckQrModal() {
 
         try {
             const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}/create-echeck-session`, {
-                method: 'POST'
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentType })
             });
 
             const result = await response.json();

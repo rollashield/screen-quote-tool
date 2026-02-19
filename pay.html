@@ -46,23 +46,58 @@
             text-align: center;
         }
 
-        .pay-header h1 {
-            font-family: 'Montserrat', sans-serif;
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 6px;
-        }
-
-        .pay-header .deposit-amount {
-            font-family: 'Montserrat', sans-serif;
-            font-size: 36px;
-            font-weight: 800;
-            margin: 8px 0;
-        }
-
         .pay-header .quote-ref {
             font-size: 14px;
             opacity: 0.85;
+            margin-top: 12px;
+        }
+
+        .amount-toggle {
+            display: flex;
+            gap: 3px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 3px;
+            max-width: 440px;
+            margin: 0 auto;
+        }
+
+        .amount-option {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 14px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .amount-option.active {
+            background: white;
+            color: #004a95;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .amount-option:not(.active):hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .amount-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .amount-value {
+            font-size: 28px;
+            font-weight: 800;
+            font-family: 'Montserrat', sans-serif;
         }
 
         /* ─── Payment Body ─── */
@@ -307,7 +342,8 @@
             .pay-container { padding: 0; margin: 0; }
             .pay-header { border-radius: 0; padding: 24px 20px; }
             .pay-body { border-radius: 0; padding: 20px 16px 28px; }
-            .pay-header .deposit-amount { font-size: 30px; }
+            .amount-value { font-size: 22px; }
+            .amount-toggle { max-width: 100%; }
             .method-card .detail-row { flex-direction: column; gap: 2px; }
         }
     </style>
@@ -331,8 +367,16 @@
 
         <!-- Header -->
         <div class="pay-header">
-            <h1>DEPOSIT PAYMENT</h1>
-            <div class="deposit-amount" id="depositAmount">$0.00</div>
+            <div class="amount-toggle">
+                <button class="amount-option active" id="depositOption" onclick="setPaymentType('deposit')">
+                    <div class="amount-label">DEPOSIT (50%)</div>
+                    <div class="amount-value" id="depositAmountBtn">$0.00</div>
+                </button>
+                <button class="amount-option" id="fullOption" onclick="setPaymentType('full')">
+                    <div class="amount-label">FULL PAYMENT</div>
+                    <div class="amount-value" id="fullAmountBtn">$0.00</div>
+                </button>
+            </div>
             <div class="quote-ref">
                 Quote <span id="quoteNumber">---</span> | <span id="customerName">---</span>
             </div>
@@ -340,7 +384,7 @@
 
         <!-- Payment Methods -->
         <div class="pay-body">
-            <p class="intro">Choose your preferred payment method below. Your 50% deposit secures your order.</p>
+            <p class="intro" id="payIntro">Choose your preferred payment method below. Your 50% deposit secures your order.</p>
 
             <!-- Card Payments -->
             <div class="method-group-label">Card Payment</div>

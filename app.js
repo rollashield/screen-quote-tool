@@ -146,12 +146,15 @@ document.addEventListener('DOMContentLoaded', function() {
         operatorSelect.innerHTML = '<option value="">-- Select Operator --</option>';
         operatorSelect.disabled = false;
 
+        const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
+        const somfyOption = isGuarantee ? '' : '<option value="somfy-rts">Somfy RTS Motor</option>';
+
         if (trackType === 'sunair-zipper') {
             operatorSelect.innerHTML += `
                 <option value="gear">Gear Operation (Manual)</option>
                 <option value="gaposa-rts">Gaposa RTS Motor</option>
                 <option value="gaposa-solar">Gaposa Solar Motor</option>
-                <option value="somfy-rts">Somfy RTS Motor</option>
+                ${somfyOption}
             `;
             noTracksGroup.style.display = 'flex';
             cableSurchargeInfo.style.display = 'none';
@@ -160,7 +163,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <option value="gear">Gear Operation (Manual)</option>
                 <option value="gaposa-rts">Gaposa RTS Motor</option>
                 <option value="gaposa-solar">Gaposa Solar Motor</option>
-                <option value="somfy-rts">Somfy RTS Motor</option>
+                ${somfyOption}
             `;
             noTracksGroup.style.display = 'none';
             document.getElementById('noTracks').checked = false;
@@ -470,6 +473,31 @@ function getClientFacingTrackName(trackTypeName) {
     return trackTypeName.replace('Sunair ', '').replace('Fenetex ', '');
 }
 
+function handleGuaranteeToggle() {
+    const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
+    const operatorSelect = document.getElementById('operatorType');
+    const trackType = document.getElementById('trackType').value;
+
+    // If enabling guarantee and Somfy is currently selected, reset operator
+    if (isGuarantee && operatorSelect.value === 'somfy-rts') {
+        alert('Somfy motors are not available with the 4-Week Install Guarantee. Please select a Gaposa motor.');
+    }
+
+    // Save current operator before rebuild (trackType change clears it)
+    const savedOperator = operatorSelect.value;
+    const shouldRestore = isGuarantee ? savedOperator !== 'somfy-rts' : true;
+
+    // Re-trigger trackType change to rebuild operator options (with or without Somfy)
+    if (trackType) {
+        document.getElementById('trackType').dispatchEvent(new Event('change'));
+        // Restore selected operator after dropdown rebuild
+        if (shouldRestore && savedOperator) {
+            operatorSelect.value = savedOperator;
+            operatorSelect.dispatchEvent(new Event('change'));
+        }
+    }
+}
+
 function updatePricingDimensions() {
     const widthInches = parseFloat(document.getElementById('widthInches').value) || 0;
     const widthFraction = parseFraction(document.getElementById('widthFraction').value);
@@ -549,9 +577,12 @@ function calculateScreenWithAlternateMotor(screen, alternateMotorType) {
         screenOnlyCost += screen.trackDeduction;
     }
 
-    // Calculate customer price with alternate motor
+    // Calculate customer price with alternate motor (guarantee: solar at RTS rate)
+    const guaranteeActive = document.getElementById('fourWeekGuarantee').checked;
+    const effectiveAltMotorCost = (guaranteeActive && alternateMotorType === 'gaposa-solar')
+        ? motorCosts['gaposa-rts'] : alternateMotorCost;
     let customerPrice = screenOnlyCost * CUSTOMER_MARKUP;
-    customerPrice += alternateMotorCost * CUSTOMER_MARKUP;
+    customerPrice += effectiveAltMotorCost * CUSTOMER_MARKUP;
 
     // Add back track deduction after markup
     if (screen.trackDeduction) {
@@ -1125,7 +1156,10 @@ async function saveQuote() {
             salesRepId: orderData.salesRepId || '',
             salesRepName: orderData.salesRepName || '',
             salesRepEmail: orderData.salesRepEmail || '',
-            salesRepPhone: orderData.salesRepPhone || ''
+            salesRepPhone: orderData.salesRepPhone || '',
+            // 4-Week Install Guarantee
+            fourWeekGuarantee: orderData.fourWeekGuarantee || false,
+            totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0
         };
 
         // If sales rep changed and opportunity is linked, update Airtable
@@ -1427,7 +1461,9 @@ function mapOrderDataToTemplate(orderData) {
             tax: 0,
             total: total,
             deposit: total / 2,
-            balance: total / 2
+            balance: total / 2,
+            guaranteeDiscount: orderData.totalGuaranteeDiscount || 0,
+            fourWeekGuarantee: orderData.fourWeekGuarantee || false
         },
         comparisonPricing: null
     };
@@ -1731,7 +1767,9 @@ async function ensureQuoteSaved() {
             salesRepId: orderData.salesRepId || '',
             salesRepName: orderData.salesRepName || '',
             salesRepEmail: orderData.salesRepEmail || '',
-            salesRepPhone: orderData.salesRepPhone || ''
+            salesRepPhone: orderData.salesRepPhone || '',
+            fourWeekGuarantee: orderData.fourWeekGuarantee || false,
+            totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0
         })
     });
 
@@ -1907,7 +1945,9 @@ async function finalizeProjectDetails() {
                 // Airtable integration fields
                 airtableOpportunityId: orderData.airtableOpportunityId || '',
                 airtableContactId: orderData.airtableContactId || '',
-                internalComments: document.getElementById('internalComments')?.value || ''
+                internalComments: document.getElementById('internalComments')?.value || '',
+                fourWeekGuarantee: orderData.fourWeekGuarantee || false,
+                totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0
             })
         });
 
@@ -2497,6 +2537,7 @@ function calculateScreenData() {
     let totalCost = baseCost + accessoriesCost;
 
     // Apply markup to get customer price
+    const guaranteeActive = document.getElementById('fourWeekGuarantee').checked;
     let customerPrice = 0;
     if (isFenetex) {
         // For Fenetex, use Sunair Zipper RTS price for that size + 20%
@@ -2528,8 +2569,10 @@ function calculateScreenData() {
         // Apply 1.8x markup to screen
         customerPrice = screenOnlyCost * CUSTOMER_MARKUP;
 
-        // Add motor with 1.8x markup
-        customerPrice += motorCost * CUSTOMER_MARKUP;
+        // Add motor with 1.8x markup (guarantee: solar priced at RTS rate)
+        const effectiveMotorCost = (guaranteeActive && operatorType === 'gaposa-solar')
+            ? motorCosts['gaposa-rts'] : motorCost;
+        customerPrice += effectiveMotorCost * CUSTOMER_MARKUP;
 
         // Add back track deduction (negative value) after markup
         if (noTracks) {
@@ -2609,6 +2652,8 @@ function calculateScreenData() {
         customerPrice,
         isFenetex,
         trackDeduction,
+        guaranteeDiscount: (guaranteeActive && operatorType === 'gaposa-solar')
+            ? (motorCosts['gaposa-solar'] - motorCosts['gaposa-rts']) * CUSTOMER_MARKUP : 0,
         photos: existingScreenPhotos.slice(),
         pendingPhotos: pendingScreenPhotos.slice()
     };
@@ -2850,6 +2895,8 @@ function calculateOrderQuote() {
     let totalMotorCosts = 0;
     let totalAccessoriesCosts = 0;
     let totalCableSurcharge = 0;
+    let totalGuaranteeDiscount = 0;
+    const fourWeekGuarantee = document.getElementById('fourWeekGuarantee').checked;
 
     screensInOrder.forEach((screen, index) => {
         // Materials price (excluding installation and wiring)
@@ -2879,6 +2926,7 @@ function calculateOrderQuote() {
         totalScreenCosts += screen.screenCostOnly;
         totalMotorCosts += screen.motorCost;
         totalAccessoriesCosts += screen.accessoriesCost;
+        totalGuaranteeDiscount += (screen.guaranteeDiscount || 0);
     });
 
     // Add project-level accessories to materials (so discount applies)
@@ -3020,7 +3068,9 @@ function calculateOrderQuote() {
         salesRepId,
         salesRepName,
         salesRepEmail,
-        salesRepPhone
+        salesRepPhone,
+        fourWeekGuarantee,
+        totalGuaranteeDiscount
     });
 }
 
@@ -3076,6 +3126,11 @@ function displayOrderQuoteSummary(orderData) {
             <strong>Total Screens:</strong>
             <span>${orderData.screens.length}</span>
         </div>
+        ${orderData.fourWeekGuarantee ? `
+        <div style="margin-bottom: 12px; padding: 8px 12px; background: #e8f5e9; border-left: 4px solid #4caf50; border-radius: 4px;">
+            <strong style="color: #2e7d32;">4-Week Install Guarantee</strong>
+        </div>
+        ` : ''}
     `;
 
     // Add each screen details
@@ -3189,6 +3244,18 @@ function displayOrderQuoteSummary(orderData) {
             `;
         }
 
+        if (orderData.totalGuaranteeDiscount > 0) {
+            customerHTML += `
+                <div style="display: flex; justify-content: space-between; align-items: center; color: #2e7d32; margin-bottom: 8px;">
+                    <strong>4-Week Guarantee Solar Savings (included above):</strong>
+                    <div style="display: flex; gap: 20px;">
+                        <strong style="min-width: 120px; text-align: right; color: #2e7d32;">-${formatCurrency(orderData.totalGuaranteeDiscount)}</strong>
+                        <strong style="min-width: 120px; text-align: right; color: #2e7d32;">-${formatCurrency(orderData.totalGuaranteeDiscount)}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
         if (orderData.orderTotalInstallationPrice > 0) {
             customerHTML += `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -3252,6 +3319,15 @@ function displayOrderQuoteSummary(orderData) {
                 <div class="summary-row" style="font-weight: bold;">
                     <strong>Discounted Materials Total:</strong>
                     <strong>${formatCurrency(orderData.discountedMaterialsPrice)}</strong>
+                </div>
+            `;
+        }
+
+        if (orderData.totalGuaranteeDiscount > 0) {
+            customerHTML += `
+                <div class="summary-row" style="color: #2e7d32;">
+                    <strong>4-Week Guarantee Solar Savings (included above):</strong>
+                    <strong style="color: #2e7d32;">-${formatCurrency(orderData.totalGuaranteeDiscount)}</strong>
                 </div>
             `;
         }

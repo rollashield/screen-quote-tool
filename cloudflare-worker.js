@@ -86,7 +86,7 @@ export default {
     // Route: Create Stripe eCheck checkout session
     if (url.pathname.match(/^\/api\/quote\/[^/]+\/create-echeck-session$/) && request.method === 'POST') {
       const quoteId = url.pathname.split('/')[3];
-      return await handleCreateEcheckSession(quoteId, env);
+      return await handleCreateEcheckSession(quoteId, request, env);
     }
 
     // Route: Send quote for remote signature (must come before generic /api/quote/ GET)
@@ -1408,11 +1408,15 @@ async function handleGetPaymentInfo(env) {
 }
 
 // ─── Stripe eCheck (ACH) Checkout Session ───────────────────────────────────
-async function handleCreateEcheckSession(quoteId, env) {
+async function handleCreateEcheckSession(quoteId, request, env) {
   try {
     if (!env.STRIPE_SECRET_KEY) {
       return jsonResponse({ error: 'Stripe is not configured' }, 500);
     }
+
+    // Read payment type from request body (deposit or full)
+    const body = await request.json().catch(() => ({}));
+    const reqPaymentType = body.paymentType || 'deposit';
 
     const row = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
     if (!row) {
@@ -1421,10 +1425,12 @@ async function handleCreateEcheckSession(quoteId, env) {
 
     const quoteData = JSON.parse(row.quote_data);
     const totalPrice = quoteData.orderTotalPrice || 0;
-    const depositAmount = Math.round((totalPrice / 2) * 100); // cents
+    const depositAmount = reqPaymentType === 'full'
+      ? Math.round(totalPrice * 100)         // full amount in cents
+      : Math.round((totalPrice / 2) * 100);  // 50% deposit in cents
 
     if (depositAmount <= 0) {
-      return jsonResponse({ error: 'Invalid deposit amount' }, 400);
+      return jsonResponse({ error: 'Invalid payment amount' }, 400);
     }
 
     const customerName = quoteData.customerName || 'Customer';
@@ -1461,12 +1467,13 @@ async function handleCreateEcheckSession(quoteId, env) {
     params.append('mode', 'payment');
     params.append('payment_method_types[0]', 'us_bank_account');
     params.append('line_items[0][price_data][currency]', 'usd');
-    params.append('line_items[0][price_data][product_data][name]', `Roll-A-Shield Deposit — ${quoteNumber}`);
+    const paymentLabel = reqPaymentType === 'full' ? 'Payment' : 'Deposit';
+    params.append('line_items[0][price_data][product_data][name]', `Roll-A-Shield ${paymentLabel} — ${quoteNumber}`);
     params.append('line_items[0][price_data][unit_amount]', depositAmount.toString());
     params.append('line_items[0][quantity]', '1');
     params.append('success_url', `${baseUrl}/pay.html?quoteId=${quoteId}&payment=success`);
     params.append('cancel_url', `${baseUrl}/pay.html?quoteId=${quoteId}&payment=cancelled`);
-    params.append('payment_intent_data[description]', `Deposit for ${quoteNumber} — ${customerName}`);
+    params.append('payment_intent_data[description]', `${paymentLabel} for ${quoteNumber} — ${customerName}`);
     params.append('payment_intent_data[metadata][quoteId]', quoteId);
     params.append('payment_intent_data[metadata][quoteNumber]', quoteNumber);
 

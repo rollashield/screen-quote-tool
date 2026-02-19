@@ -175,6 +175,11 @@ function generateQuotePDF(data) {
       <div style="text-align: right; font-size: 14px; color: #4d4d4d;">
         <div><strong>Date:</strong> ${data.quote.date}</div>
         <div><strong>Valid through:</strong> ${data.quote.validThrough}</div>
+        ${data.pricing.fourWeekGuarantee ? `
+        <div style="margin-top: 4px; display: inline-block; padding: 3px 10px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 4px; color: #2e7d32; font-weight: 600; font-size: 11px;">
+          4-Week Install Guarantee
+        </div>
+        ` : ''}
       </div>
     </div>
 
@@ -287,6 +292,23 @@ function generateQuotePDF(data) {
             ${hasComparison ? `
             <td style="padding: 8px 12px; text-align: right; color: #16a34a;">
               âˆ’$${formatCurrency(data.comparisonPricing.discountAmount2)}
+            </td>
+            ` : ''}
+          </tr>
+          ` : ''}
+
+          ${data.pricing.guaranteeDiscount > 0 ? `
+          <tr>
+            <td colspan="7"></td>
+            <td style="padding: 8px 12px; text-align: right; color: #2e7d32;">
+              4-Week Guarantee Savings (included):
+            </td>
+            <td style="padding: 8px 12px; text-align: right; color: #2e7d32;">
+              −$${formatCurrency(data.pricing.guaranteeDiscount)}
+            </td>
+            ${hasComparison ? `
+            <td style="padding: 8px 12px; text-align: right; color: #2e7d32;">
+              −$${formatCurrency(data.pricing.guaranteeDiscount)}
             </td>
             ` : ''}
           </tr>
