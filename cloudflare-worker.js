@@ -1009,6 +1009,10 @@ function generateSigningToken() {
 // ─── Send Quote for Remote Signature ─────────────────────────────────────────
 async function handleSendForSignature(quoteId, request, env) {
   try {
+    // Parse optional body (may contain PDF attachment data)
+    const body = await request.json().catch(() => ({}));
+    const pdfBase64 = body.pdfBase64 || null;
+
     const row = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
     if (!row) {
       return jsonResponse({ error: 'Quote not found' }, 404);
@@ -1043,6 +1047,7 @@ async function handleSendForSignature(quoteId, request, env) {
     // Build and send email via Resend
     const customerName = quoteData.customerName || row.customer_name || 'Customer';
     const quoteNumber = row.quote_number || 'Quote';
+    const pdfFilename = body.pdfFilename || `RollAShield-Quote-${quoteNumber}.pdf`;
     const totalPrice = quoteData.orderTotalPrice || row.total_price || 0;
     const depositAmount = totalPrice / 2;
     const screenCount = quoteData.screens?.length || row.screen_count || 0;
@@ -1090,13 +1095,14 @@ async function handleSendForSignature(quoteId, request, env) {
         cc: salesRepEmail ? [salesRepEmail] : [],
         subject: `Review & Sign Your Roll-A-Shield Quote - ${quoteNumber}`,
         html: htmlEmail,
-        text: textEmail
+        text: textEmail,
+        ...(pdfBase64 ? { attachments: [{ filename: pdfFilename, content: pdfBase64 }] } : {})
       })
     });
 
     return jsonResponse({
       success: true,
-      message: `Signing link sent to ${customerEmail}`,
+      message: `Signing link${pdfBase64 ? ' with quote PDF' : ''} sent to ${customerEmail}`,
       signingUrl: signingUrl
     });
   } catch (error) {
@@ -1232,12 +1238,42 @@ async function handleSubmitRemoteSignature(token, request, env) {
     `).bind(signatureData, signerName, signerIp, signedAt, signedAt, row.id).run();
 
     // Send confirmation email to sales rep (non-fatal)
+    // TODO: Future Airtable integration enhancements:
+    // - Create an Airtable "Activity" record for the signature event
+    // - Update the Contact record with signature timestamp
+    // - Trigger Make.com automation for post-signature workflow
     try {
       const quoteData = JSON.parse(row.quote_data);
       const salesRepEmail = quoteData.salesRepEmail;
       const customerName = quoteData.customerName || row.customer_name;
+      const totalPrice = quoteData.orderTotalPrice || row.total_price || 0;
+      const screenCount = quoteData.screens?.length || row.screen_count || 0;
 
       if (salesRepEmail) {
+        const signedAtFormatted = new Date(signedAt).toLocaleString('en-US', { timeZone: 'America/Phoenix' });
+
+        const notificationHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #28a745; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+              <h2 style="margin: 0;">Quote Signed</h2>
+            </div>
+            <div style="background: white; padding: 25px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
+              <p><strong>${customerName}</strong> has signed quote <strong>${row.quote_number}</strong>.</p>
+              <div style="background: #f0f4f8; padding: 15px; border-radius: 6px; margin: 15px 0;">
+                <p style="margin: 0;"><strong>Quote:</strong> ${row.quote_number}</p>
+                <p style="margin: 5px 0;"><strong>Screens:</strong> ${screenCount}</p>
+                <p style="margin: 5px 0;"><strong>Total:</strong> $${Number(totalPrice).toFixed(2)}</p>
+                <p style="margin: 5px 0;"><strong>Signed:</strong> ${signedAtFormatted}</p>
+                <p style="margin: 5px 0;"><strong>Method:</strong> Remote (email link)</p>
+                <p style="margin: 5px 0;"><strong>Signer:</strong> ${signerName}</p>
+              </div>
+              <p>The customer can now proceed to payment.</p>
+            </div>
+          </div>
+        `;
+
+        const notificationText = `${customerName} has signed quote ${row.quote_number}.\n\nQuote: ${row.quote_number}\nScreens: ${screenCount}\nTotal: $${Number(totalPrice).toFixed(2)}\nSigned: ${signedAtFormatted}\nMethod: Remote (email link)\nSigner: ${signerName}\n\nThe customer can now proceed to payment.`;
+
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -1248,8 +1284,8 @@ async function handleSubmitRemoteSignature(token, request, env) {
             from: 'Roll-A-Shield Quotes <noreply@updates.rollashield.com>',
             to: [salesRepEmail],
             subject: `${customerName} has signed Quote ${row.quote_number}`,
-            html: `<p><strong>${customerName}</strong> has signed quote <strong>${row.quote_number}</strong>.</p><p><strong>Signed:</strong> ${new Date(signedAt).toLocaleString('en-US', { timeZone: 'America/Phoenix' })}</p><p><strong>Method:</strong> Remote (email link)</p><p><strong>Signer name:</strong> ${signerName}</p>`,
-            text: `${customerName} has signed quote ${row.quote_number}.\nSigned: ${signedAt}\nMethod: Remote\nSigner: ${signerName}`
+            html: notificationHtml,
+            text: notificationText
           })
         });
       }

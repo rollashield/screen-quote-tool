@@ -207,6 +207,12 @@ function showQrModal() {
     document.getElementById('qrModalOverlay').classList.add('active');
 }
 
+function showZelleQrModal() {
+    const qrImg = document.getElementById('qrCodeImage');
+    qrImg.src = 'assets/zelle-qr.png';
+    document.getElementById('qrModalOverlay').classList.add('active');
+}
+
 function closeQrModal(event) {
     // If called from overlay click, only close if clicking the overlay itself
     if (event && event.target !== event.currentTarget) return;

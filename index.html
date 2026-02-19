@@ -25,6 +25,21 @@
             padding-bottom: 8px;
         }
 
+        /* Visual grouping: Screen Config + Accessories + Photos as one card */
+        .screen-entry-group .form-section {
+            margin-bottom: 0;
+            border-radius: 0;
+            border-bottom: none;
+        }
+        .screen-entry-group .form-section:first-child {
+            border-radius: 6px 6px 0 0;
+        }
+        .screen-entry-group .form-section:last-child {
+            border-radius: 0 0 6px 6px;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+
         .dimension-group {
             display: flex;
             flex-direction: column;
@@ -675,6 +690,9 @@
                 </div>
             </div>
 
+            <!-- Screen Entry Group: Config + Accessories + Photos -->
+            <div class="screen-entry-group">
+
             <!-- Screen Configuration -->
             <div class="form-section">
                 <h2>Screen Configuration</h2>
@@ -820,48 +838,7 @@
                 </label>
             </div>
 
-            <!-- Comparison and Discount Options -->
-            <div class="form-section">
-                <h2>Additional Options</h2>
-
-                <div class="checkbox-group">
-                    <input type="checkbox" id="enableComparison">
-                    <label for="enableComparison">Show Pricing Comparison with Alternative Operator</label>
-                </div>
-
-                <div id="comparisonOptions" class="form-row" style="display: none; margin-top: 15px;">
-                    <div class="form-group">
-                        <label for="comparisonMotor">Compare Against:</label>
-                        <select id="comparisonMotor">
-                            <option value="">-- Select Option to Compare --</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row" style="margin-top: 15px;">
-                    <div class="form-group">
-                        <label for="miscInstallLabel">Extra Install Cost Label</label>
-                        <input type="text" id="miscInstallLabel" placeholder="e.g., Scaffolding, Difficult Access">
-                    </div>
-                    <div class="form-group">
-                        <label for="miscInstallAmount">Extra Install Cost ($)</label>
-                        <input type="number" id="miscInstallAmount" min="0" step="0.01" placeholder="0.00">
-                        <small style="color: #666; font-size: 0.85rem;">Separate line item; 70% allocated as installer cost</small>
-                    </div>
-                </div>
-
-                <div class="form-row" style="margin-top: 15px;">
-                    <div class="form-group">
-                        <label for="discountLabel">Discount Label (optional)</label>
-                        <input type="text" id="discountLabel" placeholder="e.g., Spring Sale, Bulk Discount">
-                    </div>
-                    <div class="form-group">
-                        <label for="discountPercent">Discount Percentage</label>
-                        <input type="number" id="discountPercent" min="0" max="100" step="0.1" placeholder="0" value="0">
-                        <small style="color: #666; font-size: 0.85rem;">Applied to materials subtotal</small>
-                    </div>
-                </div>
-            </div>
+            </div><!-- end .screen-entry-group -->
 
             <!-- Action Buttons -->
             <div class="button-group">
@@ -883,6 +860,49 @@
                         </button>
                     </div>
                     <div id="projectAccessoriesList" style="display: none;"></div>
+                </div>
+
+                <!-- Additional Options (order-level settings) -->
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #e0e0e0;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 1rem; color: #333;">Additional Options</h3>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="enableComparison">
+                        <label for="enableComparison">Show Pricing Comparison with Alternative Operator</label>
+                    </div>
+
+                    <div id="comparisonOptions" class="form-row" style="display: none; margin-top: 15px;">
+                        <div class="form-group">
+                            <label for="comparisonMotor">Compare Against:</label>
+                            <select id="comparisonMotor">
+                                <option value="">-- Select Option to Compare --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="margin-top: 15px;">
+                        <div class="form-group">
+                            <label for="miscInstallLabel">Extra Install Cost Label</label>
+                            <input type="text" id="miscInstallLabel" placeholder="e.g., Scaffolding, Difficult Access">
+                        </div>
+                        <div class="form-group">
+                            <label for="miscInstallAmount">Extra Install Cost ($)</label>
+                            <input type="number" id="miscInstallAmount" min="0" step="0.01" placeholder="0.00">
+                            <small style="color: #666; font-size: 0.85rem;">Separate line item; 70% allocated as installer cost</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="margin-top: 15px;">
+                        <div class="form-group">
+                            <label for="discountLabel">Discount Label (optional)</label>
+                            <input type="text" id="discountLabel" placeholder="e.g., Spring Sale, Bulk Discount">
+                        </div>
+                        <div class="form-group">
+                            <label for="discountPercent">Discount Percentage</label>
+                            <input type="number" id="discountPercent" min="0" max="100" step="0.1" placeholder="0" value="0">
+                            <small style="color: #666; font-size: 0.85rem;">Applied to materials subtotal</small>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="button-group" style="margin-top: 15px;">
@@ -915,9 +935,8 @@
                 <div class="button-group" style="margin-top: 15px;">
                     <button class="btn-success" onclick="saveQuote()">Save Quote</button>
                     <button class="btn-secondary" onclick="generatePDF()">Download PDF</button>
-                    <button class="btn-secondary" onclick="emailQuote()">Email Quote</button>
-                    <button class="btn-success" onclick="presentForSignature()">Present for Signature</button>
-                    <button class="btn-primary" onclick="sendForSignature()">Send for Signature</button>
+                    <button class="btn-primary" onclick="sendQuoteForSignature()">Send Quote & Request Signature</button>
+                    <button class="btn-success" onclick="presentForSignature()">Present for Signature (In-Person)</button>
                     <button class="btn-primary" onclick="finalizeProjectDetails()" style="background: #28a745; margin-top: 10px; width: 100%; font-weight: 600;">Finalize Project Details</button>
                 </div>
             </div>
