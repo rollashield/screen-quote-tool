@@ -172,6 +172,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear operator selection
         operatorSelect.value = '';
         updateAccessories();
+        checkDimensionLimits();
     });
 
     // Update accessories when operator type changes
@@ -186,9 +187,15 @@ document.addEventListener('DOMContentLoaded', function() {
         updateWiringVisibility();
     });
 
-    // Update pricing dimensions when measurements change
+    // Photo input handler
+    document.getElementById('photoInput').addEventListener('change', handlePhotoSelect);
+
+    // Update pricing dimensions and check dimension limits when measurements change
     ['widthInches', 'widthFraction', 'heightInches', 'heightFraction'].forEach(id => {
-        document.getElementById(id).addEventListener('input', updatePricingDimensions);
+        document.getElementById(id).addEventListener('input', function() {
+            updatePricingDimensions();
+            checkDimensionLimits();
+        });
     });
 
     // Enable/disable comparison options
@@ -1041,8 +1048,26 @@ async function saveQuote() {
         const orderData = window.currentOrderData;
         orderData.internalComments = internalComments;
 
+        // Upload pending photos and clean up deletions
+        const quoteId = orderData.id.toString();
+        for (let i = 0; i < orderData.screens.length; i++) {
+            const screen = orderData.screens[i];
+            if (screen.pendingPhotos && screen.pendingPhotos.length > 0) {
+                const uploaded = await uploadPendingPhotos(quoteId, i, screen.pendingPhotos);
+                screen.photos = (screen.photos || []).concat(uploaded);
+                screen.pendingPhotos = [];
+            }
+        }
+        await deleteMarkedPhotos();
+
+        // Strip Blob objects before serialization
+        const screensForSave = orderData.screens.map(s => {
+            const { pendingPhotos, ...rest } = s;
+            return rest;
+        });
+
         const quoteData = {
-            id: orderData.id.toString(),
+            id: quoteId,
             customerName: orderData.customerName,
             companyName: orderData.companyName || '',
             customerEmail: orderData.customerEmail || '',
@@ -1053,7 +1078,7 @@ async function saveQuote() {
             city: orderData.city || '',
             state: orderData.state || '',
             zipCode: orderData.zipCode || '',
-            screens: orderData.screens,
+            screens: screensForSave,
             orderTotalPrice: orderData.orderTotalPrice,
             orderTotalMaterialsPrice: orderData.orderTotalMaterialsPrice,
             orderTotalInstallationPrice: orderData.orderTotalInstallationPrice,
@@ -1075,6 +1100,14 @@ async function saveQuote() {
             comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
             comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
             comparisonTotalPrice: orderData.comparisonTotalPrice,
+            // Extra misc install cost
+            miscInstallLabel: orderData.miscInstallLabel || '',
+            miscInstallAmount: orderData.miscInstallAmount || 0,
+            miscInstallCost: orderData.miscInstallCost || 0,
+            // Project-level accessories
+            projectAccessories: (orderData.projectAccessories || []).filter(a => a.quantity > 0),
+            projectAccessoriesTotalPrice: orderData.projectAccessoriesTotalPrice || 0,
+            projectAccessoriesTotalCost: orderData.projectAccessoriesTotalCost || 0,
             // Airtable integration fields
             airtableOpportunityId: orderData.airtableOpportunityId || '',
             airtableContactId: orderData.airtableContactId || '',
@@ -1265,6 +1298,17 @@ async function loadQuote(quoteId) {
             document.getElementById('discountPercent').value = quote.discountPercent || 0;
             document.getElementById('discountLabel').value = quote.discountLabel || '';
 
+            // Restore misc install fields
+            document.getElementById('miscInstallLabel').value = quote.miscInstallLabel || '';
+            document.getElementById('miscInstallAmount').value = quote.miscInstallAmount || '';
+
+            // Restore project accessories
+            if (quote.projectAccessories && quote.projectAccessories.length > 0) {
+                projectAccessories = quote.projectAccessories;
+            } else {
+                projectAccessories = [];
+            }
+
             // Restore comparison settings
             if (quote.enableComparison) {
                 document.getElementById('enableComparison').checked = true;
@@ -1328,9 +1372,10 @@ function mapOrderDataToTemplate(orderData) {
     const materialsPrice = orderData.orderTotalMaterialsPrice || 0;
     const installationPrice = orderData.orderTotalInstallationPrice || 0;
     const wiringPrice = orderData.orderTotalWiringPrice || 0;
+    const miscInstallAmount = orderData.miscInstallAmount || 0;
     const discountPercent = orderData.discountPercent || 0;
     const discountAmount = orderData.discountAmount || 0;
-    const subtotal = (discountPercent > 0 ? orderData.discountedMaterialsPrice : materialsPrice) + installationPrice + wiringPrice;
+    const subtotal = (discountPercent > 0 ? orderData.discountedMaterialsPrice : materialsPrice) + installationPrice + wiringPrice + miscInstallAmount;
     const total = orderData.orderTotalPrice || 0;
 
     const data = {
@@ -1355,10 +1400,18 @@ function mapOrderDataToTemplate(orderData) {
             ? `https://rollashield.github.io/screen-quote-tool/sign.html?quoteId=${orderData.id}&mode=in-person`
             : null,
         screens: screens,
+        projectAccessories: (orderData.projectAccessories || []).filter(a => a.quantity > 0).map(acc => ({
+            name: acc.name,
+            quantity: acc.quantity,
+            unitPrice: acc.customerPrice,
+            lineTotal: acc.customerPrice * acc.quantity
+        })),
         pricing: {
             materials: materialsPrice,
             installation: installationPrice,
             wiring: wiringPrice,
+            miscInstallLabel: orderData.miscInstallLabel || '',
+            miscInstallAmount: miscInstallAmount,
             discountPercent: discountPercent,
             discountAmount: discountAmount,
             subtotal: subtotal,
@@ -1374,7 +1427,7 @@ function mapOrderDataToTemplate(orderData) {
     if (orderData.enableComparison) {
         const compMaterials = orderData.comparisonTotalMaterialsPrice || 0;
         const compDiscounted = orderData.comparisonDiscountedMaterialsPrice || compMaterials;
-        const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice + wiringPrice;
+        const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice + wiringPrice + miscInstallAmount;
         const compTotal = orderData.comparisonTotalPrice || 0;
 
         // Get the first screen's operator to use as label
@@ -1514,6 +1567,26 @@ async function ensureQuoteSaved() {
     const internalComments = document.getElementById('internalComments')?.value || '';
     orderData.internalComments = internalComments;
 
+    // Upload any pending photos for each screen
+    const quoteId = orderData.id.toString();
+    for (let i = 0; i < orderData.screens.length; i++) {
+        const screen = orderData.screens[i];
+        if (screen.pendingPhotos && screen.pendingPhotos.length > 0) {
+            const uploaded = await uploadPendingPhotos(quoteId, i, screen.pendingPhotos);
+            screen.photos = (screen.photos || []).concat(uploaded);
+            screen.pendingPhotos = [];
+        }
+    }
+
+    // Delete any photos that were removed
+    await deleteMarkedPhotos();
+
+    // Strip File/Blob objects before serialization (they can't be JSON-stringified)
+    const screensForSave = orderData.screens.map(s => {
+        const { pendingPhotos, ...rest } = s;
+        return rest;
+    });
+
     const response = await fetch(`${WORKER_URL}/api/save-quote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1529,7 +1602,7 @@ async function ensureQuoteSaved() {
             city: orderData.city || '',
             state: orderData.state || '',
             zipCode: orderData.zipCode || '',
-            screens: orderData.screens,
+            screens: screensForSave,
             orderTotalPrice: orderData.orderTotalPrice,
             orderTotalMaterialsPrice: orderData.orderTotalMaterialsPrice,
             orderTotalInstallationPrice: orderData.orderTotalInstallationPrice,
@@ -1551,6 +1624,12 @@ async function ensureQuoteSaved() {
             comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
             comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
             comparisonTotalPrice: orderData.comparisonTotalPrice,
+            miscInstallLabel: orderData.miscInstallLabel || '',
+            miscInstallAmount: orderData.miscInstallAmount || 0,
+            miscInstallCost: orderData.miscInstallCost || 0,
+            projectAccessories: (orderData.projectAccessories || []).filter(a => a.quantity > 0),
+            projectAccessoriesTotalPrice: orderData.projectAccessoriesTotalPrice || 0,
+            projectAccessoriesTotalCost: orderData.projectAccessoriesTotalCost || 0,
             airtableOpportunityId: orderData.airtableOpportunityId || '',
             airtableContactId: orderData.airtableContactId || '',
             internalComments: internalComments,
@@ -1664,6 +1743,27 @@ async function finalizeProjectDetails() {
     const orderData = window.currentOrderData;
     const orderId = orderData.id || Date.now();
 
+    // Upload pending photos and clean up deletions before saving
+    try {
+        for (let i = 0; i < orderData.screens.length; i++) {
+            const screen = orderData.screens[i];
+            if (screen.pendingPhotos && screen.pendingPhotos.length > 0) {
+                const uploaded = await uploadPendingPhotos(orderId.toString(), i, screen.pendingPhotos);
+                screen.photos = (screen.photos || []).concat(uploaded);
+                screen.pendingPhotos = [];
+            }
+        }
+        await deleteMarkedPhotos();
+    } catch (photoErr) {
+        console.error('Photo processing error:', photoErr);
+    }
+
+    // Strip Blob objects before serialization
+    const screensForFinalize = orderData.screens.map(s => {
+        const { pendingPhotos, ...rest } = s;
+        return rest;
+    });
+
     // Save the quote to D1 before navigating
     try {
         const response = await fetch(`${WORKER_URL}/api/save-quote`, {
@@ -1681,7 +1781,7 @@ async function finalizeProjectDetails() {
                 city: orderData.city || '',
                 state: orderData.state || '',
                 zipCode: orderData.zipCode || '',
-                screens: orderData.screens,
+                screens: screensForFinalize,
                 orderTotalPrice: orderData.orderTotalPrice,
                 orderTotalMaterialsPrice: orderData.orderTotalMaterialsPrice,
                 orderTotalInstallationPrice: orderData.orderTotalInstallationPrice,
@@ -1703,6 +1803,12 @@ async function finalizeProjectDetails() {
                 comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
                 comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
                 comparisonTotalPrice: orderData.comparisonTotalPrice,
+                miscInstallLabel: orderData.miscInstallLabel || '',
+                miscInstallAmount: orderData.miscInstallAmount || 0,
+                miscInstallCost: orderData.miscInstallCost || 0,
+                projectAccessories: (orderData.projectAccessories || []).filter(a => a.quantity > 0),
+                projectAccessoriesTotalPrice: orderData.projectAccessoriesTotalPrice || 0,
+                projectAccessoriesTotalCost: orderData.projectAccessoriesTotalCost || 0,
                 // Airtable integration fields
                 airtableOpportunityId: orderData.airtableOpportunityId || '',
                 airtableContactId: orderData.airtableContactId || '',
@@ -1760,8 +1866,16 @@ function resetForm() {
     document.getElementById('comparisonMotor').value = '';
     document.getElementById('discountLabel').value = '';
     document.getElementById('discountPercent').value = '0';
+    document.getElementById('miscInstallLabel').value = '';
+    document.getElementById('miscInstallAmount').value = '';
     updateAccessories();
     editingScreenIndex = null;
+
+    // Clear project accessories
+    projectAccessories = [];
+    document.getElementById('projectAccessoriesSection').style.display = 'none';
+    document.getElementById('projectAccessoriesList').style.display = 'none';
+    document.getElementById('toggleProjectAccBtn').textContent = 'Add Project Accessories';
 
     // Clear Airtable state
     document.getElementById('airtableOpportunityId').value = '';
@@ -1806,7 +1920,370 @@ function addToOrder() {
     document.getElementById('quoteSummary').classList.add('hidden');
 }
 
+// ─── Photo Management ────────────────────────────────────────────────────────
+
+/**
+ * Compress a photo file client-side using canvas.
+ * Resizes to max 2048px on longest edge, exports as JPEG at 0.75 quality.
+ * Returns a Promise<Blob>.
+ */
+function compressPhoto(file) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const maxDim = 2048;
+            let w = img.width;
+            let h = img.height;
+            if (w > maxDim || h > maxDim) {
+                if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                else { w = Math.round(w * maxDim / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            canvas.toBlob(blob => {
+                if (blob) resolve(blob);
+                else reject(new Error('Failed to compress photo'));
+            }, 'image/jpeg', 0.75);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+        img.src = url;
+    });
+}
+
+async function handlePhotoSelect(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    const totalCurrent = pendingScreenPhotos.length + existingScreenPhotos.length;
+    const remaining = MAX_PHOTOS_PER_SCREEN - totalCurrent;
+
+    if (remaining <= 0) {
+        alert(`Maximum ${MAX_PHOTOS_PER_SCREEN} photos per screen.`);
+        event.target.value = '';
+        return;
+    }
+
+    const toProcess = files.slice(0, remaining);
+    if (toProcess.length < files.length) {
+        alert(`Only adding ${toProcess.length} of ${files.length} photos (limit: ${MAX_PHOTOS_PER_SCREEN}).`);
+    }
+
+    for (const file of toProcess) {
+        try {
+            const compressed = await compressPhoto(file);
+            compressed._originalName = file.name;
+            pendingScreenPhotos.push(compressed);
+        } catch (err) {
+            console.error('Photo compression failed:', err);
+        }
+    }
+
+    event.target.value = '';
+    renderPhotoPreview();
+}
+
+function renderPhotoPreview() {
+    const grid = document.getElementById('photoGrid');
+    const countEl = document.getElementById('photoCount');
+    const addLabel = document.getElementById('photoAddLabel');
+    const total = pendingScreenPhotos.length + existingScreenPhotos.length;
+    countEl.textContent = `(${total}/${MAX_PHOTOS_PER_SCREEN})`;
+
+    let html = '';
+
+    // Existing (already uploaded) photos
+    existingScreenPhotos.forEach((photo, i) => {
+        const thumbUrl = photo.url || photo.key;
+        html += `<div class="photo-thumb">
+            <img src="${thumbUrl}" alt="${photo.filename || 'Photo'}">
+            <button class="photo-remove" onclick="removeExistingPhoto(${i})" title="Remove">&times;</button>
+        </div>`;
+    });
+
+    // Pending (not yet uploaded) photos
+    pendingScreenPhotos.forEach((blob, i) => {
+        const objectUrl = URL.createObjectURL(blob);
+        html += `<div class="photo-thumb">
+            <img src="${objectUrl}" alt="${blob._originalName || 'Photo'}">
+            <button class="photo-remove" onclick="removePendingPhoto(${i})" title="Remove">&times;</button>
+        </div>`;
+    });
+
+    grid.innerHTML = html;
+    addLabel.style.display = total >= MAX_PHOTOS_PER_SCREEN ? 'none' : '';
+}
+
+function removePendingPhoto(index) {
+    pendingScreenPhotos.splice(index, 1);
+    renderPhotoPreview();
+}
+
+function removeExistingPhoto(index) {
+    const removed = existingScreenPhotos.splice(index, 1)[0];
+    if (removed && removed.key) {
+        // Track for deletion when quote is saved
+        window._photosToDelete = window._photosToDelete || [];
+        window._photosToDelete.push(removed.key);
+    }
+    renderPhotoPreview();
+}
+
+/**
+ * Upload all pending photos for a screen to R2.
+ * Returns array of photo metadata objects.
+ */
+async function uploadPendingPhotos(quoteId, screenIndex, pendingPhotos) {
+    const uploaded = [];
+    for (const blob of pendingPhotos) {
+        const formData = new FormData();
+        formData.append('photo', blob, blob._originalName || 'photo.jpg');
+        formData.append('quoteId', quoteId);
+        formData.append('screenIndex', String(screenIndex));
+
+        try {
+            const response = await fetch(`${WORKER_URL}/api/photos/upload`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (result.success && result.photo) {
+                uploaded.push({
+                    key: result.photo.key,
+                    url: `${WORKER_URL}/r2/${result.photo.key}`,
+                    filename: result.photo.filename,
+                    size: result.photo.size,
+                    contentType: result.photo.contentType,
+                    uploadedAt: new Date().toISOString(),
+                    category: 'site'
+                });
+            }
+        } catch (err) {
+            console.error('Photo upload failed:', err);
+        }
+    }
+    return uploaded;
+}
+
+/**
+ * Delete photos from R2 that were marked for deletion.
+ */
+async function deleteMarkedPhotos() {
+    const toDelete = window._photosToDelete || [];
+    for (const key of toDelete) {
+        try {
+            await fetch(`${WORKER_URL}/api/photos/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key })
+            });
+        } catch (err) {
+            console.error('Photo delete failed:', err);
+        }
+    }
+    window._photosToDelete = [];
+}
+
+function checkDimensionLimits() {
+    const warningDiv = document.getElementById('dimensionWarning');
+    const warningText = document.getElementById('dimensionWarningText');
+    const addBtn = document.getElementById('addToOrderBtn');
+    const trackType = document.getElementById('trackType').value;
+
+    // Clear warning if no track type selected
+    const priceData = getPricingTable(trackType);
+    if (!priceData) {
+        warningDiv.style.display = 'none';
+        if (addBtn) addBtn.disabled = false;
+        return;
+    }
+
+    const widthInches = parseFloat(document.getElementById('widthInches').value) || 0;
+    const widthFraction = parseFraction(document.getElementById('widthFraction').value);
+    const heightInches = parseFloat(document.getElementById('heightInches').value) || 0;
+    const heightFraction = parseFraction(document.getElementById('heightFraction').value);
+
+    const totalWidthInches = widthInches + widthFraction;
+    const totalHeightInches = heightInches + heightFraction;
+
+    // Don't show warnings if no dimensions entered yet
+    if (totalWidthInches === 0 && totalHeightInches === 0) {
+        warningDiv.style.display = 'none';
+        if (addBtn) addBtn.disabled = false;
+        return;
+    }
+
+    const width = Math.round(totalWidthInches / 12);
+    const height = Math.round(totalHeightInches / 12);
+
+    const trackName = document.getElementById('trackType').selectedOptions[0]?.text || 'selected track';
+    const maxWidth = Math.max(...Object.keys(priceData).map(Number));
+    const messages = [];
+
+    if (width > maxWidth) {
+        messages.push(`Width (${width} ft) exceeds maximum of ${maxWidth} ft for ${trackName}.`);
+    } else if (width > 0 && priceData[String(width)]) {
+        const maxHeight = getMaxHeightForWidth(priceData, String(width));
+        if (height > maxHeight && totalHeightInches > 0) {
+            messages.push(`Height (${height} ft) exceeds maximum of ${maxHeight} ft for ${trackName} at ${width} ft width.`);
+        }
+    } else if (width > 0 && !priceData[String(width)]) {
+        // Width exists but below minimum (unlikely but handle)
+        const minWidth = Math.min(...Object.keys(priceData).map(Number));
+        messages.push(`Width (${width} ft) is below minimum of ${minWidth} ft for ${trackName}.`);
+    }
+
+    if (messages.length > 0) {
+        warningText.innerHTML = messages.join('<br>');
+        warningDiv.style.display = 'block';
+        if (addBtn) addBtn.disabled = true;
+    } else {
+        warningDiv.style.display = 'none';
+        if (addBtn) addBtn.disabled = false;
+    }
+}
+
+// ── Project Accessories (A La Carte) ──
+
+function getApplicableProjectAccessories() {
+    // Scan screens for motor brands present
+    const motorBrands = new Set();
+    let hasSolar = false;
+    screensInOrder.forEach(screen => {
+        if (screen.operatorType === 'gaposa-rts' || screen.operatorType === 'gaposa-solar') {
+            motorBrands.add('gaposa');
+        }
+        if (screen.operatorType === 'somfy-rts') {
+            motorBrands.add('somfy');
+        }
+        if (screen.operatorType === 'gaposa-solar') {
+            hasSolar = true;
+        }
+    });
+
+    const items = [];
+    motorBrands.forEach(brand => {
+        let brandAccessories = accessories[brand] || [];
+        brandAccessories.forEach(acc => {
+            // Filter extension cord: only show if solar motor present
+            if (acc.id === 'gaposa-solar-ext' && !hasSolar) return;
+            items.push({ ...acc, brand });
+        });
+    });
+    return items;
+}
+
+function renderProjectAccessories() {
+    const listEl = document.getElementById('projectAccessoriesList');
+    const available = getApplicableProjectAccessories();
+
+    if (available.length === 0) {
+        listEl.innerHTML = '<p style="color: #666; font-size: 0.85rem;">No motorized screens in order. Add screens with motors to see available accessories.</p>';
+        return;
+    }
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+    available.forEach(acc => {
+        // Calculate customer price (same markup logic as per-screen)
+        let customerPrice;
+        if (acc.markup) {
+            customerPrice = acc.cost * (1 - SUNAIR_DISCOUNT) * CUSTOMER_MARKUP;
+        } else {
+            customerPrice = acc.cost;
+        }
+
+        // Find existing quantity from projectAccessories
+        const existing = projectAccessories.find(pa => pa.id === acc.id);
+        const qty = existing ? existing.quantity : 0;
+        const lineTotal = customerPrice * qty;
+
+        html += `
+            <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #f8f9fa; border-radius: 4px; flex-wrap: wrap;">
+                <span style="flex: 1; min-width: 180px; font-size: 0.9rem;">${acc.name}</span>
+                <span style="color: #666; font-size: 0.85rem; min-width: 80px; text-align: right;">$${customerPrice.toFixed(2)} ea</span>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <button type="button" onclick="updateProjectAccessoryQuantity('${acc.id}', ${qty - 1})"
+                            style="width: 28px; height: 28px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-size: 1rem; line-height: 1;"
+                            ${qty <= 0 ? 'disabled' : ''}>−</button>
+                    <span style="width: 28px; text-align: center; font-weight: 600; font-size: 0.9rem;">${qty}</span>
+                    <button type="button" onclick="updateProjectAccessoryQuantity('${acc.id}', ${qty + 1})"
+                            style="width: 28px; height: 28px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-size: 1rem; line-height: 1;"
+                            ${qty >= 10 ? 'disabled' : ''}>+</button>
+                </div>
+                <span style="min-width: 80px; text-align: right; font-weight: 600; font-size: 0.9rem; color: ${lineTotal > 0 ? '#0056A3' : '#999'};">
+                    ${lineTotal > 0 ? '$' + lineTotal.toFixed(2) : '—'}
+                </span>
+            </div>
+        `;
+    });
+    html += '</div>';
+    listEl.innerHTML = html;
+}
+
+function toggleProjectAccessories() {
+    const listEl = document.getElementById('projectAccessoriesList');
+    const btn = document.getElementById('toggleProjectAccBtn');
+    if (listEl.style.display === 'none') {
+        listEl.style.display = 'block';
+        btn.textContent = 'Hide Project Accessories';
+        renderProjectAccessories();
+    } else {
+        listEl.style.display = 'none';
+        btn.textContent = 'Add Project Accessories';
+    }
+}
+
+function updateProjectAccessoryQuantity(accId, newQty) {
+    if (newQty < 0) newQty = 0;
+    if (newQty > 10) newQty = 10;
+
+    const available = getApplicableProjectAccessories();
+    const accDef = available.find(a => a.id === accId);
+    if (!accDef) return;
+
+    // Calculate customer price
+    let customerPrice;
+    if (accDef.markup) {
+        customerPrice = accDef.cost * (1 - SUNAIR_DISCOUNT) * CUSTOMER_MARKUP;
+    } else {
+        customerPrice = accDef.cost;
+    }
+
+    // Update or add/remove from projectAccessories array
+    const idx = projectAccessories.findIndex(pa => pa.id === accId);
+    if (newQty === 0) {
+        if (idx >= 0) projectAccessories.splice(idx, 1);
+    } else {
+        const entry = {
+            id: accDef.id,
+            name: accDef.name,
+            cost: accDef.cost,
+            markup: accDef.markup,
+            quantity: newQty,
+            customerPrice: customerPrice
+        };
+        if (idx >= 0) {
+            projectAccessories[idx] = entry;
+        } else {
+            projectAccessories.push(entry);
+        }
+    }
+
+    renderProjectAccessories();
+}
+
 function calculateScreenData() {
+    // Guard: if dimension warning is showing, block screen creation
+    const dimensionWarning = document.getElementById('dimensionWarning');
+    if (dimensionWarning && dimensionWarning.style.display !== 'none') {
+        alert('Cannot add screen — dimensions exceed pricing limits. Please adjust dimensions.');
+        return null;
+    }
+
     // Get form values
     const screenName = document.getElementById('screenName').value.trim();
     const trackType = document.getElementById('trackType').value;
@@ -2036,7 +2513,9 @@ function calculateScreenData() {
         wiringPrice,
         customerPrice,
         isFenetex,
-        trackDeduction
+        trackDeduction,
+        photos: existingScreenPhotos.slice(),
+        pendingPhotos: pendingScreenPhotos.slice()
     };
 }
 
@@ -2056,7 +2535,14 @@ function resetFormForNextScreen() {
     document.getElementById('wiringDistance').value = '';
     document.getElementById('wiringGroup').style.display = 'none';
     document.getElementById('dimensionsSummary').style.display = 'none';
+    document.getElementById('dimensionWarning').style.display = 'none';
+    document.getElementById('addToOrderBtn').disabled = false;
     updateAccessories();
+
+    // Clear photo state
+    pendingScreenPhotos = [];
+    existingScreenPhotos = [];
+    renderPhotoPreview();
 }
 
 function renderScreensList() {
@@ -2100,6 +2586,7 @@ function renderScreensList() {
                     <strong>Accessories:</strong> ${accessoriesText}<br>
                     ${screen.includeInstallation ? '<strong>Installation:</strong> Included<br>' : ''}
                     ${screen.wiringDistance > 0 ? `<strong>Wiring:</strong> ${screen.wiringDistance}"<br>` : ''}
+                    ${(screen.photos && screen.photos.length) || (screen.pendingPhotos && screen.pendingPhotos.length) ? `<strong>Photos:</strong> ${(screen.photos || []).length + (screen.pendingPhotos || []).length}<br>` : ''}
                     <strong>Price:</strong> ${formatCurrency(screen.customerPrice)}
                 </div>
             </div>
@@ -2107,6 +2594,21 @@ function renderScreensList() {
     });
 
     screensList.innerHTML = html;
+
+    // Show/hide project accessories section based on screens in order
+    const projAccSection = document.getElementById('projectAccessoriesSection');
+    if (screensInOrder.length > 0) {
+        projAccSection.style.display = 'block';
+        // Re-render if visible (motor brands may have changed)
+        const listEl = document.getElementById('projectAccessoriesList');
+        if (listEl.style.display !== 'none') {
+            renderProjectAccessories();
+        }
+    } else {
+        projAccSection.style.display = 'none';
+        // Clear project accessories when all screens removed
+        projectAccessories = [];
+    }
 }
 
 function editScreen(index) {
@@ -2122,6 +2624,11 @@ function editScreen(index) {
     document.getElementById('includeInstallation').checked = screen.includeInstallation;
     document.getElementById('wiringDistance').value = screen.wiringDistance || '';
     updateWiringVisibility();
+
+    // Restore photos
+    existingScreenPhotos = (screen.photos || []).slice();
+    pendingScreenPhotos = (screen.pendingPhotos || []).slice();
+    renderPhotoPreview();
 
     // Set dimensions - need to calculate back from display
     // For simplicity, we'll use the pricing dimensions
@@ -2182,6 +2689,7 @@ function updateAddToOrderButton() {
 function duplicateScreen(index) {
     const screen = JSON.parse(JSON.stringify(screensInOrder[index])); // Deep copy
     screen.screenName = screen.screenName ? `${screen.screenName} (Copy)` : null;
+    screen.pendingPhotos = []; // Pending photos (Blobs) can't be deep-copied; start fresh
     screensInOrder.push(screen);
     renderScreensList();
 }
@@ -2255,13 +2763,31 @@ function calculateOrderQuote() {
         totalAccessoriesCosts += screen.accessoriesCost;
     });
 
+    // Add project-level accessories to materials (so discount applies)
+    let projectAccessoriesTotalCost = 0;
+    let projectAccessoriesTotalPrice = 0;
+    projectAccessories.forEach(acc => {
+        projectAccessoriesTotalCost += acc.cost * acc.quantity;
+        projectAccessoriesTotalPrice += acc.customerPrice * acc.quantity;
+    });
+    orderTotalMaterialsPrice += projectAccessoriesTotalPrice;
+    orderTotalCost += projectAccessoriesTotalCost;
+    totalAccessoriesCosts += projectAccessoriesTotalCost;
+
+    // Get extra misc install cost
+    const miscInstallLabel = document.getElementById('miscInstallLabel').value.trim() || 'Additional Installation';
+    const miscInstallAmount = parseFloat(document.getElementById('miscInstallAmount').value) || 0;
+    const miscInstallCost = miscInstallAmount * 0.70;  // 70% to installer
+
     // Get discount information
     const discountPercent = parseFloat(document.getElementById('discountPercent').value) || 0;
     const discountLabel = document.getElementById('discountLabel').value.trim() || 'Discount';
     const discountAmount = (orderTotalMaterialsPrice * discountPercent) / 100;
     const discountedMaterialsPrice = orderTotalMaterialsPrice - discountAmount;
 
-    const orderTotalPrice = discountedMaterialsPrice + orderTotalInstallationPrice + orderTotalWiringPrice;
+    // Add misc install to totals (separate line item, not subject to discount)
+    const orderTotalPrice = discountedMaterialsPrice + orderTotalInstallationPrice + orderTotalWiringPrice + miscInstallAmount;
+    orderTotalInstallationCost += miscInstallCost;  // Fold 70% into installer cost
     const totalProfit = orderTotalPrice - orderTotalCost - orderTotalInstallationCost - orderTotalWiringPrice;
     const marginPercent = orderTotalPrice > 0 ? (totalProfit / orderTotalPrice) * 100 : 0;
 
@@ -2300,7 +2826,7 @@ function calculateOrderQuote() {
         // Apply discount to comparison totals
         const comparisonDiscountAmount = (comparisonTotalMaterialsPrice * discountPercent) / 100;
         comparisonDiscountedMaterialsPrice = comparisonTotalMaterialsPrice - comparisonDiscountAmount;
-        comparisonTotalPrice = comparisonDiscountedMaterialsPrice + orderTotalInstallationPrice + orderTotalWiringPrice;
+        comparisonTotalPrice = comparisonDiscountedMaterialsPrice + orderTotalInstallationPrice + orderTotalWiringPrice + miscInstallAmount;
     }
 
     // Get customer contact/address fields for DB storage
@@ -2364,6 +2890,12 @@ function calculateOrderQuote() {
         comparisonTotalMaterialsPrice,
         comparisonDiscountedMaterialsPrice,
         comparisonTotalPrice,
+        miscInstallLabel,
+        miscInstallAmount,
+        miscInstallCost,
+        projectAccessories: projectAccessories.filter(a => a.quantity > 0),
+        projectAccessoriesTotalPrice,
+        projectAccessoriesTotalCost,
         airtableOpportunityId,
         airtableContactId,
         internalComments,
@@ -2480,6 +3012,26 @@ function displayOrderQuoteSummary(orderData) {
         `;
     });
 
+    // Show project accessories if any
+    if (orderData.projectAccessories && orderData.projectAccessories.length > 0) {
+        customerHTML += `
+            <div style="margin-bottom: 15px; padding: 10px; background: #f5f0ff; border-radius: 4px;">
+                <div style="border-bottom: 1px solid #0056A3; padding-bottom: 8px; margin-bottom: 8px;">
+                    <strong>Project Accessories</strong>
+                </div>
+        `;
+        orderData.projectAccessories.forEach(acc => {
+            const lineTotal = acc.customerPrice * acc.quantity;
+            customerHTML += `
+                <div class="summary-row">
+                    <span>${acc.name}${acc.quantity > 1 ? ` (x${acc.quantity})` : ''}</span>
+                    <span>${formatCurrency(lineTotal)}</span>
+                </div>
+            `;
+        });
+        customerHTML += '</div>';
+    }
+
     // Add subtotal, discount, installation, and grand total
     if (orderData.enableComparison && orderData.comparisonMotor) {
         // Show comparison columns
@@ -2543,6 +3095,18 @@ function displayOrderQuoteSummary(orderData) {
             `;
         }
 
+        if (orderData.miscInstallAmount > 0) {
+            customerHTML += `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong>${orderData.miscInstallLabel}:</strong>
+                    <div style="display: flex; gap: 20px;">
+                        <strong style="min-width: 120px; text-align: right;">${formatCurrency(orderData.miscInstallAmount)}</strong>
+                        <strong style="min-width: 120px; text-align: right; color: #007bff;">${formatCurrency(orderData.miscInstallAmount)}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
         customerHTML += `
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 1.2rem; font-weight: bold; color: #0056A3; margin-top: 8px; padding-top: 12px; border-top: 2px solid #0056A3;">
                 <strong>Grand Total:</strong>
@@ -2592,6 +3156,15 @@ function displayOrderQuoteSummary(orderData) {
             `;
         }
 
+        if (orderData.miscInstallAmount > 0) {
+            customerHTML += `
+                <div class="summary-row">
+                    <strong>${orderData.miscInstallLabel}:</strong>
+                    <strong>${formatCurrency(orderData.miscInstallAmount)}</strong>
+                </div>
+            `;
+        }
+
         customerHTML += `
             <div class="summary-row total">
                 <strong>Grand Total:</strong>
@@ -2637,6 +3210,9 @@ function displayOrderQuoteSummary(orderData) {
             <strong>Installation Cost (70% to installer):</strong>
             <span>${formatCurrency(orderData.orderTotalInstallationCost)}</span>
         </div>
+        ${orderData.miscInstallAmount > 0 ? `<div class="summary-row" style="font-size: 0.85rem; color: #856404; padding-left: 12px;">
+            <em>Includes ${orderData.miscInstallLabel}: ${formatCurrency(orderData.miscInstallCost)} (70% of ${formatCurrency(orderData.miscInstallAmount)})</em>
+        </div>` : ''}
         ${(orderData.orderTotalWiringCost > 0 || orderData.orderTotalWiringPrice > 0) ? `<div class="summary-row">
             <strong>Wiring Cost (100% to installer):</strong>
             <span>${formatCurrency(orderData.orderTotalWiringPrice)}</span>

@@ -481,6 +481,50 @@
         .linked-opp-banner .unlink-btn:hover {
             color: #533f03;
         }
+
+        /* Photo Grid */
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .photo-thumb {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            background: #eee;
+        }
+
+        .photo-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-thumb .photo-remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 24px;
+            height: 24px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            font-size: 14px;
+            line-height: 24px;
+            text-align: center;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .photo-thumb .photo-remove:hover {
+            background: rgba(200,0,0,0.8);
+        }
     </style>
 </head>
 <body>
@@ -710,6 +754,17 @@
                     </div>
                 </div>
 
+                <!-- Dimension Limit Warning -->
+                <div id="dimensionWarning" style="display: none; background: #fff3f3; border: 2px solid #dc3545; border-radius: 6px; padding: 10px 14px; margin-top: 8px;">
+                    <div style="display: flex; align-items: flex-start; gap: 8px; color: #dc3545; font-size: 0.9rem; font-weight: 600;">
+                        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" style="flex-shrink: 0; margin-top: 1px;">
+                            <path d="M8 1L1 14h14L8 1z" stroke="#dc3545" stroke-width="1.5" fill="none"/>
+                            <path d="M8 6v4M8 11.5v.5" stroke="#dc3545" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <div id="dimensionWarningText"></div>
+                    </div>
+                </div>
+
                 <div class="checkbox-group" id="noTracksGroup" style="display: none;">
                     <input type="checkbox" id="noTracks">
                     <label for="noTracks">No Tracks (Zipper screens only - deduct track costs)</label>
@@ -751,6 +806,20 @@
                 </div>
             </div>
 
+            <!-- Screen Photos -->
+            <div class="form-section" id="photoSection">
+                <h2>Screen Photos <span id="photoCount" style="font-weight: normal; font-size: 0.85rem; color: #666;">(0/5)</span></h2>
+                <p class="info-text">Add site photos for this screen (up to 5)</p>
+                <div id="photoGrid" class="photo-grid"></div>
+                <label class="photo-add-btn" id="photoAddLabel">
+                    <input type="file" id="photoInput" accept="image/*" capture="environment" multiple style="display: none;">
+                    <span class="btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="vertical-align: middle;"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                        Add Photo
+                    </span>
+                </label>
+            </div>
+
             <!-- Comparison and Discount Options -->
             <div class="form-section">
                 <h2>Additional Options</h2>
@@ -766,6 +835,18 @@
                         <select id="comparisonMotor">
                             <option value="">-- Select Option to Compare --</option>
                         </select>
+                    </div>
+                </div>
+
+                <div class="form-row" style="margin-top: 15px;">
+                    <div class="form-group">
+                        <label for="miscInstallLabel">Extra Install Cost Label</label>
+                        <input type="text" id="miscInstallLabel" placeholder="e.g., Scaffolding, Difficult Access">
+                    </div>
+                    <div class="form-group">
+                        <label for="miscInstallAmount">Extra Install Cost ($)</label>
+                        <input type="number" id="miscInstallAmount" min="0" step="0.01" placeholder="0.00">
+                        <small style="color: #666; font-size: 0.85rem;">Separate line item; 70% allocated as installer cost</small>
                     </div>
                 </div>
 
@@ -792,6 +873,18 @@
             <div id="screensInOrder" class="form-section hidden">
                 <h2>Screens in Order (<span id="screenCount">0</span>)</h2>
                 <div id="screensList"></div>
+
+                <!-- Project Accessories (a la carte) -->
+                <div id="projectAccessoriesSection" style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #e0e0e0; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="margin: 0; font-size: 1rem; color: #333;">Project Accessories</h3>
+                        <button class="btn-secondary" onclick="toggleProjectAccessories()" id="toggleProjectAccBtn" style="font-size: 0.85rem; padding: 6px 12px;">
+                            Add Project Accessories
+                        </button>
+                    </div>
+                    <div id="projectAccessoriesList" style="display: none;"></div>
+                </div>
+
                 <div class="button-group" style="margin-top: 15px;">
                     <button class="btn-primary" onclick="calculateOrderQuote()">Calculate Order Quote</button>
                 </div>

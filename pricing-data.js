@@ -13,6 +13,11 @@ const CABLE_SURCHARGE = 125;
 let screensInOrder = [];
 let editingScreenIndex = null;
 
+// Photo state (per-screen, reset between screens)
+let pendingScreenPhotos = [];   // File/Blob objects not yet uploaded
+let existingScreenPhotos = [];  // Already-uploaded photo metadata from R2
+const MAX_PHOTOS_PER_SCREEN = 5;
+
 // Sunair Zipper Track - Gear Operation Pricing
 const sunairZipperGear = {
     '3': {'4': 763.48, '5': 807.98, '6': 852.49, '7': 896.99, '8': 941.50, '9': 985.99, '10': 1030.50, '11': 1075.01, '12': 1119.51, '13': 1164.02, '14': 1208.52, '15': 1253.02, '16': 1297.53},
@@ -142,3 +147,33 @@ const installationPricing = {
 // Customer price: $12/ft = $1/inch
 const WIRING_COST_PER_INCH = 1;   // 100% goes to installer
 const WIRING_PRICE_PER_INCH = 1;  // $12/ft = $1/inch to customer
+
+// Project-level accessories (a la carte, separate from per-screen)
+let projectAccessories = [];  // [{id, name, cost, markup, quantity, customerPrice}]
+
+/**
+ * Get the pricing table for a given track type.
+ * Returns null if track type has no pricing table (e.g., gear/manual).
+ */
+function getPricingTable(trackType) {
+    if (trackType === 'sunair-zipper') return sunairZipperGear;
+    if (trackType === 'sunair-cable') return sunairCableGear;
+    if (trackType === 'fenetex-keder') return fenetexKeder;
+    return null;
+}
+
+/**
+ * For a given pricing table and rounded width, find the max height that has a non-null price.
+ */
+function getMaxHeightForWidth(priceData, widthKey) {
+    const heightMap = priceData[widthKey];
+    if (!heightMap) return 0;
+    let maxH = 0;
+    for (const h of Object.keys(heightMap)) {
+        if (heightMap[h] !== null && heightMap[h] !== undefined) {
+            const hNum = parseInt(h);
+            if (hNum > maxH) maxH = hNum;
+        }
+    }
+    return maxH;
+}

@@ -131,6 +131,21 @@ export default {
       return await handleDeleteQuote(quoteId, env);
     }
 
+    // Route: Serve photo from R2
+    if (url.pathname.startsWith('/r2/quotes/') && request.method === 'GET') {
+      return await handleServePhoto(url.pathname.slice(4), env); // strip "/r2/" prefix
+    }
+
+    // Route: Upload photo to R2
+    if (url.pathname === '/api/photos/upload' && request.method === 'POST') {
+      return await handlePhotoUpload(request, env);
+    }
+
+    // Route: Delete photo from R2
+    if (url.pathname === '/api/photos/delete' && request.method === 'POST') {
+      return await handlePhotoDelete(request, env);
+    }
+
     // Route: Search Airtable Opportunities
     if (url.pathname === '/api/airtable/opportunities/search' && request.method === 'GET') {
       return await handleOpportunitySearch(request, env);
@@ -149,6 +164,108 @@ export default {
     return new Response('Not Found', { status: 404 });
   }
 };
+
+// ─── Photo Serve (R2) ───────────────────────────────────────────────────────
+async function handleServePhoto(key, env) {
+  if (!env.PHOTO_BUCKET) {
+    return new Response('Photo storage not configured', { status: 500 });
+  }
+
+  const object = await env.PHOTO_BUCKET.get(key);
+  if (!object) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Access-Control-Allow-Origin': '*'
+    }
+  });
+}
+
+// ─── Photo Upload (R2) ──────────────────────────────────────────────────────
+async function handlePhotoUpload(request, env) {
+  try {
+    if (!env.PHOTO_BUCKET) {
+      return jsonResponse({ error: 'Photo storage is not configured' }, 500);
+    }
+
+    const formData = await request.formData();
+    const photo = formData.get('photo');
+    const quoteId = formData.get('quoteId');
+    const screenIndex = formData.get('screenIndex');
+
+    if (!photo || !quoteId || screenIndex === null) {
+      return jsonResponse({ error: 'photo, quoteId, and screenIndex are required' }, 400);
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'];
+    if (!allowedTypes.includes(photo.type)) {
+      return jsonResponse({ error: 'Only JPEG, PNG, and HEIC images are allowed' }, 400);
+    }
+
+    // Validate file size (5MB max — photos are compressed client-side)
+    if (photo.size > 5 * 1024 * 1024) {
+      return jsonResponse({ error: 'Photo must be under 5MB' }, 400);
+    }
+
+    // Generate unique R2 key
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 8);
+    const ext = photo.type === 'image/png' ? 'png' : 'jpg';
+    const key = `quotes/${quoteId}/screens/${screenIndex}/${timestamp}-${randomId}.${ext}`;
+
+    // Upload to R2
+    await env.PHOTO_BUCKET.put(key, photo.stream(), {
+      httpMetadata: { contentType: photo.type },
+      customMetadata: { quoteId, screenIndex: String(screenIndex), originalName: photo.name }
+    });
+
+    return jsonResponse({
+      success: true,
+      photo: {
+        key,
+        filename: photo.name,
+        size: photo.size,
+        contentType: photo.type
+      }
+    });
+  } catch (error) {
+    console.error('Error in handlePhotoUpload:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Photo Delete (R2) ──────────────────────────────────────────────────────
+async function handlePhotoDelete(request, env) {
+  try {
+    if (!env.PHOTO_BUCKET) {
+      return jsonResponse({ error: 'Photo storage is not configured' }, 500);
+    }
+
+    const body = await request.json();
+    const { key } = body;
+
+    if (!key) {
+      return jsonResponse({ error: 'key is required' }, 400);
+    }
+
+    // Validate key format to prevent arbitrary deletion
+    if (!key.startsWith('quotes/')) {
+      return jsonResponse({ error: 'Invalid photo key' }, 400);
+    }
+
+    await env.PHOTO_BUCKET.delete(key);
+
+    return jsonResponse({ success: true });
+  } catch (error) {
+    console.error('Error in handlePhotoDelete:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
 
 // ─── Airtable Helper ───────────────────────────────────────────────────────────
 async function airtableFetch(env, path, options = {}) {

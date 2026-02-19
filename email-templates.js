@@ -60,6 +60,22 @@ async function emailQuote() {
         `;
     });
 
+    // Add project accessories to email if any
+    if (orderData.projectAccessories && orderData.projectAccessories.length > 0) {
+        htmlBody += `
+                <div style="background: #f5f0ff; padding: 15px; border-radius: 6px; margin: 10px 0 0 0;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #333;">Project Accessories</h3>`;
+        orderData.projectAccessories.forEach(acc => {
+            const lineTotal = acc.customerPrice * acc.quantity;
+            htmlBody += `
+                    <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+                        <span>${acc.name}${acc.quantity > 1 ? ' (x' + acc.quantity + ')' : ''}</span>
+                        <span style="font-weight: bold;">$${lineTotal.toFixed(2)}</span>
+                    </div>`;
+        });
+        htmlBody += `</div>`;
+    }
+
     htmlBody += `
                 </div>
 
@@ -98,6 +114,14 @@ async function emailQuote() {
                     </div>`;
     }
 
+    if (orderData.miscInstallAmount > 0) {
+        htmlBody += `
+                    <div style="display: flex; justify-content: space-between; margin: 10px 0;">
+                        <span>${orderData.miscInstallLabel || 'Additional Installation'}:</span>
+                        <span style="font-weight: bold;">$${orderData.miscInstallAmount.toFixed(2)}</span>
+                    </div>`;
+    }
+
     htmlBody += `
                     <div style="border-top: 2px solid white; margin-top: 15px; padding-top: 15px; display: flex; justify-content: space-between; font-size: 24px;">
                         <span>Grand Total:</span>
@@ -131,6 +155,15 @@ async function emailQuote() {
         textBody += `  Size: ${screen.actualWidthDisplay} W x ${screen.actualHeightDisplay} H\n\n`;
     });
 
+    if (orderData.projectAccessories && orderData.projectAccessories.length > 0) {
+        textBody += `PROJECT ACCESSORIES\n`;
+        orderData.projectAccessories.forEach(acc => {
+            const lineTotal = acc.customerPrice * acc.quantity;
+            textBody += `  ${acc.name}${acc.quantity > 1 ? ' (x' + acc.quantity + ')' : ''}: $${lineTotal.toFixed(2)}\n`;
+        });
+        textBody += '\n';
+    }
+
     textBody += `PRICING\n`;
     textBody += `Materials Subtotal: $${orderData.orderTotalMaterialsPrice.toFixed(2)}\n`;
     if (orderData.discountPercent > 0) {
@@ -140,6 +173,9 @@ async function emailQuote() {
     textBody += `Installation: $${orderData.orderTotalInstallationPrice.toFixed(2)}\n`;
     if (orderData.orderTotalWiringPrice > 0) {
         textBody += `Wiring: $${orderData.orderTotalWiringPrice.toFixed(2)}\n`;
+    }
+    if (orderData.miscInstallAmount > 0) {
+        textBody += `${orderData.miscInstallLabel || 'Additional Installation'}: $${orderData.miscInstallAmount.toFixed(2)}\n`;
     }
     textBody += `GRAND TOTAL: $${orderData.orderTotalPrice.toFixed(2)}\n\n`;
     textBody += `This quote is valid for 30 days.\n\nBest regards,\nRoll-A-Shield Team`;

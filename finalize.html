@@ -181,6 +181,47 @@
         .hidden {
             display: none !important;
         }
+
+        /* Photo sections */
+        .photo-grid-finalize {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .photo-grid-finalize .photo-thumb {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            background: #eee;
+        }
+        .photo-grid-finalize .photo-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            cursor: pointer;
+        }
+        .photo-grid-finalize .photo-thumb .photo-remove {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 22px;
+            height: 22px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            font-size: 13px;
+            line-height: 22px;
+            text-align: center;
+            cursor: pointer;
+            padding: 0;
+        }
+        .photo-grid-finalize .photo-thumb .photo-remove:hover {
+            background: rgba(200,0,0,0.8);
+        }
     </style>
 </head>
 <body>
@@ -283,6 +324,108 @@
             if (orderData && orderData.measurements) {
                 finalMeasurements = orderData.measurements;
             }
+        }
+
+        // ─── Photo helpers (finalize) ────────────────────────────────────────
+
+        function compressPhotoFinalize(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const maxDim = 2048;
+                    let w = img.width, h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                        else { w = Math.round(w * maxDim / h); h = maxDim; }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Compression failed')), 'image/jpeg', 0.75);
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Load failed')); };
+                img.src = url;
+            });
+        }
+
+        async function handleInstallationPhotoSelect(event, screenIndex) {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
+
+            const screen = orderData.screens[screenIndex];
+            if (!screen.photos) screen.photos = [];
+            const currentInstall = screen.photos.filter(p => p.category === 'installation').length;
+            const remaining = 5 - currentInstall;
+
+            if (remaining <= 0) {
+                alert('Maximum 5 installation photos per screen.');
+                event.target.value = '';
+                return;
+            }
+
+            const toProcess = files.slice(0, remaining);
+            if (toProcess.length < files.length) {
+                alert(`Only adding ${toProcess.length} of ${files.length} photos (limit: 5).`);
+            }
+
+            for (const file of toProcess) {
+                try {
+                    const compressed = await compressPhotoFinalize(file);
+                    const formData = new FormData();
+                    formData.append('photo', compressed, file.name || 'photo.jpg');
+                    formData.append('quoteId', orderData.id.toString());
+                    formData.append('screenIndex', String(screenIndex));
+
+                    const resp = await fetch(`${WORKER_URL}/api/photos/upload`, { method: 'POST', body: formData });
+                    const result = await resp.json();
+                    if (result.success && result.photo) {
+                        screen.photos.push({
+                            key: result.photo.key,
+                            url: `${WORKER_URL}/r2/${result.photo.key}`,
+                            filename: result.photo.filename,
+                            size: result.photo.size,
+                            contentType: result.photo.contentType,
+                            uploadedAt: new Date().toISOString(),
+                            category: 'installation'
+                        });
+                    }
+                } catch (err) {
+                    console.error('Installation photo upload failed:', err);
+                }
+            }
+
+            event.target.value = '';
+            await saveMeasurements();
+            displayMeasurementForm(screenIndex);
+        }
+
+        async function removeInstallationPhoto(screenIndex, photoIndexInCategory) {
+            const screen = orderData.screens[screenIndex];
+            const installPhotos = (screen.photos || []).filter(p => p.category === 'installation');
+            const photo = installPhotos[photoIndexInCategory];
+            if (!photo) return;
+
+            // Remove from screen.photos array
+            const globalIndex = screen.photos.indexOf(photo);
+            if (globalIndex !== -1) screen.photos.splice(globalIndex, 1);
+
+            // Delete from R2
+            if (photo.key) {
+                try {
+                    await fetch(`${WORKER_URL}/api/photos/delete`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: photo.key })
+                    });
+                } catch (err) {
+                    console.error('Failed to delete photo from R2:', err);
+                }
+            }
+
+            await saveMeasurements();
+            displayMeasurementForm(screenIndex);
         }
 
         async function saveMeasurements() {
@@ -642,6 +785,43 @@
                 <div class="form-section">
                     <h3>Screen-Specific Comments</h3>
                     <textarea id="screenComments" rows="3" style="width: 100%;" placeholder="Any notes specific to this screen...">${saved.screenComments || ''}</textarea>
+                </div>
+
+                <!-- Site Photos (from quote, read-only) -->
+                ${(screen.photos || []).filter(p => p.category === 'site').length > 0 ? `
+                <div class="form-section">
+                    <h3>Site Photos (from quote)</h3>
+                    <div class="photo-grid-finalize">
+                        ${(screen.photos || []).filter(p => p.category === 'site').map(p => `
+                            <div class="photo-thumb">
+                                <img src="${p.url || p.key}" alt="${p.filename || 'Site photo'}" onclick="window.open(this.src, '_blank')">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+
+                <!-- Installation Photos -->
+                <div class="form-section">
+                    <h3>Installation Photos <span id="installPhotoCount-${index}" style="font-weight: normal; font-size: 0.85rem; color: #666;">(${(screen.photos || []).filter(p => p.category === 'installation').length}/5)</span></h3>
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 8px;">Add photos highlighting installation-related concerns</p>
+                    <div id="installPhotoGrid-${index}" class="photo-grid-finalize">
+                        ${(screen.photos || []).filter(p => p.category === 'installation').map((p, pi) => `
+                            <div class="photo-thumb">
+                                <img src="${p.url || p.key}" alt="${p.filename || 'Installation photo'}" onclick="window.open(this.src, '_blank')">
+                                <button class="photo-remove" onclick="removeInstallationPhoto(${index}, ${pi})" title="Remove">&times;</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${(screen.photos || []).filter(p => p.category === 'installation').length < 5 ? `
+                    <label style="margin-top: 8px; display: inline-block;">
+                        <input type="file" accept="image/*" capture="environment" multiple style="display: none;" onchange="handleInstallationPhotoSelect(event, ${index})">
+                        <span style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 14px; background: #0056A3; color: white; border-radius: 4px; font-size: 0.9rem;">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            Add Installation Photo
+                        </span>
+                    </label>
+                    ` : ''}
                 </div>
 
                 <button class="save-button" onclick="saveCurrentScreen()">Save Measurements for Screen ${index + 1}</button>
@@ -1050,8 +1230,54 @@
                     textBody += `SCREEN NOTES:\n${meas.screenComments}\n\n`;
                 }
 
+                // Photo links
+                const screenPhotos = screen.photos || [];
+                const sitePhotos = screenPhotos.filter(p => p.category === 'site');
+                const installPhotos = screenPhotos.filter(p => p.category === 'installation');
+                if (sitePhotos.length > 0 || installPhotos.length > 0) {
+                    htmlBody += `<h3 style="color: #333; margin-top: 20px;">PHOTOS</h3>`;
+                    textBody += `PHOTOS:\n`;
+                    if (sitePhotos.length > 0) {
+                        htmlBody += `<p><strong>Site Photos (${sitePhotos.length}):</strong></p><ul>`;
+                        textBody += `Site Photos (${sitePhotos.length}):\n`;
+                        sitePhotos.forEach(p => {
+                            htmlBody += `<li><a href="${p.url}" target="_blank">${p.filename || 'Photo'}</a></li>`;
+                            textBody += `  - ${p.url}\n`;
+                        });
+                        htmlBody += `</ul>`;
+                    }
+                    if (installPhotos.length > 0) {
+                        htmlBody += `<p><strong>Installation Photos (${installPhotos.length}):</strong></p><ul>`;
+                        textBody += `Installation Photos (${installPhotos.length}):\n`;
+                        installPhotos.forEach(p => {
+                            htmlBody += `<li><a href="${p.url}" target="_blank">${p.filename || 'Photo'}</a></li>`;
+                            textBody += `  - ${p.url}\n`;
+                        });
+                        htmlBody += `</ul>`;
+                    }
+                    textBody += `\n`;
+                }
+
                 htmlBody += `</div>`;
             });
+
+            // Project-level accessories
+            const projAcc = orderData.projectAccessories || [];
+            if (projAcc.length > 0) {
+                htmlBody += `
+                    <div style="border: 2px solid #6f42c1; padding: 20px; margin: 20px 0; background: #f5f0ff;">
+                        <h2 style="color: #6f42c1; margin-top: 0;">PROJECT ACCESSORIES</h2>
+                        <ul>
+                `;
+                textBody += `\n========================================\n`;
+                textBody += `PROJECT ACCESSORIES:\n`;
+                projAcc.forEach(acc => {
+                    htmlBody += `<li>${acc.name}${acc.quantity > 1 ? ' (x' + acc.quantity + ')' : ''}</li>`;
+                    textBody += `  - ${acc.name}${acc.quantity > 1 ? ' (x' + acc.quantity + ')' : ''}\n`;
+                });
+                htmlBody += `</ul></div>`;
+                textBody += `\n`;
+            }
 
             if (productionComments) {
                 htmlBody += `

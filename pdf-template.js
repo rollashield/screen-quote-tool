@@ -77,6 +77,17 @@ function generateQuotePDF(data) {
     </tr>
   `).join('');
 
+  // Project accessories rows (shown after screens, before pricing summary)
+  const projAccRows = (data.projectAccessories || []).map(acc => `
+    <tr style="background-color: #f5f0ff;">
+      <td colspan="7" style="padding: 8px; color: #4d4d4d; font-style: italic;">
+        ${acc.name}${acc.quantity > 1 ? ' (x' + acc.quantity + ')' : ''}
+      </td>
+      <td style="padding: 8px; text-align: right; color: #2a2d2c;">$${formatCurrency(acc.lineTotal)}</td>
+      ${hasComparison ? `<td style="padding: 8px; text-align: right; color: #0071bc;">$${formatCurrency(acc.lineTotal)}</td>` : ''}
+    </tr>
+  `).join('');
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -191,6 +202,7 @@ function generateQuotePDF(data) {
         </thead>
         <tbody>
           ${screenRows}
+          ${projAccRows}
         </tbody>
       </table>
     </div>
@@ -241,6 +253,23 @@ function generateQuotePDF(data) {
             ${hasComparison ? `
             <td style="padding: 8px 12px; text-align: right; color: #0071bc;">
               $${formatCurrency(data.pricing.wiring)}
+            </td>
+            ` : ''}
+          </tr>
+          ` : ''}
+
+          ${data.pricing.miscInstallAmount > 0 ? `
+          <tr>
+            <td colspan="7"></td>
+            <td style="padding: 8px 12px; text-align: right; color: #4d4d4d;">
+              ${data.pricing.miscInstallLabel || 'Additional Installation'}:
+            </td>
+            <td style="padding: 8px 12px; text-align: right; color: #2a2d2c;">
+              $${formatCurrency(data.pricing.miscInstallAmount)}
+            </td>
+            ${hasComparison ? `
+            <td style="padding: 8px 12px; text-align: right; color: #0071bc;">
+              $${formatCurrency(data.pricing.miscInstallAmount)}
             </td>
             ` : ''}
           </tr>
