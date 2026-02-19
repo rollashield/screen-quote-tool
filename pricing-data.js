@@ -140,5 +140,5 @@ const installationPricing = {
 
 // Wiring pricing (for RTS motors requiring electrical work)
 // Customer price: $12/ft = $1/inch
-const WIRING_COST_PER_INCH = 0;   // TODO: cost to company per inch (TBD)
+const WIRING_COST_PER_INCH = 1;   // 100% goes to installer
 const WIRING_PRICE_PER_INCH = 1;  // $12/ft = $1/inch to customer
