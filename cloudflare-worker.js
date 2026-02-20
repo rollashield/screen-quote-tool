@@ -712,13 +712,15 @@ async function handleSaveQuote(request, env) {
     const quoteId = quoteData.id || Date.now().toString();
     const timestamp = new Date().toISOString();
 
-    // Check if this quote already exists (preserve Airtable ID + signature/payment data)
+    // Check if this quote already exists (preserve Airtable ID + signature/payment/quote number)
     // Must happen BEFORE INSERT OR REPLACE which resets columns to null
     let existingAirtableQuoteId = null;
+    let existingQuoteNumber = null;
+    let existingCreatedAt = null;
     let existingSignatureData = {};
     try {
       const existingRow = await env.DB.prepare(
-        `SELECT airtable_quote_id, quote_number,
+        `SELECT airtable_quote_id, quote_number, created_at,
                 quote_status, signing_token, signing_token_expires_at,
                 signature_data, signed_at, signer_name, signer_ip,
                 signing_method, signature_sent_at,
@@ -730,6 +732,8 @@ async function handleSaveQuote(request, env) {
         if (existingRow.airtable_quote_id) {
           existingAirtableQuoteId = existingRow.airtable_quote_id;
         }
+        existingQuoteNumber = existingRow.quote_number;
+        existingCreatedAt = existingRow.created_at;
         existingSignatureData = {
           quote_status: existingRow.quote_status || 'draft',
           signing_token: existingRow.signing_token,
@@ -753,14 +757,16 @@ async function handleSaveQuote(request, env) {
       console.error('Error checking existing quote data:', lookupErr);
     }
 
-    // Generate quote number
-    let quoteNumber = null;
-    try {
-      quoteNumber = await generateQuoteNumber(env);
-    } catch (qnError) {
-      console.error('Error generating quote number:', qnError);
-      // Fallback: use timestamp-based number
-      quoteNumber = `Q${timestamp.slice(2, 4)}${timestamp.slice(5, 7)}-${Date.now().toString().slice(-3)}`;
+    // Preserve existing quote number on re-save; only generate for new quotes
+    let quoteNumber = existingQuoteNumber;
+    if (!quoteNumber) {
+      try {
+        quoteNumber = await generateQuoteNumber(env);
+      } catch (qnError) {
+        console.error('Error generating quote number:', qnError);
+        // Fallback: use timestamp-based number
+        quoteNumber = `Q${timestamp.slice(2, 4)}${timestamp.slice(5, 7)}-${Date.now().toString().slice(-3)}`;
+      }
     }
 
     // Store quote number on the data object for the Airtable notes builder
@@ -822,7 +828,7 @@ async function handleSaveQuote(request, env) {
       quoteData.orderTotalPrice || quoteData.totalPrice || 0,
       quoteData.screens?.length || 0,
       JSON.stringify(quoteData),
-      timestamp,
+      existingCreatedAt || timestamp,
       timestamp,
       quoteData.airtableOpportunityId || null,
       quoteData.airtableContactId || null,

@@ -100,6 +100,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - **Screen object states**: `phase: 'opening'` (Phase 1 only, no pricing) or `phase: 'configured'` (full pricing)
   - **Key functions**: `addOpening()`, `applyConfiguration()`, `computeScreenPricing()` (pure, no DOM), `saveDraft()`
   - **Quote ID persistence**: `currentQuoteId` global tracks the active quote's DB ID across recalculate/re-save cycles. Set on `loadQuote()`, reused by `calculateOrderQuote()`, `saveDraft()`, `saveQuote()`. Cleared by `resetForm()`. Prevents duplicate DB rows when editing existing quotes.
+  - **Quote number stability**: Worker preserves the existing `quote_number` on re-save (only generates new numbers for brand-new quotes). Also preserves `created_at` timestamp on re-save.
   - Airtable opportunity search & auto-fill customer info
   - Sales rep selection (synced from Airtable)
   - Screen-level accessories (per screen, in Phase 2)
