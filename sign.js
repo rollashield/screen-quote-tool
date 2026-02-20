@@ -82,6 +82,22 @@ async function fetchInPersonQuote(id) {
 // ─── Render Quote ────────────────────────────────────────────────────────────
 function renderQuote(data) {
     const quoteData = data.quote;
+
+    // Guard: block rendering for draft/unconfigured quotes
+    const unconfigured = (quoteData.screens || []).filter(s => s.phase === 'opening');
+    if (unconfigured.length > 0) {
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.getElementById('signContainer').style.display = 'block';
+        document.getElementById('quoteContent').innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: #c00;">
+                <h2>Quote Not Ready</h2>
+                <p>This quote is still in draft — ${unconfigured.length} opening(s) need product configuration.</p>
+                <p>Please ask your sales representative to complete the configuration before signing.</p>
+            </div>
+        `;
+        return;
+    }
+
     const templateData = mapOrderDataForSigning(quoteData, data.quoteNumber);
     const htmlString = generateQuotePDF(templateData);
 

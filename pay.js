@@ -66,7 +66,18 @@ function populatePage(quoteResult, paymentInfo) {
     // quoteResult.quote is the parsed order data (already stripped of internal fields)
     const orderData = quoteResult.quote;
 
+    // Guard: block payment page for draft/unconfigured quotes
     const totalPrice = orderData.orderTotalPrice || 0;
+    if (totalPrice === 0 || (orderData.screens || []).some(s => s.phase === 'opening')) {
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.body.innerHTML = `
+            <div style="text-align: center; padding: 60px 20px; font-family: 'Open Sans', sans-serif;">
+                <h2 style="color: #c00;">Quote Not Ready</h2>
+                <p>This quote has not been finalized yet. Please contact your sales representative.</p>
+            </div>
+        `;
+        return;
+    }
     storedTotalPrice = totalPrice;
     const depositAmount = totalPrice / 2;
     const customerName = orderData.customerName || 'Customer';

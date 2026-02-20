@@ -89,14 +89,23 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
 
 ## Pages & Flows
 - `index.html` — Quote builder (sales rep tool)
+  - **Two-phase screen entry workflow:**
+    - **Phase 1 "Document Opening"**: Name, dimensions, frame color, installation/wiring, photos — captured on-site walking each opening
+    - **Phase 2 "Configure Screens"**: Track type, operator/motor, fabric, accessories — applied in batch to selected openings after all are measured
+    - Opening cards (amber/dashed) vs configured cards (blue/solid) with status bar
+    - Batch configuration: select multiple openings → apply same config to all at once
+    - Single-pass still supported: if all fields filled, "Add to Order" creates configured screen directly
+    - Draft save: save after Phase 1 only (`orderTotalPrice: 0`), load later to finish configuration
+    - `calculateOrderQuote()` blocks if any screens have `phase: 'opening'`
+  - **Screen object states**: `phase: 'opening'` (Phase 1 only, no pricing) or `phase: 'configured'` (full pricing)
+  - **Key functions**: `addOpening()`, `applyConfiguration()`, `computeScreenPricing()` (pure, no DOM), `saveDraft()`
   - Airtable opportunity search & auto-fill customer info
   - Sales rep selection (synced from Airtable)
-  - Screen configuration: track type, fabric, color, dimensions, motor/operator
-  - Screen-level accessories (per screen)
+  - Screen-level accessories (per screen, in Phase 2)
   - Project-level accessories (per order, with quantities)
-  - Site photo upload (stored in R2)
-  - 4-Week Install Guarantee option (restricts to Gaposa motors, solar priced at RTS rate)
-  - Dimension validation warnings (max width/height by track type)
+  - Site photo upload (stored in R2, captured in Phase 1)
+  - 4-Week Install Guarantee option (in Phase 2; restricts to Gaposa motors, solar priced at RTS rate)
+  - Dimension validation warnings (max width/height by track type, shown when track selected)
   - PDF generation via html2pdf.js + pdf-template.js
   - Combined "Send Quote + Send for Signature" action
   - Duplicate/edit/remove screens
@@ -116,9 +125,21 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - Production comments textarea
   - Sends production email to production team
 
+### Draft/unconfigured quote guards
+All downstream pages and worker endpoints block draft quotes with unconfigured openings:
+- `sign.js` — `renderQuote()` shows "Quote Not Ready" message
+- `pay.js` — `populatePage()` shows "Quote Not Ready" message
+- `finalize.html` — `loadOrderData()` redirects to index.html with alert
+- `cloudflare-worker.js` — `handleSendForSignature()` returns 400 error
+- `app.js` — `mapOrderDataToTemplate()` throws error (blocks PDF generation)
+
+### Backward compatibility
+Existing saved quotes (no `phase` field on screens) default to `phase: 'configured'` when loaded.
+
 ### Design docs (historical — features are implemented)
 - PDF template: `docs/pdf-template-plan.md`
 - Signature & payment feature: `docs/signature-feature-plan.md`
+- Two-phase screen entry: `.claude/plans/synthetic-baking-pine.md`
 
 ## Payments
 - **Clover**: Credit card via static permanent payment link (configured in `/api/payment-info`)

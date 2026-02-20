@@ -346,6 +346,13 @@
                 const result = await response.json();
 
                 if (response.ok && result.success && result.quote) {
+                    // Guard: block finalization for draft/unconfigured quotes
+                    const unconfigured = (result.quote.screens || []).filter(s => s.phase === 'opening');
+                    if (unconfigured.length > 0) {
+                        alert(`This quote has ${unconfigured.length} unconfigured opening(s). Please complete configuration before finalizing.`);
+                        window.location.href = 'index.html';
+                        return;
+                    }
                     orderData = result.quote;
                 } else {
                     alert('Order not found. Returning to quote page.');

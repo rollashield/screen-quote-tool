@@ -1019,6 +1019,13 @@ async function handleSendForSignature(quoteId, request, env) {
     }
 
     const quoteData = JSON.parse(row.quote_data);
+
+    // Guard: block signing for draft/unconfigured quotes
+    const unconfigured = (quoteData.screens || []).filter(s => s.phase === 'opening');
+    if (unconfigured.length > 0) {
+      return jsonResponse({ error: `Quote has ${unconfigured.length} unconfigured opening(s). Complete configuration before sending for signature.` }, 400);
+    }
+
     const customerEmail = quoteData.customerEmail || row.customer_email;
 
     if (!customerEmail) {

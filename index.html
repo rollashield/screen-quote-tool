@@ -606,6 +606,27 @@
             #opportunitySearchBar .form-group {
                 min-width: 0 !important;
             }
+
+            /* Phase 2 opening selector */
+            #openingSelector {
+                padding: 8px !important;
+            }
+            #openingSelector > div:first-child {
+                flex-direction: column;
+                gap: 6px !important;
+            }
+
+            /* Apply button full-width */
+            #applyConfigBtn {
+                width: 100%;
+            }
+
+            /* Screen card header on mobile */
+            .screen-card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
         }
     </style>
 </head>
@@ -757,71 +778,22 @@
                 </div>
             </div>
 
-            <!-- 4-Week Install Guarantee -->
-            <div class="form-section" id="guaranteeSection" style="background: #e8f5e9; border-left: 4px solid #4caf50;">
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
-                    <input type="checkbox" id="fourWeekGuarantee" onchange="handleGuaranteeToggle()">
-                    4-Week Install Guarantee
-                </label>
-                <p style="margin-top: 6px; font-size: 13px; color: #4d4d4d;">
-                    Limits motor selection to Gaposa only. Solar motors priced at RTS rate (saves ~$350/screen).
-                </p>
-            </div>
+            <!-- ═══ PHASE 1: Document Opening ═══ -->
+            <div class="screen-entry-group" id="phase1Section">
 
-            <!-- Screen Entry Group: Config + Accessories + Photos -->
-            <div class="screen-entry-group">
-
-            <!-- Screen Configuration -->
             <div class="form-section">
-                <h2>Screen Configuration</h2>
+                <h2>
+                    <span style="display: inline-flex; align-items: center; gap: 8px;">
+                        <span style="background: #004a95; color: white; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">1</span>
+                        Document Opening
+                    </span>
+                </h2>
+                <p class="info-text">Walk the site — name each opening, measure, and snap a photo</p>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="screenName">Screen Name (optional)</label>
-                        <input type="text" id="screenName" placeholder="e.g., Front Patio, Main Window">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="trackType">Track/System Type *</label>
-                        <select id="trackType" required>
-                            <option value="">-- Select Track Type --</option>
-                            <option value="sunair-zipper">Sunair Zipper Track</option>
-                            <option value="sunair-cable">Sunair Cable</option>
-                            <option value="fenetex-keder">Fenetex Keder Track</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="operatorType">Operator/Motor *</label>
-                        <select id="operatorType" required disabled>
-                            <option value="">-- Select Track Type First --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="fabricColor">Fabric Color *</label>
-                        <select id="fabricColor" required>
-                            <option value="">-- Select Fabric Color --</option>
-                            <option value="T18FVT061-Espresso">Espresso Texture</option>
-                            <option value="T18FVT054-Tobacco">Tobacco</option>
-                            <option value="T18FVT061-Charcoal">Charcoal</option>
-                            <option value="T18FVT059-Granite">Granite</option>
-                            <option value="T18FVT060-Black">Black</option>
-                            <option value="T18FVT056-Sable">Sable</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="frameColor">Frame Color *</label>
-                        <select id="frameColor" required>
-                            <option value="">-- Select Frame Color --</option>
-                            <option value="white">White</option>
-                            <option value="mocha">Mocha</option>
-                            <option value="taupe">Taupe</option>
-                            <option value="brown">Brown</option>
-                            <option value="bronze">Bronze</option>
-                            <option value="black">Black</option>
-                            <option value="grey">Grey</option>
-                        </select>
+                        <label for="screenName">Opening Name</label>
+                        <input type="text" id="screenName" placeholder="e.g., Front Patio, Kitchen Window">
                     </div>
                 </div>
 
@@ -861,6 +833,135 @@
                     </div>
                 </div>
 
+                <div id="dimensionsSummary" class="alert alert-info" style="display: none; margin-top: 15px;">
+                    <strong>Pricing Dimensions:</strong> <span id="pricingDimensions"></span>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="frameColor">Frame Color</label>
+                        <select id="frameColor">
+                            <option value="">-- Select Frame Color --</option>
+                            <option value="white">White</option>
+                            <option value="mocha">Mocha</option>
+                            <option value="taupe">Taupe</option>
+                            <option value="brown">Brown</option>
+                            <option value="bronze">Bronze</option>
+                            <option value="black">Black</option>
+                            <option value="grey">Grey</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="includeInstallation" checked>
+                    <label for="includeInstallation">Include Installation</label>
+                </div>
+
+                <!-- Wiring Distance -->
+                <div id="wiringGroup" style="display: none; margin-top: 10px; padding: 12px; background: #f0f8ff; border-radius: 6px; border: 1px solid #d0e4f5;">
+                    <div class="form-row" style="align-items: end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="wiringDistance" style="font-size: 0.85rem; font-weight: 600;">Wiring Distance (inches from power source to motor)</label>
+                            <input type="number" id="wiringDistance" min="0" step="1" placeholder="0 = no wiring needed" style="max-width: 250px;">
+                        </div>
+                    </div>
+                    <p style="font-size: 0.8rem; color: #666; margin-top: 6px; margin-bottom: 0;">Enter distance in inches if wiring is needed. Leave blank or 0 if power is already at location.</p>
+                </div>
+
+                <!-- Screen Photos -->
+                <div style="margin-top: 15px;">
+                    <h3 style="font-size: 0.95rem; margin: 0 0 8px 0;">
+                        Site Photos <span id="photoCount" style="font-weight: normal; font-size: 0.85rem; color: #666;">(0/5)</span>
+                    </h3>
+                    <div id="photoGrid" class="photo-grid"></div>
+                    <label class="photo-add-btn" id="photoAddLabel">
+                        <input type="file" id="photoInput" accept="image/*" capture="environment" multiple style="display: none;">
+                        <span class="btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="vertical-align: middle;"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            Add Photo
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            </div><!-- end #phase1Section -->
+
+            <!-- Phase 1 Action Buttons -->
+            <div class="button-group">
+                <button id="addOpeningBtn" class="btn-primary" onclick="addOpening()">Add Opening</button>
+                <button id="addToOrderBtn" class="btn-primary" onclick="addToOrder()" style="display: none;">Add to Order</button>
+                <button class="btn-secondary" onclick="resetForm()">Clear Form</button>
+            </div>
+
+            <!-- ═══ PHASE 2: Configure Screens ═══ -->
+            <div id="phase2Section" style="display: none;">
+
+            <div class="screen-entry-group">
+
+            <div class="form-section" style="border-left: 4px solid #004a95;">
+                <h2>
+                    <span style="display: inline-flex; align-items: center; gap: 8px;">
+                        <span style="background: #004a95; color: white; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">2</span>
+                        Configure Screens
+                    </span>
+                </h2>
+                <p class="info-text">Select openings and choose product configuration</p>
+
+                <!-- Opening Selector -->
+                <div id="openingSelector" style="margin-bottom: 18px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <strong style="font-size: 0.9rem;">Select Openings to Configure:</strong>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-secondary" onclick="selectAllOpenings()" style="font-size: 0.8rem; padding: 4px 10px;">Select All</button>
+                            <button class="btn-secondary" onclick="selectNoOpenings()" style="font-size: 0.8rem; padding: 4px 10px;">Select None</button>
+                        </div>
+                    </div>
+                    <div id="openingSelectorList"></div>
+                </div>
+
+                <!-- 4-Week Install Guarantee -->
+                <div id="guaranteeSection" style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
+                        <input type="checkbox" id="fourWeekGuarantee" onchange="handleGuaranteeToggle()">
+                        4-Week Install Guarantee
+                    </label>
+                    <p style="margin-top: 6px; font-size: 13px; color: #4d4d4d; margin-bottom: 0;">
+                        Limits motor selection to Gaposa only. Solar motors priced at RTS rate (saves ~$350/screen).
+                    </p>
+                </div>
+
+                <!-- Product Configuration Fields -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="trackType">Track/System Type *</label>
+                        <select id="trackType" required>
+                            <option value="">-- Select Track Type --</option>
+                            <option value="sunair-zipper">Sunair Zipper Track</option>
+                            <option value="sunair-cable">Sunair Cable</option>
+                            <option value="fenetex-keder">Fenetex Keder Track</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="operatorType">Operator/Motor *</label>
+                        <select id="operatorType" required disabled>
+                            <option value="">-- Select Track Type First --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="fabricColor">Fabric Color *</label>
+                        <select id="fabricColor" required>
+                            <option value="">-- Select Fabric Color --</option>
+                            <option value="T18FVT061-Espresso">Espresso Texture</option>
+                            <option value="T18FVT054-Tobacco">Tobacco</option>
+                            <option value="T18FVT061-Charcoal">Charcoal</option>
+                            <option value="T18FVT059-Granite">Granite</option>
+                            <option value="T18FVT060-Black">Black</option>
+                            <option value="T18FVT056-Sable">Sable</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="checkbox-group" id="noTracksGroup" style="display: none;">
                     <input type="checkbox" id="noTracks">
                     <label for="noTracks">No Tracks (Zipper screens only - deduct track costs)</label>
@@ -872,61 +973,31 @@
                     </div>
                 </div>
 
-                <div id="dimensionsSummary" class="alert alert-info" style="display: none; margin-top: 15px;">
-                    <strong>Pricing Dimensions:</strong> <span id="pricingDimensions"></span>
-                </div>
-
-                <div class="checkbox-group">
-                    <input type="checkbox" id="includeInstallation" checked>
-                    <label for="includeInstallation">Include Installation</label>
-                </div>
-
-                <!-- Wiring Distance (RTS motors with installation only) -->
-                <div id="wiringGroup" style="display: none; margin-top: 10px; padding: 12px; background: #f0f8ff; border-radius: 6px; border: 1px solid #d0e4f5;">
-                    <div class="form-row" style="align-items: end;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label for="wiringDistance" style="font-size: 0.85rem; font-weight: 600;">Wiring Distance (inches from power source to motor)</label>
-                            <input type="number" id="wiringDistance" min="0" step="1" placeholder="0 = no wiring needed" style="max-width: 250px;">
-                        </div>
+                <!-- Accessories -->
+                <div id="accessoriesSection" style="margin-top: 15px;">
+                    <h3 style="font-size: 0.95rem; margin: 0 0 8px 0;">Remotes & Accessories</h3>
+                    <p class="info-text">Available options will update based on motor type selected</p>
+                    <div class="accessories-section" id="accessoriesList">
+                        <p>Please select a track type with motor operation to see available accessories.</p>
                     </div>
-                    <p style="font-size: 0.8rem; color: #666; margin-top: 6px; margin-bottom: 0;">Enter the distance in inches if electrical wiring is needed for the RTS motor. Leave blank or 0 if power is already at the motor location.</p>
                 </div>
-            </div>
 
-            <!-- Accessories -->
-            <div class="form-section" id="accessoriesSection">
-                <h2>Remotes & Accessories</h2>
-                <p class="info-text">Available options will update based on motor type selected</p>
-                <div class="accessories-section" id="accessoriesList">
-                    <p>Please select a screen type with motor operation to see available accessories.</p>
+                <!-- Apply Button -->
+                <div class="button-group" style="margin-top: 15px;">
+                    <button id="applyConfigBtn" class="btn-primary" onclick="applyConfiguration()" style="background: #004a95;">
+                        Apply to Selected (0)
+                    </button>
                 </div>
-            </div>
-
-            <!-- Screen Photos -->
-            <div class="form-section" id="photoSection">
-                <h2>Screen Photos <span id="photoCount" style="font-weight: normal; font-size: 0.85rem; color: #666;">(0/5)</span></h2>
-                <p class="info-text">Add site photos for this screen (up to 5)</p>
-                <div id="photoGrid" class="photo-grid"></div>
-                <label class="photo-add-btn" id="photoAddLabel">
-                    <input type="file" id="photoInput" accept="image/*" capture="environment" multiple style="display: none;">
-                    <span class="btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="vertical-align: middle;"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                        Add Photo
-                    </span>
-                </label>
             </div>
 
             </div><!-- end .screen-entry-group -->
 
-            <!-- Action Buttons -->
-            <div class="button-group">
-                <button id="addToOrderBtn" class="btn-primary" onclick="addToOrder()">Add to Order</button>
-                <button class="btn-secondary" onclick="resetForm()">Clear Form</button>
-            </div>
+            </div><!-- end #phase2Section -->
 
             <!-- Screens in Order -->
             <div id="screensInOrder" class="form-section hidden">
                 <h2>Screens in Order (<span id="screenCount">0</span>)</h2>
+                <div id="screenStatusBar" style="display: none; font-size: 0.85rem; color: #555; margin-bottom: 12px; padding: 8px 12px; background: #f0f4f8; border-radius: 6px;"></div>
                 <div id="screensList"></div>
 
                 <!-- Project Accessories (a la carte) -->
@@ -985,6 +1056,7 @@
 
                 <div class="button-group" style="margin-top: 15px;">
                     <button class="btn-primary" onclick="calculateOrderQuote()">Calculate Order Quote</button>
+                    <button class="btn-secondary" onclick="saveDraft()" id="saveDraftBtn">Save Draft</button>
                 </div>
             </div>
 
