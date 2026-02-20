@@ -516,17 +516,26 @@
 
             orderData.screens.forEach((screen, index) => {
                 const isComplete = finalMeasurements[index] && finalMeasurements[index].complete;
+                const sitePhotos = (screen.photos || []).filter(p => p.category === 'site').length;
+                const installPhotos = (screen.photos || []).filter(p => p.category === 'installation').length;
+                const totalPhotos = sitePhotos + installPhotos;
+
                 const card = document.createElement('div');
                 card.className = 'screen-card' + (isComplete ? ' completed' : '');
                 card.onclick = () => selectScreen(index);
 
                 card.innerHTML = `
-                    <h4>Screen ${index + 1}</h4>
+                    <h4>${screen.screenName || 'Screen ' + (index + 1)}</h4>
                     <div style="font-size: 0.85rem; color: #666;">
                         ${screen.trackTypeName}<br>
                         ${screen.operatorTypeName}<br>
                         ${screen.actualWidthDisplay} x ${screen.actualHeightDisplay}
                     </div>
+                    ${totalPhotos > 0 ? `
+                    <div style="font-size: 0.8rem; color: #0071bc; margin-top: 4px;">
+                        📷 ${totalPhotos} photo${totalPhotos !== 1 ? 's' : ''}${installPhotos > 0 ? ' (' + installPhotos + ' install)' : ''}
+                    </div>
+                    ` : ''}
                     <div class="status">
                         ${isComplete ? '✓ Measurements Complete' : '○ Pending Measurements'}
                     </div>
@@ -591,7 +600,7 @@
             quotedHeightInches = screen.totalHeightInches || 0;
 
             form.innerHTML = `
-                <h2 style="color: #0056A3; margin-bottom: 15px;">Screen ${index + 1} - Final Measurements</h2>
+                <h2 style="color: #0056A3; margin-bottom: 15px;">${screen.screenName || 'Screen ' + (index + 1)} - Final Measurements</h2>
 
                 <!-- Quote Reference -->
                 <div class="quote-reference">

@@ -99,6 +99,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
     - `calculateOrderQuote()` blocks if any screens have `phase: 'opening'`
   - **Screen object states**: `phase: 'opening'` (Phase 1 only, no pricing) or `phase: 'configured'` (full pricing)
   - **Key functions**: `addOpening()`, `applyConfiguration()`, `computeScreenPricing()` (pure, no DOM), `saveDraft()`
+  - **Quote ID persistence**: `currentQuoteId` global tracks the active quote's DB ID across recalculate/re-save cycles. Set on `loadQuote()`, reused by `calculateOrderQuote()`, `saveDraft()`, `saveQuote()`. Cleared by `resetForm()`. Prevents duplicate DB rows when editing existing quotes.
   - Airtable opportunity search & auto-fill customer info
   - Sales rep selection (synced from Airtable)
   - Screen-level accessories (per screen, in Phase 2)
@@ -118,12 +119,14 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - Multi-method: Clover CC, Stripe eCheck, ACH, Zelle (with QR code), check
   - Stripe eCheck sessions dynamically priced based on deposit/full selection
 - `finalize.html` — Final measurements and production order form
+  - Screen selection cards show screen name, track/operator/dimensions, photo count badge, measurement status
   - Opening measurements (width top/middle/bottom, height left/middle/right)
   - Sunair ordering measurements auto-calculated: +5" width (tracks), +7.25" height (wall mount) or +5.25" (ceiling mount)
   - Fenetex alert: measurements are opening-only, Production adds track/headbox dims
+  - Site photos displayed read-only per screen; installation photos uploadable (up to 5 per screen)
   - Difficult Install checkbox (flags production email with red banner + subject line prefix)
   - Production comments textarea
-  - Sends production email to production team
+  - Sends production email to production team (includes all photo links)
 
 ### Draft/unconfigured quote guards
 All downstream pages and worker endpoints block draft quotes with unconfigured openings:

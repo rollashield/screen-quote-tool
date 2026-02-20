@@ -70,6 +70,7 @@
 // ─── Sales Rep Management ─────────────────────────────────────────────────────
 let salesRepsList = []; // Cached list of all sales reps from Airtable
 let originalSalesRepId = ''; // Track original rep for change detection
+let currentQuoteId = null; // Persists across recalculate/re-save to prevent duplicate DB rows
 
 async function loadSalesReps() {
     try {
@@ -1076,8 +1077,8 @@ async function saveDraft() {
     if (draftBtn) draftBtn.disabled = true;
 
     try {
-        // Generate a temporary ID for photo uploads
-        const tempId = Date.now().toString();
+        // Reuse existing quote ID if we're re-saving, else generate new
+        const tempId = (currentQuoteId || Date.now()).toString();
 
         // Upload pending photos
         for (let i = 0; i < screensInOrder.length; i++) {
@@ -1160,6 +1161,7 @@ async function saveDraft() {
         const result = await response.json();
 
         if (response.ok && result.success) {
+            if (!currentQuoteId) currentQuoteId = tempId; // Lock ID for future re-saves
             alert(`Draft saved!\nQuote #: ${result.quoteNumber || 'N/A'}\n\nYou can load this draft later to finish configuration.`);
             loadSavedQuotes();
         } else {
@@ -1304,6 +1306,7 @@ async function saveQuote() {
         const result = await response.json();
 
         if (response.ok && result.success) {
+            if (!currentQuoteId) currentQuoteId = quoteId; // Lock ID for future re-saves
             // Write quoteNumber back so PDFs generated after saving show the real number
             if (result.quoteNumber) {
                 window.currentOrderData.quoteNumber = result.quoteNumber;
@@ -1392,6 +1395,7 @@ async function loadQuote(quoteId) {
         }
 
         const quote = result.quote;
+        currentQuoteId = quote.id; // Preserve loaded quote's ID for re-save
 
         // Populate customer fields
         document.getElementById('customerName').value = quote.customerName || '';
@@ -2172,6 +2176,9 @@ function resetForm() {
 
     // Clear guarantee
     document.getElementById('fourWeekGuarantee').checked = false;
+
+    // Reset quote ID so next save creates a new quote
+    currentQuoteId = null;
 }
 
 // Multi-screen order functions
@@ -3565,7 +3572,7 @@ function calculateOrderQuote() {
 
     // Display order quote summary
     displayOrderQuoteSummary({
-        id: Date.now(),
+        id: currentQuoteId || Date.now(),
         customerName,
         companyName,
         customerEmail,
@@ -3621,6 +3628,8 @@ function calculateOrderQuote() {
 function displayOrderQuoteSummary(orderData) {
     // Store order data globally for finalize page access
     window.currentOrderData = orderData;
+    // Sync persistent quote ID so re-saves update the same DB row
+    currentQuoteId = orderData.id;
 
     const summaryContent = document.getElementById('summaryContent');
     const internalInfo = document.getElementById('internalInfo');
