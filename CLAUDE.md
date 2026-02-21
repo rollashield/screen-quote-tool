@@ -145,6 +145,10 @@ Existing saved quotes (no `phase` field on screens) default to `phase: 'configur
 - Signature & payment feature: `docs/signature-feature-plan.md`
 - Two-phase screen entry: `.claude/plans/synthetic-baking-pine.md`
 
+### Future plans (not yet implemented)
+- **Properties & Openings**: Promote openings from embedded quote JSON to first-class D1 tables (`properties`, `openings`). Adds property-level data (address, gate code, site notes) and opening-level identity that persists across quotes. Enables multi-property customers, upsell tracking, and future service/warranty tracking. Build in D1 first, migrate to Scheduler App PostgreSQL or sync to Airtable later. Full architecture: `../docs/architecture/properties-and-openings.md`
+- **Offline functionality**: IndexedDB auto-save, recovery on reload, queued cloud sync. Plan: `.claude/plans/synthetic-baking-pine.md` (includes pros/cons analysis)
+
 ## Payments
 - **Clover**: Credit card via static permanent payment link (configured in `/api/payment-info`)
 - **Stripe**: eCheck/ACH via Checkout Sessions (`us_bank_account` payment method)
