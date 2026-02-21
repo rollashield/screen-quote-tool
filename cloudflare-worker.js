@@ -602,9 +602,22 @@ async function handleAirtableSave(env, quoteData, quoteNumber, quoteId, existing
   }
 
   // ── Update Contact (sync-back editable fields) ──
-  // Only if we have a Contact ID and there was an existing opportunity
-  // (for manual entry, Contact was already created with current data above)
-  if (airtableContactId && quoteData.airtableOpportunityId) {
+  // If we have an Opportunity but no Contact ID, look up the Contact from the Opportunity
+  if (!airtableContactId && airtableOpportunityId) {
+    try {
+      const oppRecord = await airtableFetch(env,
+        `/${AT_TABLES.opportunities}/${airtableOpportunityId}?fields%5B%5D=${AT_FIELDS.opportunities.contacts}`
+      );
+      const linkedContacts = oppRecord?.fields?.[AT_FIELDS.opportunities.contacts];
+      if (linkedContacts && linkedContacts.length > 0) {
+        airtableContactId = linkedContacts[0];
+      }
+    } catch (lookupErr) {
+      console.error('Error looking up Contact from Opportunity:', lookupErr);
+    }
+  }
+
+  if (airtableContactId && airtableOpportunityId) {
     const updateFields = {};
 
     // Split customer name into first/last for Airtable
