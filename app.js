@@ -241,6 +241,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('opportunitySearchResults').style.display = 'none';
         }
     });
+
+    // Set initial wiring field visibility based on default checkbox state
+    updateWiringVisibility();
 });
 
 // ─── Airtable Opportunity Search & Selection ────────────────────────────────
@@ -330,9 +333,10 @@ function selectOpportunityById(element) {
 }
 
 function selectOpportunity(opp) {
-    // Store Airtable IDs
+    // Store Airtable IDs and opportunity name
     document.getElementById('airtableOpportunityId').value = opp.id;
     document.getElementById('airtableContactId').value = opp.contact ? opp.contact.id : '';
+    document.getElementById('airtableOpportunityName').value = opp.name || '';
 
     // Populate form fields from Contact
     if (opp.contact) {
@@ -366,7 +370,7 @@ function selectOpportunity(opp) {
     const banner = document.getElementById('linkedOpportunityBanner');
     banner.classList.remove('hidden');
     banner.style.display = 'flex';
-    document.getElementById('linkedOpportunityText').textContent = 'Linked to: ' + opp.name;
+    document.getElementById('linkedOpportunityText').textContent = 'Linked to Airtable Opportunity ' + opp.name;
 
     // Hide search results and clear search input
     document.getElementById('opportunitySearchResults').style.display = 'none';
@@ -394,6 +398,7 @@ function selectManualEntry() {
 function unlinkOpportunity() {
     document.getElementById('airtableOpportunityId').value = '';
     document.getElementById('airtableContactId').value = '';
+    document.getElementById('airtableOpportunityName').value = '';
     document.getElementById('salesRepSelect').value = '';
     originalSalesRepId = '';
     updateSalesRepInfo();
@@ -1146,6 +1151,7 @@ async function saveDraft() {
             projectAccessoriesTotalCost: 0,
             airtableOpportunityId: document.getElementById('airtableOpportunityId').value || '',
             airtableContactId: document.getElementById('airtableContactId').value || '',
+            airtableOpportunityName: document.getElementById('airtableOpportunityName').value || '',
             internalComments: document.getElementById('internalComments')?.value || '',
             salesRepId, salesRepName, salesRepEmail, salesRepPhone,
             fourWeekGuarantee: document.getElementById('fourWeekGuarantee').checked,
@@ -1267,6 +1273,7 @@ async function saveQuote() {
             // Airtable integration fields
             airtableOpportunityId: orderData.airtableOpportunityId || '',
             airtableContactId: orderData.airtableContactId || '',
+            airtableOpportunityName: orderData.airtableOpportunityName || '',
             internalComments: internalComments,
             // Sales Rep info
             salesRepId: orderData.salesRepId || '',
@@ -1419,13 +1426,17 @@ async function loadQuote(quoteId) {
         if (quote.airtableOpportunityId) {
             document.getElementById('airtableOpportunityId').value = quote.airtableOpportunityId;
             document.getElementById('airtableContactId').value = quote.airtableContactId || '';
+            document.getElementById('airtableOpportunityName').value = quote.airtableOpportunityName || '';
             const banner = document.getElementById('linkedOpportunityBanner');
             banner.classList.remove('hidden');
             banner.style.display = 'flex';
-            document.getElementById('linkedOpportunityText').textContent = 'Linked to Airtable Opportunity';
+            const oppName = quote.airtableOpportunityName || '';
+            document.getElementById('linkedOpportunityText').textContent =
+                'Linked to Airtable Opportunity' + (oppName ? ' ' + oppName : '');
         } else {
             document.getElementById('airtableOpportunityId').value = '';
             document.getElementById('airtableContactId').value = '';
+            document.getElementById('airtableOpportunityName').value = '';
             const banner = document.getElementById('linkedOpportunityBanner');
             banner.classList.add('hidden');
             banner.style.display = 'none';
@@ -1902,6 +1913,7 @@ async function ensureQuoteSaved() {
             projectAccessoriesTotalCost: orderData.projectAccessoriesTotalCost || 0,
             airtableOpportunityId: orderData.airtableOpportunityId || '',
             airtableContactId: orderData.airtableContactId || '',
+            airtableOpportunityName: orderData.airtableOpportunityName || '',
             internalComments: internalComments,
             salesRepId: orderData.salesRepId || '',
             salesRepName: orderData.salesRepName || '',
@@ -2084,6 +2096,7 @@ async function finalizeProjectDetails() {
                 // Airtable integration fields
                 airtableOpportunityId: orderData.airtableOpportunityId || '',
                 airtableContactId: orderData.airtableContactId || '',
+                airtableOpportunityName: orderData.airtableOpportunityName || '',
                 internalComments: document.getElementById('internalComments')?.value || '',
                 fourWeekGuarantee: orderData.fourWeekGuarantee || false,
                 totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0
@@ -3560,6 +3573,7 @@ function calculateOrderQuote() {
     // Get Airtable integration fields
     const airtableOpportunityId = document.getElementById('airtableOpportunityId').value;
     const airtableContactId = document.getElementById('airtableContactId').value;
+    const airtableOpportunityName = document.getElementById('airtableOpportunityName').value;
     const internalComments = document.getElementById('internalComments')?.value || '';
 
     // Get Sales Rep info from dropdown
@@ -3615,6 +3629,7 @@ function calculateOrderQuote() {
         projectAccessoriesTotalCost,
         airtableOpportunityId,
         airtableContactId,
+        airtableOpportunityName,
         internalComments,
         salesRepId,
         salesRepName,

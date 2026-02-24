@@ -137,15 +137,17 @@ function mapOrderDataForSigning(quoteData, quoteNumber) {
         frame: screen.frameColorName || '',
         width: screen.actualWidthDisplay || '',
         height: screen.actualHeightDisplay || '',
-        price1: (screen.customerPrice || 0) - (screen.installationPrice || 0),
+        price1: (screen.customerPrice || 0) - (screen.installationPrice || 0) - (screen.wiringPrice || 0),
         price2: screen.comparisonMaterialPrice || null
     }));
 
     const materialsPrice = quoteData.orderTotalMaterialsPrice || 0;
     const installationPrice = quoteData.orderTotalInstallationPrice || 0;
+    const wiringPrice = quoteData.orderTotalWiringPrice || 0;
+    const miscInstallAmount = quoteData.miscInstallAmount || 0;
     const discountPercent = quoteData.discountPercent || 0;
     const discountAmount = quoteData.discountAmount || 0;
-    const subtotal = (discountPercent > 0 ? quoteData.discountedMaterialsPrice : materialsPrice) + installationPrice;
+    const subtotal = (discountPercent > 0 ? quoteData.discountedMaterialsPrice : materialsPrice) + installationPrice + wiringPrice + miscInstallAmount;
     const total = quoteData.orderTotalPrice || 0;
 
     const data = {
@@ -167,16 +169,27 @@ function mapOrderDataForSigning(quoteData, quoteNumber) {
             validThrough: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
         },
         screens: screens,
+        projectAccessories: (quoteData.projectAccessories || []).filter(a => a.quantity > 0).map(acc => ({
+            name: acc.name,
+            quantity: acc.quantity,
+            unitPrice: acc.customerPrice,
+            lineTotal: acc.customerPrice * acc.quantity
+        })),
         pricing: {
             materials: materialsPrice,
             installation: installationPrice,
+            wiring: wiringPrice,
+            miscInstallLabel: quoteData.miscInstallLabel || '',
+            miscInstallAmount: miscInstallAmount,
             discountPercent: discountPercent,
             discountAmount: discountAmount,
             subtotal: subtotal,
             tax: 0,
             total: total,
             deposit: total / 2,
-            balance: total / 2
+            balance: total / 2,
+            guaranteeDiscount: quoteData.totalGuaranteeDiscount || 0,
+            fourWeekGuarantee: quoteData.fourWeekGuarantee || false
         },
         comparisonPricing: null
     };
@@ -184,12 +197,20 @@ function mapOrderDataForSigning(quoteData, quoteNumber) {
     if (quoteData.enableComparison) {
         const compMaterials = quoteData.comparisonTotalMaterialsPrice || 0;
         const compDiscounted = quoteData.comparisonDiscountedMaterialsPrice || compMaterials;
-        const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice;
+        const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice + wiringPrice + miscInstallAmount;
         const compTotal = quoteData.comparisonTotalPrice || 0;
 
+        const firstScreen = (quoteData.screens || [])[0];
+        const option1Label = firstScreen
+            ? clientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName)
+            : 'Option 1';
+        const option2Label = quoteData.comparisonMotor
+            ? clientFacingOperatorName(quoteData.comparisonMotor, quoteData.comparisonMotor)
+            : 'Option 2';
+
         data.comparisonPricing = {
-            option1Label: 'Option 1',
-            option2Label: 'Option 2',
+            option1Label: option1Label,
+            option2Label: option2Label,
             materials2: compMaterials,
             discountAmount2: discountPercent > 0 ? compMaterials - compDiscounted : 0,
             subtotal2: compSubtotal,

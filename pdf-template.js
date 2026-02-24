@@ -287,11 +287,11 @@ function generateQuotePDF(data) {
               Multi-Screen Discount (${data.pricing.discountPercent}%):
             </td>
             <td style="padding: 8px 12px; text-align: right; color: #16a34a;">
-              âˆ’$${formatCurrency(data.pricing.discountAmount)}
+              &minus;$${formatCurrency(data.pricing.discountAmount)}
             </td>
             ${hasComparison ? `
             <td style="padding: 8px 12px; text-align: right; color: #16a34a;">
-              âˆ’$${formatCurrency(data.comparisonPricing.discountAmount2)}
+              &minus;$${formatCurrency(data.comparisonPricing.discountAmount2)}
             </td>
             ` : ''}
           </tr>
@@ -304,11 +304,11 @@ function generateQuotePDF(data) {
               4-Week Guarantee Savings (included):
             </td>
             <td style="padding: 8px 12px; text-align: right; color: #2e7d32;">
-              −$${formatCurrency(data.pricing.guaranteeDiscount)}
+              &minus;$${formatCurrency(data.pricing.guaranteeDiscount)}
             </td>
             ${hasComparison ? `
             <td style="padding: 8px 12px; text-align: right; color: #2e7d32;">
-              −$${formatCurrency(data.pricing.guaranteeDiscount)}
+              &minus;$${formatCurrency(data.pricing.guaranteeDiscount)}
             </td>
             ` : ''}
           </tr>
@@ -398,8 +398,8 @@ function generateQuotePDF(data) {
             <td colspan="7"></td>
             <td></td>
             <td colspan="2" style="padding-top: 8px; padding-right: 12px; text-align: right; font-size: 11px; color: #4d4d4d;">
-              <span style="margin-right: 16px;">â—† ${data.comparisonPricing.option1Label}</span>
-              <span style="color: #0071bc;">â—† ${data.comparisonPricing.option2Label}</span>
+              <span style="margin-right: 16px;">&#x25C6; ${data.comparisonPricing.option1Label}</span>
+              <span style="color: #0071bc;">&#x25C6; ${data.comparisonPricing.option2Label}</span>
             </td>
           </tr>
           ` : ''}

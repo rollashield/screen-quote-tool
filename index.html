@@ -666,6 +666,7 @@
                 <!-- Hidden fields for Airtable IDs -->
                 <input type="hidden" id="airtableOpportunityId">
                 <input type="hidden" id="airtableContactId">
+                <input type="hidden" id="airtableOpportunityName">
 
                 <div class="form-row">
                     <div class="form-group">
@@ -920,17 +921,6 @@
                     <div id="openingSelectorList"></div>
                 </div>
 
-                <!-- 4-Week Install Guarantee -->
-                <div id="guaranteeSection" style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
-                        <input type="checkbox" id="fourWeekGuarantee" onchange="handleGuaranteeToggle()">
-                        4-Week Install Guarantee
-                    </label>
-                    <p style="margin-top: 6px; font-size: 13px; color: #4d4d4d; margin-bottom: 0;">
-                        Limits motor selection to Gaposa only. Solar motors priced at RTS rate (saves ~$350/screen).
-                    </p>
-                </div>
-
                 <!-- Product Configuration Fields -->
                 <div class="form-row">
                     <div class="form-group">
@@ -1014,6 +1004,17 @@
                 <!-- Additional Options (order-level settings) -->
                 <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #e0e0e0;">
                     <h3 style="margin: 0 0 12px 0; font-size: 1rem; color: #333;">Additional Options</h3>
+
+                    <!-- 4-Week Install Guarantee (quote-level option) -->
+                    <div id="guaranteeSection" style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
+                            <input type="checkbox" id="fourWeekGuarantee" onchange="handleGuaranteeToggle()">
+                            4-Week Install Guarantee
+                        </label>
+                        <p style="margin-top: 6px; font-size: 13px; color: #4d4d4d; margin-bottom: 0;">
+                            Limits motor selection to Gaposa only. Solar motors priced at RTS rate (saves ~$350/screen).
+                        </p>
+                    </div>
 
                     <div class="checkbox-group">
                         <input type="checkbox" id="enableComparison">
