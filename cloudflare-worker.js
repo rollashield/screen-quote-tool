@@ -1017,9 +1017,26 @@ async function handleGetQuote(quoteId, env) {
     quoteData.quote_status = result.quote_status || 'draft';
     quoteData.payment_status = result.payment_status || 'unpaid';
 
+    // Lazy migration: extract entities from JSON blob if not yet migrated
+    let entities = null;
+    if (!result.entities_migrated) {
+      try {
+        entities = await migrateQuoteToEntities(quoteId, result, quoteData, env);
+      } catch (migrationErr) {
+        console.error('Lazy migration failed (non-fatal):', migrationErr);
+      }
+    } else {
+      // Already migrated — fetch entity IDs for the frontend
+      entities = {
+        contactId: result.contact_id,
+        propertyId: result.property_id
+      };
+    }
+
     return jsonResponse({
       success: true,
-      quote: quoteData
+      quote: quoteData,
+      entities: entities
     });
 
   } catch (error) {
@@ -1029,6 +1046,184 @@ async function handleGetQuote(quoteId, env) {
       error: error.message
     }, 500);
   }
+}
+
+// ─── Lazy Migration: Extract entities from quote JSON blob ─────────────────
+async function migrateQuoteToEntities(quoteId, quoteRow, quoteData, env) {
+  const now = new Date().toISOString();
+  let contactId = quoteRow.contact_id || null;
+  let propertyId = quoteRow.property_id || null;
+
+  // 1. Create contact from customer fields (if we have a name)
+  if (!contactId && quoteData.customerName) {
+    contactId = `contact-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const nameParts = splitName(quoteData.customerName);
+
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO contacts (
+        id, first_name, last_name, email, phone, company_name,
+        street_address, apt_suite, city, state, zip_code,
+        airtable_contact_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      contactId,
+      nameParts.firstName,
+      nameParts.lastName,
+      quoteData.customerEmail || null,
+      quoteData.customerPhone || null,
+      quoteData.companyName || null,
+      quoteData.streetAddress || null,
+      quoteData.aptSuite || null,
+      quoteData.city || null,
+      quoteData.state || null,
+      quoteData.zipCode || null,
+      quoteRow.airtable_contact_id || null,
+      quoteRow.created_at || now,
+      now
+    ).run();
+  }
+
+  // 2. Create property from address fields (if we have a street address)
+  if (!propertyId && quoteData.streetAddress) {
+    propertyId = `prop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO properties (
+        id, contact_id, name, street_address, apt_suite,
+        nearest_intersection, city, state, zip_code,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      propertyId,
+      contactId,
+      null, // No property name from legacy data
+      quoteData.streetAddress,
+      quoteData.aptSuite || null,
+      quoteData.nearestIntersection || null,
+      quoteData.city || null,
+      quoteData.state || null,
+      quoteData.zipCode || null,
+      quoteRow.created_at || now,
+      now
+    ).run();
+  }
+
+  // 3. Create openings + quote_line_items from screens array
+  const screens = quoteData.screens || [];
+  const openingIds = [];
+
+  for (let i = 0; i < screens.length; i++) {
+    const screen = screens[i];
+    const openingId = `opening-${quoteId}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+    const lineItemId = `li-${quoteId}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+    openingIds.push(openingId);
+
+    // Create opening (Phase 1 data: dimensions, frame, wiring, photos)
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO openings (
+        id, property_id, quote_id, name,
+        width_inches, width_fraction, height_inches, height_fraction,
+        width_feet, height_feet, width_display, height_display,
+        frame_color, frame_color_name,
+        include_installation, wiring_distance,
+        status, photos_json, sort_order,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      openingId,
+      propertyId,
+      quoteId,
+      screen.screenName || null,
+      screen.totalWidthInches || null,
+      screen.widthFractionValue || null,
+      screen.totalHeightInches || null,
+      screen.heightFractionValue || null,
+      screen.width || null,
+      screen.height || null,
+      screen.actualWidthDisplay || null,
+      screen.actualHeightDisplay || null,
+      screen.frameColor || null,
+      screen.frameColorName || null,
+      screen.includeInstallation !== false ? 1 : 0,
+      screen.wiringDistance || 0,
+      screen.phase === 'configured' ? 'quoted' : 'documented',
+      JSON.stringify(screen.photos || []),
+      i,
+      quoteRow.created_at || now,
+      now
+    ).run();
+
+    // Create quote_line_item (Phase 2 data: product config + pricing)
+    const phase = screen.phase || 'configured';
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO quote_line_items (
+        id, quote_id, opening_id, product_type,
+        track_type, track_type_name, operator_type, operator_type_name,
+        fabric_color, fabric_color_name, frame_color, frame_color_name,
+        no_tracks, accessories_json,
+        customer_price, installation_price, wiring_price,
+        cost_total, screen_cost_only, motor_cost, accessories_cost,
+        installation_cost, guarantee_discount,
+        comparison_price, comparison_material_price,
+        excluded, sort_order, phase,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      lineItemId,
+      quoteId,
+      openingId,
+      'screen',
+      screen.trackType || null,
+      screen.trackTypeName || null,
+      screen.operatorType || null,
+      screen.operatorTypeName || null,
+      screen.fabricColor || null,
+      screen.fabricColorName || null,
+      screen.frameColor || null,
+      screen.frameColorName || null,
+      screen.noTracks ? 1 : 0,
+      JSON.stringify(screen.accessories || []),
+      screen.customerPrice || 0,
+      screen.installationPrice || 0,
+      screen.wiringPrice || 0,
+      screen.totalCost || 0,
+      screen.screenCostOnly || 0,
+      screen.motorCost || 0,
+      screen.accessoriesCost || 0,
+      screen.installationCost || 0,
+      screen.guaranteeDiscount || 0,
+      screen.comparisonPrice || null,
+      screen.comparisonMaterialPrice || null,
+      0, // not excluded
+      i,
+      phase === 'configured' ? 'configured' : 'opening',
+      quoteRow.created_at || now,
+      now
+    ).run();
+  }
+
+  // 4. Update quote row with entity references + mark as migrated
+  await env.DB.prepare(`
+    UPDATE quotes SET contact_id = ?, property_id = ?, entities_migrated = 1, updated_at = ?
+    WHERE id = ?
+  `).bind(contactId, propertyId, now, quoteId).run();
+
+  return {
+    contactId,
+    propertyId,
+    openingIds,
+    migrated: true
+  };
+}
+
+// Split a full name string into first/last parts
+function splitName(fullName) {
+  if (!fullName) return { firstName: null, lastName: null };
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: null };
+  const lastName = parts.pop();
+  const firstName = parts.join(' ');
+  return { firstName, lastName };
 }
 
 // ─── Delete Specific Quote ─────────────────────────────────────────────────────
