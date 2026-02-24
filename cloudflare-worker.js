@@ -55,7 +55,7 @@ export default {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
+          'Access-Control-Allow-Methods': 'POST, GET, DELETE, PATCH, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
         }
       });
@@ -159,6 +159,57 @@ export default {
     // Route: Update Opportunity Sales Rep
     if (url.pathname === '/api/airtable/opportunities/update-rep' && request.method === 'POST') {
       return await handleUpdateOpportunitySalesRep(request, env);
+    }
+
+    // ─── Entity CRUD Routes ─────────────────────────────────────────────────
+
+    // Contacts
+    if (url.pathname === '/api/contacts' && request.method === 'POST') {
+      return await handleSaveContact(request, env);
+    }
+    if (url.pathname.match(/^\/api\/contacts\/[^/]+$/) && request.method === 'GET') {
+      const contactId = url.pathname.split('/')[3];
+      return await handleGetContact(contactId, env);
+    }
+
+    // Properties
+    if (url.pathname === '/api/properties' && request.method === 'POST') {
+      return await handleSaveProperty(request, env);
+    }
+    if (url.pathname === '/api/properties' && request.method === 'GET') {
+      const contactId = url.searchParams.get('contact_id');
+      return await handleListProperties(contactId, env);
+    }
+
+    // Openings
+    if (url.pathname === '/api/openings' && request.method === 'POST') {
+      return await handleSaveOpening(request, env);
+    }
+    if (url.pathname.match(/^\/api\/openings\/[^/]+$/) && request.method === 'PATCH') {
+      const openingId = url.pathname.split('/')[3];
+      return await handlePatchOpening(openingId, request, env);
+    }
+    if (url.pathname === '/api/openings' && request.method === 'GET') {
+      const propertyId = url.searchParams.get('property_id');
+      const quoteId = url.searchParams.get('quote_id');
+      return await handleListOpenings(propertyId, quoteId, env);
+    }
+
+    // Quote Line Items
+    if (url.pathname === '/api/quote-line-items' && request.method === 'POST') {
+      return await handleSaveLineItem(request, env);
+    }
+    if (url.pathname.match(/^\/api\/quote-line-items\/[^/]+$/) && request.method === 'PATCH') {
+      const lineItemId = url.pathname.split('/')[3];
+      return await handlePatchLineItem(lineItemId, request, env);
+    }
+    if (url.pathname.match(/^\/api\/quote-line-items\/[^/]+\/exclude$/) && request.method === 'PATCH') {
+      const lineItemId = url.pathname.split('/')[4];
+      return await handleToggleExclude(lineItemId, env);
+    }
+    if (url.pathname === '/api/quote-line-items' && request.method === 'GET') {
+      const quoteId = url.searchParams.get('quote_id');
+      return await handleListLineItems(quoteId, env);
     }
 
     return new Response('Not Found', { status: 404 });
@@ -738,7 +789,8 @@ async function handleSaveQuote(request, env) {
                 signature_data, signed_at, signer_name, signer_ip,
                 signing_method, signature_sent_at,
                 payment_status, payment_method, payment_amount, payment_date,
-                clover_payment_link, stripe_payment_intent_id, clover_checkout_id
+                clover_payment_link, stripe_payment_intent_id, clover_checkout_id,
+                contact_id, property_id, sent_emails_json, entities_migrated
          FROM quotes WHERE id = ?`
       ).bind(quoteId).first();
       if (existingRow) {
@@ -764,6 +816,10 @@ async function handleSaveQuote(request, env) {
           clover_payment_link: existingRow.clover_payment_link,
           stripe_payment_intent_id: existingRow.stripe_payment_intent_id,
           clover_checkout_id: existingRow.clover_checkout_id,
+          contact_id: existingRow.contact_id,
+          property_id: existingRow.property_id,
+          sent_emails_json: existingRow.sent_emails_json,
+          entities_migrated: existingRow.entities_migrated,
         };
       }
     } catch (lookupErr) {
@@ -824,8 +880,13 @@ async function handleSaveQuote(request, env) {
         payment_date,
         clover_payment_link,
         stripe_payment_intent_id,
-        clover_checkout_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        clover_checkout_id,
+        contact_id,
+        property_id,
+        sent_emails_json,
+        airtable_opportunity_name,
+        entities_migrated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       quoteId,
       quoteData.customerName,
@@ -863,7 +924,12 @@ async function handleSaveQuote(request, env) {
       existingSignatureData.payment_date || null,
       existingSignatureData.clover_payment_link || null,
       existingSignatureData.stripe_payment_intent_id || null,
-      existingSignatureData.clover_checkout_id || null
+      existingSignatureData.clover_checkout_id || null,
+      existingSignatureData.contact_id || null,
+      existingSignatureData.property_id || null,
+      existingSignatureData.sent_emails_json || '[]',
+      quoteData.airtableOpportunityName || null,
+      existingSignatureData.entities_migrated || 0
     ).run();
 
     // Attempt Airtable sync (non-fatal if it fails)
@@ -1536,6 +1602,349 @@ async function handleCreateEcheckSession(quoteId, request, env) {
   }
 }
 
+// ─── Entity CRUD Handlers ─────────────────────────────────────────────────────
+
+// Contacts: Create or update
+async function handleSaveContact(request, env) {
+  try {
+    const data = await request.json();
+    const id = data.id || `contact-${Date.now()}`;
+    const now = new Date().toISOString();
+
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO contacts (
+        id, first_name, last_name, email, phone, company_name,
+        street_address, apt_suite, city, state, zip_code,
+        airtable_contact_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      data.firstName || null,
+      data.lastName || null,
+      data.email || null,
+      data.phone || null,
+      data.companyName || null,
+      data.streetAddress || null,
+      data.aptSuite || null,
+      data.city || null,
+      data.state || null,
+      data.zipCode || null,
+      data.airtableContactId || null,
+      data.createdAt || now,
+      now
+    ).run();
+
+    return jsonResponse({ success: true, contactId: id });
+  } catch (error) {
+    console.error('Error saving contact:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Contacts: Get by ID
+async function handleGetContact(contactId, env) {
+  try {
+    const row = await env.DB.prepare('SELECT * FROM contacts WHERE id = ?').bind(contactId).first();
+    if (!row) return jsonResponse({ success: false, error: 'Contact not found' }, 404);
+    return jsonResponse({ success: true, contact: row });
+  } catch (error) {
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Properties: Create or update
+async function handleSaveProperty(request, env) {
+  try {
+    const data = await request.json();
+    const id = data.id || `prop-${Date.now()}`;
+    const now = new Date().toISOString();
+
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO properties (
+        id, contact_id, name, street_address, apt_suite, nearest_intersection,
+        city, state, zip_code, is_commercial, gate_code, hoa_info,
+        access_notes, loading_dock, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      data.contactId || null,
+      data.name || null,
+      data.streetAddress || '',
+      data.aptSuite || null,
+      data.nearestIntersection || null,
+      data.city || null,
+      data.state || null,
+      data.zipCode || null,
+      data.isCommercial ? 1 : 0,
+      data.gateCode || null,
+      data.hoaInfo || null,
+      data.accessNotes || null,
+      data.loadingDock ? 1 : 0,
+      data.createdAt || now,
+      now
+    ).run();
+
+    return jsonResponse({ success: true, propertyId: id });
+  } catch (error) {
+    console.error('Error saving property:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Properties: List by contact
+async function handleListProperties(contactId, env) {
+  try {
+    let rows;
+    if (contactId) {
+      rows = await env.DB.prepare('SELECT * FROM properties WHERE contact_id = ? ORDER BY created_at DESC')
+        .bind(contactId).all();
+    } else {
+      rows = await env.DB.prepare('SELECT * FROM properties ORDER BY created_at DESC LIMIT 100').all();
+    }
+    return jsonResponse({ success: true, properties: rows.results });
+  } catch (error) {
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Openings: Create or update
+async function handleSaveOpening(request, env) {
+  try {
+    const data = await request.json();
+    const id = data.id || `opening-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO openings (
+        id, property_id, quote_id, name,
+        width_inches, width_fraction, height_inches, height_fraction,
+        width_feet, height_feet, width_display, height_display,
+        frame_color, frame_color_name,
+        include_installation, wiring_distance, location_notes,
+        status, photos_json, sort_order, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      data.propertyId || null,
+      data.quoteId || null,
+      data.name || null,
+      data.widthInches || null,
+      data.widthFraction || null,
+      data.heightInches || null,
+      data.heightFraction || null,
+      data.widthFeet || null,
+      data.heightFeet || null,
+      data.widthDisplay || null,
+      data.heightDisplay || null,
+      data.frameColor || null,
+      data.frameColorName || null,
+      data.includeInstallation !== undefined ? (data.includeInstallation ? 1 : 0) : 1,
+      data.wiringDistance || 0,
+      data.locationNotes || null,
+      data.status || 'documented',
+      JSON.stringify(data.photos || []),
+      data.sortOrder || 0,
+      data.createdAt || now,
+      now
+    ).run();
+
+    return jsonResponse({ success: true, openingId: id });
+  } catch (error) {
+    console.error('Error saving opening:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Openings: Partial update (for auto-save)
+async function handlePatchOpening(openingId, request, env) {
+  try {
+    const data = await request.json();
+    const now = new Date().toISOString();
+
+    // Build dynamic SET clause from provided fields
+    const fieldMap = {
+      name: 'name', widthInches: 'width_inches', widthFraction: 'width_fraction',
+      heightInches: 'height_inches', heightFraction: 'height_fraction',
+      widthFeet: 'width_feet', heightFeet: 'height_feet',
+      widthDisplay: 'width_display', heightDisplay: 'height_display',
+      frameColor: 'frame_color', frameColorName: 'frame_color_name',
+      includeInstallation: 'include_installation', wiringDistance: 'wiring_distance',
+      locationNotes: 'location_notes', status: 'status', sortOrder: 'sort_order'
+    };
+
+    const sets = ['updated_at = ?'];
+    const values = [now];
+
+    for (const [jsKey, dbCol] of Object.entries(fieldMap)) {
+      if (data[jsKey] !== undefined) {
+        sets.push(`${dbCol} = ?`);
+        values.push(typeof data[jsKey] === 'boolean' ? (data[jsKey] ? 1 : 0) : data[jsKey]);
+      }
+    }
+
+    if (data.photos !== undefined) {
+      sets.push('photos_json = ?');
+      values.push(JSON.stringify(data.photos));
+    }
+
+    values.push(openingId);
+    await env.DB.prepare(`UPDATE openings SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
+
+    return jsonResponse({ success: true, openingId });
+  } catch (error) {
+    console.error('Error patching opening:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Openings: List by property or quote
+async function handleListOpenings(propertyId, quoteId, env) {
+  try {
+    let rows;
+    if (quoteId) {
+      rows = await env.DB.prepare('SELECT * FROM openings WHERE quote_id = ? ORDER BY sort_order, created_at')
+        .bind(quoteId).all();
+    } else if (propertyId) {
+      rows = await env.DB.prepare('SELECT * FROM openings WHERE property_id = ? ORDER BY sort_order, created_at')
+        .bind(propertyId).all();
+    } else {
+      return jsonResponse({ success: false, error: 'property_id or quote_id required' }, 400);
+    }
+    return jsonResponse({ success: true, openings: rows.results });
+  } catch (error) {
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Quote Line Items: Create or update
+async function handleSaveLineItem(request, env) {
+  try {
+    const data = await request.json();
+    const id = data.id || `li-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO quote_line_items (
+        id, quote_id, opening_id, product_type,
+        track_type, track_type_name, operator_type, operator_type_name,
+        fabric_color, fabric_color_name, frame_color, frame_color_name,
+        no_tracks, accessories_json,
+        customer_price, installation_price, wiring_price,
+        cost_total, screen_cost_only, motor_cost, accessories_cost,
+        installation_cost, guarantee_discount,
+        comparison_price, comparison_material_price,
+        excluded, sort_order, phase, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      data.quoteId || null,
+      data.openingId || null,
+      data.productType || 'screen',
+      data.trackType || null,
+      data.trackTypeName || null,
+      data.operatorType || null,
+      data.operatorTypeName || null,
+      data.fabricColor || null,
+      data.fabricColorName || null,
+      data.frameColor || null,
+      data.frameColorName || null,
+      data.noTracks ? 1 : 0,
+      JSON.stringify(data.accessories || []),
+      data.customerPrice || 0,
+      data.installationPrice || 0,
+      data.wiringPrice || 0,
+      data.costTotal || 0,
+      data.screenCostOnly || 0,
+      data.motorCost || 0,
+      data.accessoriesCost || 0,
+      data.installationCost || 0,
+      data.guaranteeDiscount || 0,
+      data.comparisonPrice || null,
+      data.comparisonMaterialPrice || null,
+      data.excluded ? 1 : 0,
+      data.sortOrder || 0,
+      data.phase || 'configured',
+      data.createdAt || now,
+      now
+    ).run();
+
+    return jsonResponse({ success: true, lineItemId: id });
+  } catch (error) {
+    console.error('Error saving line item:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Quote Line Items: Partial update
+async function handlePatchLineItem(lineItemId, request, env) {
+  try {
+    const data = await request.json();
+    const now = new Date().toISOString();
+
+    const fieldMap = {
+      trackType: 'track_type', trackTypeName: 'track_type_name',
+      operatorType: 'operator_type', operatorTypeName: 'operator_type_name',
+      fabricColor: 'fabric_color', fabricColorName: 'fabric_color_name',
+      frameColor: 'frame_color', frameColorName: 'frame_color_name',
+      noTracks: 'no_tracks', customerPrice: 'customer_price',
+      installationPrice: 'installation_price', wiringPrice: 'wiring_price',
+      costTotal: 'cost_total', screenCostOnly: 'screen_cost_only',
+      motorCost: 'motor_cost', accessoriesCost: 'accessories_cost',
+      installationCost: 'installation_cost', guaranteeDiscount: 'guarantee_discount',
+      excluded: 'excluded', sortOrder: 'sort_order', phase: 'phase'
+    };
+
+    const sets = ['updated_at = ?'];
+    const values = [now];
+
+    for (const [jsKey, dbCol] of Object.entries(fieldMap)) {
+      if (data[jsKey] !== undefined) {
+        sets.push(`${dbCol} = ?`);
+        values.push(typeof data[jsKey] === 'boolean' ? (data[jsKey] ? 1 : 0) : data[jsKey]);
+      }
+    }
+
+    if (data.accessories !== undefined) {
+      sets.push('accessories_json = ?');
+      values.push(JSON.stringify(data.accessories));
+    }
+
+    values.push(lineItemId);
+    await env.DB.prepare(`UPDATE quote_line_items SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
+
+    return jsonResponse({ success: true, lineItemId });
+  } catch (error) {
+    console.error('Error patching line item:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Quote Line Items: Toggle exclude
+async function handleToggleExclude(lineItemId, env) {
+  try {
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `UPDATE quote_line_items SET excluded = CASE WHEN excluded = 1 THEN 0 ELSE 1 END, updated_at = ? WHERE id = ?`
+    ).bind(now, lineItemId).run();
+    return jsonResponse({ success: true, lineItemId });
+  } catch (error) {
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// Quote Line Items: List by quote
+async function handleListLineItems(quoteId, env) {
+  try {
+    if (!quoteId) return jsonResponse({ success: false, error: 'quote_id required' }, 400);
+    const rows = await env.DB.prepare(
+      'SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order, created_at'
+    ).bind(quoteId).all();
+    return jsonResponse({ success: true, lineItems: rows.results });
+  } catch (error) {
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
 // ─── JSON Response Helper ──────────────────────────────────────────────────────
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -1543,7 +1952,7 @@ function jsonResponse(data, status = 200) {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'POST, GET, DELETE, PATCH, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     }
   });
