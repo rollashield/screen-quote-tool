@@ -71,6 +71,8 @@
 let salesRepsList = []; // Cached list of all sales reps from Airtable
 let originalSalesRepId = ''; // Track original rep for change detection
 let currentQuoteId = null; // Persists across recalculate/re-save to prevent duplicate DB rows
+let currentContactId = null; // Entity ID for the contact record
+let currentPropertyId = null; // Entity ID for the property record
 
 async function loadSalesReps() {
     try {
@@ -1155,7 +1157,10 @@ async function saveDraft() {
             internalComments: document.getElementById('internalComments')?.value || '',
             salesRepId, salesRepName, salesRepEmail, salesRepPhone,
             fourWeekGuarantee: document.getElementById('fourWeekGuarantee').checked,
-            totalGuaranteeDiscount: 0
+            totalGuaranteeDiscount: 0,
+            // Entity IDs for sync (passed back to worker)
+            _contactId: currentContactId || null,
+            _propertyId: currentPropertyId || null
         };
 
         const response = await fetch(`${WORKER_URL}/api/save-quote`, {
@@ -1168,6 +1173,22 @@ async function saveDraft() {
 
         if (response.ok && result.success) {
             if (!currentQuoteId) currentQuoteId = tempId; // Lock ID for future re-saves
+            // Store entity IDs returned by the worker
+            if (result.entities) {
+                currentContactId = result.entities.contactId || currentContactId;
+                currentPropertyId = result.entities.propertyId || currentPropertyId;
+                // Map entity IDs back onto screen objects
+                if (result.entities.openingIds) {
+                    screensInOrder.forEach((s, i) => {
+                        if (result.entities.openingIds[i]) s._openingId = result.entities.openingIds[i];
+                    });
+                }
+                if (result.entities.lineItemIds) {
+                    screensInOrder.forEach((s, i) => {
+                        if (result.entities.lineItemIds[i]) s._lineItemId = result.entities.lineItemIds[i];
+                    });
+                }
+            }
             alert(`Draft saved!\nQuote #: ${result.quoteNumber || 'N/A'}\n\nYou can load this draft later to finish configuration.`);
             loadSavedQuotes();
         } else {
@@ -1282,7 +1303,10 @@ async function saveQuote() {
             salesRepPhone: orderData.salesRepPhone || '',
             // 4-Week Install Guarantee
             fourWeekGuarantee: orderData.fourWeekGuarantee || false,
-            totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0
+            totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0,
+            // Entity IDs for sync (passed back to worker)
+            _contactId: currentContactId || null,
+            _propertyId: currentPropertyId || null
         };
 
         // If sales rep changed and opportunity is linked, update Airtable
@@ -1317,6 +1341,21 @@ async function saveQuote() {
             // Write quoteNumber back so PDFs generated after saving show the real number
             if (result.quoteNumber) {
                 window.currentOrderData.quoteNumber = result.quoteNumber;
+            }
+            // Store entity IDs returned by the worker
+            if (result.entities) {
+                currentContactId = result.entities.contactId || currentContactId;
+                currentPropertyId = result.entities.propertyId || currentPropertyId;
+                if (result.entities.openingIds) {
+                    screensInOrder.forEach((s, i) => {
+                        if (result.entities.openingIds[i]) s._openingId = result.entities.openingIds[i];
+                    });
+                }
+                if (result.entities.lineItemIds) {
+                    screensInOrder.forEach((s, i) => {
+                        if (result.entities.lineItemIds[i]) s._lineItemId = result.entities.lineItemIds[i];
+                    });
+                }
             }
             let msg = `Quote saved successfully!\nQuote #: ${result.quoteNumber || 'N/A'}`;
             if (result.airtableSync === false) {
@@ -1403,6 +1442,23 @@ async function loadQuote(quoteId) {
 
         const quote = result.quote;
         currentQuoteId = quote.id; // Preserve loaded quote's ID for re-save
+
+        // Store entity IDs from lazy migration or cached response
+        const entities = result.entities || {};
+        currentContactId = entities.contactId || null;
+        currentPropertyId = entities.propertyId || null;
+
+        // Map entity IDs onto screen objects (by index, matching openingIds/lineItemIds arrays)
+        if (entities.openingIds && quote.screens) {
+            quote.screens.forEach((screen, i) => {
+                if (entities.openingIds[i]) screen._openingId = entities.openingIds[i];
+            });
+        }
+        if (entities.lineItemIds && quote.screens) {
+            quote.screens.forEach((screen, i) => {
+                if (entities.lineItemIds[i]) screen._lineItemId = entities.lineItemIds[i];
+            });
+        }
 
         // Populate customer fields
         document.getElementById('customerName').value = quote.customerName || '';
@@ -2190,8 +2246,10 @@ function resetForm() {
     // Clear guarantee
     document.getElementById('fourWeekGuarantee').checked = false;
 
-    // Reset quote ID so next save creates a new quote
+    // Reset quote and entity IDs so next save creates new records
     currentQuoteId = null;
+    currentContactId = null;
+    currentPropertyId = null;
 }
 
 // Multi-screen order functions
@@ -3636,7 +3694,10 @@ function calculateOrderQuote() {
         salesRepEmail,
         salesRepPhone,
         fourWeekGuarantee,
-        totalGuaranteeDiscount
+        totalGuaranteeDiscount,
+        // Entity IDs for sync
+        _contactId: currentContactId || null,
+        _propertyId: currentPropertyId || null
     });
 }
 

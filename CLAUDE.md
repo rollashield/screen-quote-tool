@@ -49,6 +49,19 @@ Web application for generating custom rolling screen quotes with email integrati
 - POST /api/photos/delete - Delete site photo from R2
 - GET /r2/quotes/* - Serve photo from R2
 
+### Entities (Contacts, Properties, Openings, Line Items)
+- POST /api/contacts - Create/update contact
+- GET /api/contacts/:id - Get contact by ID
+- POST /api/properties - Create/update property
+- GET /api/properties?contact_id=X - List properties for a contact
+- POST /api/openings - Create/update opening
+- PATCH /api/openings/:id - Partial update opening (auto-save)
+- GET /api/openings?property_id=X&quote_id=X - List openings
+- POST /api/quote-line-items - Create/update line item
+- PATCH /api/quote-line-items/:id - Partial update line item
+- PATCH /api/quote-line-items/:id/exclude - Toggle exclude on line item
+- GET /api/quote-line-items?quote_id=X - List line items for a quote
+
 ### Airtable Integration
 - GET /api/airtable/opportunities/search?q=<query> - Search Airtable opportunities by name (filters out "Closed Lost")
 - GET /api/airtable/sales-reps - List all sales reps from Airtable
@@ -145,8 +158,18 @@ Existing saved quotes (no `phase` field on screens) default to `phase: 'configur
 - Signature & payment feature: `docs/signature-feature-plan.md`
 - Two-phase screen entry: `.claude/plans/synthetic-baking-pine.md`
 
+### Entity Architecture (contacts, properties, openings, line items)
+First-class D1 tables for contacts, properties, openings, and quote line items. The JSON blob in `quotes.quote_data` remains the source of truth; entity tables are synced on every save.
+
+- **Schema**: `d1-schema.sql` (full), `d1-migration-001-entities.sql` (migration for existing DBs)
+- **Lazy migration**: When `GET /api/quote/:id` loads a quote with `entities_migrated = 0`, automatically extracts entities from the JSON blob
+- **Entity sync on save**: `POST /api/save-quote` syncs contact, property, openings, and line items after saving the blob
+- **Entity ID flow**: Frontend stores `_contactId`, `_propertyId` as globals and `_openingId`, `_lineItemId` on screen objects. Passed back to worker on save to reuse existing entity IDs (stable IDs across saves).
+- **Orphan cleanup**: When screens are removed, `syncQuoteEntities()` deletes orphaned openings and line items
+- **Tables**: `contacts`, `properties`, `openings`, `quote_line_items` — see `d1-schema.sql` for full column list
+- **Architecture doc**: `../docs/architecture/properties-and-openings.md`
+
 ### Future plans (not yet implemented)
-- **Properties & Openings**: Promote openings from embedded quote JSON to first-class D1 tables (`properties`, `openings`). Adds property-level data (address, gate code, site notes) and opening-level identity that persists across quotes. Enables multi-property customers, upsell tracking, and future service/warranty tracking. Build in D1 first, migrate to Scheduler App PostgreSQL or sync to Airtable later. Full architecture: `../docs/architecture/properties-and-openings.md`
 - **Offline functionality**: IndexedDB auto-save, recovery on reload, queued cloud sync. Plan: `.claude/plans/synthetic-baking-pine.md` (includes pros/cons analysis)
 
 ## Payments
@@ -160,9 +183,10 @@ Existing saved quotes (no `phase` field on screens) default to `phase: 'configur
 - **Deposit**: Always 50% of total quote price
 
 ## D1 Database
-Schema in `d1-schema.sql`. Key columns beyond basic quote data:
+Schema in `d1-schema.sql`. Five tables: `quotes`, `contacts`, `properties`, `openings`, `quote_line_items`.
 - **Signing**: `quote_status`, `signing_token`, `signature_data`, `signed_at`, `signer_name`, `signer_ip`, `signing_method`
 - **Guarantee**: `four_week_guarantee`, `total_guarantee_discount`
+- **Entity references on quotes**: `contact_id`, `property_id`, `entities_migrated`, `sent_emails_json`
 - **Photos**: Stored in R2 (key format: `quotes/{quoteId}/screens/{screenIndex}/{timestamp}-{randomId}.{ext}`)
 
 ## Important Notes

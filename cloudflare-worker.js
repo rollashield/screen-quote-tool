@@ -944,12 +944,21 @@ async function handleSaveQuote(request, env) {
       airtableSyncError = atError.message || 'Airtable sync failed';
     }
 
+    // Sync entities (non-fatal — quote blob is the source of truth)
+    let entities = null;
+    try {
+      entities = await syncQuoteEntities(quoteId, quoteData, env);
+    } catch (entityErr) {
+      console.error('Entity sync failed (non-fatal):', entityErr);
+    }
+
     return jsonResponse({
       success: true,
       quoteId: quoteId,
       quoteNumber: quoteNumber,
       airtableSync: airtableSync,
       airtableSyncError: airtableSyncError,
+      entities: entities,
       message: airtableSync ? 'Quote saved successfully' : 'Quote saved (Airtable sync failed)'
     });
 
@@ -1031,6 +1040,19 @@ async function handleGetQuote(quoteId, env) {
         contactId: result.contact_id,
         propertyId: result.property_id
       };
+      // Fetch opening and line item IDs (ordered by sort_order to match screens array)
+      try {
+        const openings = await env.DB.prepare(
+          'SELECT id FROM openings WHERE quote_id = ? ORDER BY sort_order'
+        ).bind(quoteId).all();
+        const lineItems = await env.DB.prepare(
+          'SELECT id FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order'
+        ).bind(quoteId).all();
+        entities.openingIds = (openings.results || []).map(r => r.id);
+        entities.lineItemIds = (lineItems.results || []).map(r => r.id);
+      } catch (entityLookupErr) {
+        console.error('Error fetching entity IDs (non-fatal):', entityLookupErr);
+      }
     }
 
     return jsonResponse({
@@ -1224,6 +1246,177 @@ function splitName(fullName) {
   const lastName = parts.pop();
   const firstName = parts.join(' ');
   return { firstName, lastName };
+}
+
+// ─── Entity Sync on Save ───────────────────────────────────────────────────────
+// Called on every save to keep entity tables in sync with the JSON blob.
+// Uses entity IDs from the payload if available (re-save), generates new ones otherwise.
+async function syncQuoteEntities(quoteId, quoteData, env) {
+  const now = new Date().toISOString();
+
+  // 1. Upsert contact
+  let contactId = quoteData._contactId || null;
+  if (quoteData.customerName) {
+    if (!contactId) {
+      contactId = `contact-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+    const nameParts = splitName(quoteData.customerName);
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO contacts (
+        id, first_name, last_name, email, phone, company_name,
+        street_address, apt_suite, city, state, zip_code,
+        airtable_contact_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      contactId,
+      nameParts.firstName, nameParts.lastName,
+      quoteData.customerEmail || null,
+      quoteData.customerPhone || null,
+      quoteData.companyName || null,
+      quoteData.streetAddress || null,
+      quoteData.aptSuite || null,
+      quoteData.city || null,
+      quoteData.state || null,
+      quoteData.zipCode || null,
+      quoteData.airtableContactId || null,
+      now, now
+    ).run();
+  }
+
+  // 2. Upsert property (only if we have a street address)
+  let propertyId = quoteData._propertyId || null;
+  if (quoteData.streetAddress) {
+    if (!propertyId) {
+      propertyId = `prop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO properties (
+        id, contact_id, name, street_address, apt_suite,
+        nearest_intersection, city, state, zip_code,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      propertyId, contactId, null,
+      quoteData.streetAddress,
+      quoteData.aptSuite || null,
+      quoteData.nearestIntersection || null,
+      quoteData.city || null,
+      quoteData.state || null,
+      quoteData.zipCode || null,
+      now, now
+    ).run();
+  }
+
+  // 3. Sync openings + line items from screens array
+  const screens = quoteData.screens || [];
+  const openingIds = [];
+  const lineItemIds = [];
+
+  for (let i = 0; i < screens.length; i++) {
+    const screen = screens[i];
+    const openingId = screen._openingId || `opening-${quoteId}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+    const lineItemId = screen._lineItemId || `li-${quoteId}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+    openingIds.push(openingId);
+    lineItemIds.push(lineItemId);
+
+    // Upsert opening
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO openings (
+        id, property_id, quote_id, name,
+        width_inches, width_fraction, height_inches, height_fraction,
+        width_feet, height_feet, width_display, height_display,
+        frame_color, frame_color_name,
+        include_installation, wiring_distance,
+        status, photos_json, sort_order,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      openingId, propertyId, quoteId,
+      screen.screenName || null,
+      screen.totalWidthInches || null,
+      screen.widthFractionValue || null,
+      screen.totalHeightInches || null,
+      screen.heightFractionValue || null,
+      screen.width || null,
+      screen.height || null,
+      screen.actualWidthDisplay || null,
+      screen.actualHeightDisplay || null,
+      screen.frameColor || null,
+      screen.frameColorName || null,
+      screen.includeInstallation !== false ? 1 : 0,
+      screen.wiringDistance || 0,
+      screen.phase === 'configured' ? 'quoted' : 'documented',
+      JSON.stringify(screen.photos || []),
+      i, now, now
+    ).run();
+
+    // Upsert line item
+    const phase = screen.phase || 'configured';
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO quote_line_items (
+        id, quote_id, opening_id, product_type,
+        track_type, track_type_name, operator_type, operator_type_name,
+        fabric_color, fabric_color_name, frame_color, frame_color_name,
+        no_tracks, accessories_json,
+        customer_price, installation_price, wiring_price,
+        cost_total, screen_cost_only, motor_cost, accessories_cost,
+        installation_cost, guarantee_discount,
+        comparison_price, comparison_material_price,
+        excluded, sort_order, phase,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      lineItemId, quoteId, openingId, 'screen',
+      screen.trackType || null,
+      screen.trackTypeName || null,
+      screen.operatorType || null,
+      screen.operatorTypeName || null,
+      screen.fabricColor || null,
+      screen.fabricColorName || null,
+      screen.frameColor || null,
+      screen.frameColorName || null,
+      screen.noTracks ? 1 : 0,
+      JSON.stringify(screen.accessories || []),
+      screen.customerPrice || 0,
+      screen.installationPrice || 0,
+      screen.wiringPrice || 0,
+      screen.totalCost || 0,
+      screen.screenCostOnly || 0,
+      screen.motorCost || 0,
+      screen.accessoriesCost || 0,
+      screen.installationCost || 0,
+      screen.guaranteeDiscount || 0,
+      screen.comparisonPrice || null,
+      screen.comparisonMaterialPrice || null,
+      0, i,
+      phase === 'configured' ? 'configured' : 'opening',
+      now, now
+    ).run();
+  }
+
+  // 4. Delete orphaned openings/line items (screens removed since last save)
+  if (openingIds.length > 0) {
+    // Delete line items for openings no longer in the quote
+    await env.DB.prepare(
+      `DELETE FROM quote_line_items WHERE quote_id = ? AND opening_id NOT IN (${openingIds.map(() => '?').join(',')})`
+    ).bind(quoteId, ...openingIds).run();
+    // Delete openings no longer in the quote
+    await env.DB.prepare(
+      `DELETE FROM openings WHERE quote_id = ? AND id NOT IN (${openingIds.map(() => '?').join(',')})`
+    ).bind(quoteId, ...openingIds).run();
+  } else {
+    // All screens removed — delete all openings and line items for this quote
+    await env.DB.prepare('DELETE FROM quote_line_items WHERE quote_id = ?').bind(quoteId).run();
+    await env.DB.prepare('DELETE FROM openings WHERE quote_id = ?').bind(quoteId).run();
+  }
+
+  // 5. Update quote row with entity references
+  await env.DB.prepare(`
+    UPDATE quotes SET contact_id = ?, property_id = ?, entities_migrated = 1, updated_at = ?
+    WHERE id = ?
+  `).bind(contactId, propertyId, now, quoteId).run();
+
+  return { contactId, propertyId, openingIds, lineItemIds };
 }
 
 // ─── Delete Specific Quote ─────────────────────────────────────────────────────
