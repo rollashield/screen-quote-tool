@@ -416,7 +416,7 @@ function showConfirmation() {
 
     // Build the payment page URL
     const paymentUrl = quoteId
-        ? `pay.html?quoteId=${quoteId}${signingMode === 'in-person' ? '&mode=in-person' : ''}`
+        ? `pay.html?quoteId=${quoteId}${signingMode === 'in-person' ? '&mode=in-person' : '&fromSignature=1'}`
         : null;
 
     // Show payment link for all modes
@@ -430,6 +430,25 @@ function showConfirmation() {
         const linksDiv = document.getElementById('confirmationLinks');
         linksDiv.style.display = 'flex';
         document.getElementById('finalizeLink').href = `finalize.html?orderId=${quoteId}`;
+    }
+
+    // Auto-redirect to payment for remote signing (not in-person — sales rep stays here)
+    if (signingMode !== 'in-person' && paymentUrl) {
+        let countdown = 3;
+        const countdownEl = document.createElement('p');
+        countdownEl.style.cssText = 'text-align: center; color: #666; margin-top: 12px; font-size: 0.95rem;';
+        countdownEl.textContent = `Redirecting to payment page in ${countdown}...`;
+        confirmScreen.appendChild(countdownEl);
+
+        const timer = setInterval(() => {
+            countdown--;
+            if (countdown > 0) {
+                countdownEl.textContent = `Redirecting to payment page in ${countdown}...`;
+            } else {
+                clearInterval(timer);
+                window.location.href = paymentUrl;
+            }
+        }, 1000);
     }
 }
 

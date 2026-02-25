@@ -126,6 +126,20 @@ function populatePage(quoteResult, paymentInfo) {
     document.getElementById('checkMemo').textContent = quoteNumber;
     document.getElementById('checkWarning').textContent = paymentInfo.check.warning;
 
+    // Show "Thanks for signing" banner if arriving from signature page
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('fromSignature') === '1') {
+        const banner = document.createElement('div');
+        banner.style.cssText = 'background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 16px; margin-bottom: 20px; text-align: center;';
+        banner.innerHTML = `
+            <div style="font-size: 1.5rem; margin-bottom: 4px;">✓</div>
+            <strong style="color: #155724;">Thank you! Your signature has been submitted.</strong>
+            <p style="color: #155724; margin-top: 4px; margin-bottom: 0;">Please select a payment method below to complete your order.</p>
+        `;
+        const payBody = document.querySelector('.pay-body');
+        if (payBody) payBody.insertBefore(banner, payBody.firstChild);
+    }
+
     // Show the page
     document.getElementById('loadingScreen').style.display = 'none';
     document.getElementById('payContainer').style.display = 'block';

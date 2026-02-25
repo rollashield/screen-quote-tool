@@ -1851,6 +1851,73 @@ async function handleSubmitRemoteSignature(token, request, env) {
       console.error('Failed to send signature confirmation email:', emailError);
     }
 
+    // Send customer confirmation email with payment link (non-fatal)
+    try {
+      const quoteData2 = JSON.parse(row.quote_data);
+      const customerEmail = quoteData2.customerEmail || row.customer_email;
+      const customerName2 = quoteData2.customerName || row.customer_name;
+      const totalPrice2 = quoteData2.orderTotalPrice || row.total_price || 0;
+      const screenCount2 = quoteData2.screens?.length || row.screen_count || 0;
+      const depositAmount = (Number(totalPrice2) / 2).toFixed(2);
+      const baseUrl = 'https://rollashield.github.io/screen-quote-tool';
+      const paymentUrl = `${baseUrl}/pay.html?quoteId=${row.id}&fromSignature=1`;
+
+      if (customerEmail) {
+        const custHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #004a95; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+              <h2 style="margin: 0;">Signature Confirmed</h2>
+            </div>
+            <div style="background: white; padding: 25px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
+              <p>Dear ${customerName2},</p>
+              <p>Thank you for signing your Roll-A-Shield quote <strong>${row.quote_number}</strong>.</p>
+              <div style="background: #f0f4f8; padding: 15px; border-radius: 6px; margin: 15px 0;">
+                <p style="margin: 0;"><strong>Quote:</strong> ${row.quote_number}</p>
+                <p style="margin: 5px 0;"><strong>Screens:</strong> ${screenCount2}</p>
+                <p style="margin: 5px 0;"><strong>Total:</strong> $${Number(totalPrice2).toFixed(2)}</p>
+                <p style="margin: 5px 0;"><strong>Deposit (50%):</strong> $${depositAmount}</p>
+              </div>
+              <p>To proceed with your order, please submit your deposit payment:</p>
+              <div style="text-align: center; margin: 20px 0;">
+                <a href="${paymentUrl}" style="display: inline-block; background: #004a95; color: white; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1.1rem;">Proceed to Payment</a>
+              </div>
+              <p style="font-size: 0.9rem; color: #666;">Payment methods available: Credit Card, eCheck, ACH Transfer, Zelle, or Check.</p>
+              <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+              <p style="font-size: 0.85rem; color: #888;">If you have any questions, please contact your Roll-A-Shield representative.</p>
+            </div>
+          </div>
+        `;
+
+        const custText = `Dear ${customerName2},\n\nThank you for signing your Roll-A-Shield quote ${row.quote_number}.\n\nQuote: ${row.quote_number}\nScreens: ${screenCount2}\nTotal: $${Number(totalPrice2).toFixed(2)}\nDeposit (50%): $${depositAmount}\n\nTo proceed with your order, please submit your deposit payment:\n${paymentUrl}\n\nPayment methods: Credit Card, eCheck, ACH Transfer, Zelle, or Check.\n\nIf you have any questions, please contact your Roll-A-Shield representative.`;
+
+        const custSubject = `Roll-A-Shield Quote ${row.quote_number} — Signature Confirmed`;
+        const custEmailResult = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'Roll-A-Shield <noreply@updates.rollashield.com>',
+            to: [customerEmail],
+            subject: custSubject,
+            html: custHtml,
+            text: custText
+          })
+        });
+
+        const custEmailData = await custEmailResult.json();
+        await storeEmailRecord(env, row.id, {
+          type: 'signature-customer-confirmation',
+          to: [customerEmail],
+          subject: custSubject,
+          resendId: custEmailData?.id
+        });
+      }
+    } catch (custEmailError) {
+      console.error('Failed to send customer signature confirmation email:', custEmailError);
+    }
+
     // Update Airtable quote status to "Accepted" (non-fatal)
     if (row.airtable_quote_id) {
       try {
