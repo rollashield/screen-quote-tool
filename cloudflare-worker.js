@@ -1824,6 +1824,7 @@ async function handleSubmitRemoteSignature(token, request, env) {
 
         const notificationText = `${customerName} has signed quote ${row.quote_number}.\n\nQuote: ${row.quote_number}\nScreens: ${screenCount}\nTotal: $${Number(totalPrice).toFixed(2)}\nSigned: ${signedAtFormatted}\nMethod: Remote (email link)\nSigner: ${signerName}\n\nThe customer can now proceed to payment.`;
 
+        const sigSubject = `${customerName} has signed Quote ${row.quote_number}`;
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -1833,10 +1834,17 @@ async function handleSubmitRemoteSignature(token, request, env) {
           body: JSON.stringify({
             from: 'Roll-A-Shield Quotes <noreply@updates.rollashield.com>',
             to: [salesRepEmail],
-            subject: `${customerName} has signed Quote ${row.quote_number}`,
+            subject: sigSubject,
             html: notificationHtml,
             text: notificationText
           })
+        });
+
+        // Store email record for tracking
+        await storeEmailRecord(env, row.id, {
+          type: 'signature-confirmation',
+          to: [salesRepEmail],
+          subject: sigSubject
         });
       }
     } catch (emailError) {

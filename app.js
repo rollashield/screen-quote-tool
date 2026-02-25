@@ -2843,6 +2843,10 @@ function resetForm() {
     // Clear guarantee
     document.getElementById('fourWeekGuarantee').checked = false;
 
+    // Hide screens section and quote summary
+    document.getElementById('screensInOrder').classList.add('hidden');
+    document.getElementById('quoteSummary').classList.add('hidden');
+
     // Reset quote and entity IDs so next save creates new records
     currentQuoteId = null;
     currentContactId = null;

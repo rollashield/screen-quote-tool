@@ -83,8 +83,8 @@ async function fetchInPersonQuote(id) {
 function renderQuote(data) {
     const quoteData = data.quote;
 
-    // Guard: block rendering for draft/unconfigured quotes
-    const unconfigured = (quoteData.screens || []).filter(s => s.phase === 'opening');
+    // Guard: block rendering for draft/unconfigured quotes (skip excluded screens)
+    const unconfigured = (quoteData.screens || []).filter(s => s.phase === 'opening' && !s.excluded);
     if (unconfigured.length > 0) {
         document.getElementById('loadingScreen').style.display = 'none';
         document.getElementById('signContainer').style.display = 'block';
@@ -129,7 +129,7 @@ function mapOrderDataForSigning(quoteData, quoteNumber) {
         [quoteData.city, quoteData.state, quoteData.zipCode].filter(Boolean).join(', ')
     ].filter(Boolean).join(', ');
 
-    const screens = (quoteData.screens || []).map((screen, i) => ({
+    const screens = (quoteData.screens || []).filter(s => !s.excluded).map((screen, i) => ({
         name: screen.screenName || `Screen ${i + 1}`,
         track: clientFacingTrackName(screen.trackTypeName || ''),
         operator: clientFacingOperatorName(screen.operatorType, screen.operatorTypeName),
@@ -194,19 +194,33 @@ function mapOrderDataForSigning(quoteData, quoteNumber) {
         comparisonPricing: null
     };
 
-    if (quoteData.enableComparison) {
+    const hasComparison = quoteData.enableComparison && (
+        (quoteData.comparisonType === 'track' && quoteData.comparisonTrack) ||
+        ((!quoteData.comparisonType || quoteData.comparisonType === 'motor') && quoteData.comparisonMotor)
+    );
+    if (hasComparison) {
         const compMaterials = quoteData.comparisonTotalMaterialsPrice || 0;
         const compDiscounted = quoteData.comparisonDiscountedMaterialsPrice || compMaterials;
         const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice + wiringPrice + miscInstallAmount;
         const compTotal = quoteData.comparisonTotalPrice || 0;
 
-        const firstScreen = (quoteData.screens || [])[0];
-        const option1Label = firstScreen
-            ? clientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName)
-            : 'Option 1';
-        const option2Label = quoteData.comparisonMotor
-            ? clientFacingOperatorName(quoteData.comparisonMotor, quoteData.comparisonMotor)
-            : 'Option 2';
+        const firstScreen = (quoteData.screens || []).filter(s => !s.excluded)[0];
+        let option1Label, option2Label;
+        if (quoteData.comparisonType === 'track') {
+            option1Label = firstScreen
+                ? clientFacingTrackName(firstScreen.trackTypeName)
+                : 'Option 1';
+            option2Label = quoteData.comparisonTrackName
+                ? clientFacingTrackName(quoteData.comparisonTrackName)
+                : 'Option 2';
+        } else {
+            option1Label = firstScreen
+                ? clientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName)
+                : 'Option 1';
+            option2Label = quoteData.comparisonMotor
+                ? clientFacingOperatorName(quoteData.comparisonMotor, quoteData.comparisonMotor)
+                : 'Option 2';
+        }
 
         data.comparisonPricing = {
             option1Label: option1Label,
