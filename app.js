@@ -74,6 +74,223 @@ let currentQuoteId = null; // Persists across recalculate/re-save to prevent dup
 let currentContactId = null; // Entity ID for the contact record
 let currentPropertyId = null; // Entity ID for the property record
 
+// ─── Shared Helpers (dropdown option data, used by defaults/quick-config/inline editor) ──
+
+function getTrackTypeOptions() {
+    return [
+        { value: 'sunair-zipper', label: 'Sunair Zipper Track' },
+        { value: 'sunair-cable', label: 'Sunair Cable' },
+        { value: 'fenetex-keder', label: 'Fenetex Keder Track' }
+    ];
+}
+
+function getTrackTypeName(value) {
+    const opt = getTrackTypeOptions().find(o => o.value === value);
+    return opt ? opt.label : '';
+}
+
+function getOperatorOptionsForTrack(trackType, isGuarantee) {
+    if (!trackType) return [];
+    const somfyOption = isGuarantee ? null : { value: 'somfy-rts', label: 'Somfy RTS Motor' };
+    if (trackType === 'sunair-zipper' || trackType === 'sunair-cable') {
+        const opts = [
+            { value: 'gear', label: 'Gear Operation (Manual)' },
+            { value: 'gaposa-rts', label: 'Gaposa RTS Motor' },
+            { value: 'gaposa-solar', label: 'Gaposa Solar Motor' }
+        ];
+        if (somfyOption) opts.push(somfyOption);
+        return opts;
+    } else if (trackType === 'fenetex-keder') {
+        return [{ value: 'gaposa-rts', label: 'Gaposa RTS Motor (Included)' }];
+    }
+    return [];
+}
+
+function getOperatorTypeName(trackType, operatorValue) {
+    const opts = getOperatorOptionsForTrack(trackType, false);
+    const opt = opts.find(o => o.value === operatorValue);
+    return opt ? opt.label : '';
+}
+
+function getFabricOptions() {
+    return [
+        { value: 'T18FVT061-Espresso', label: 'Espresso Texture', group: 'Standard Fabrics' },
+        { value: 'T18FVT054-Tobacco', label: 'Tobacco', group: 'Standard Fabrics' },
+        { value: 'T18FVT061-Charcoal', label: 'Charcoal', group: 'Standard Fabrics' },
+        { value: 'T18FVT059-Granite', label: 'Granite', group: 'Standard Fabrics' },
+        { value: 'T18FVT060-Black', label: 'Black', group: 'Standard Fabrics' },
+        { value: 'T18FVT056-Sable', label: 'Sable', group: 'Standard Fabrics' },
+        { value: 'T18FVT-Black90', label: 'Black 90', group: '90% Fabrics' },
+        { value: 'T18FVT-Brown90', label: 'Brown 90', group: '90% Fabrics' },
+        { value: 'T18FVT-Black97', label: 'Black 97', group: '97% Fabrics' },
+        { value: 'T18FVT-Charcoal97', label: 'Charcoal 97', group: '97% Fabrics' },
+        { value: 'T18FVT-Tobacco97', label: 'Tobacco 97', group: '97% Fabrics' },
+        { value: 'T18FVT-Tuffscreen', label: 'Tuffscreen / Bugscreen', group: 'Specialty' }
+    ];
+}
+
+function getFabricName(value) {
+    const opt = getFabricOptions().find(o => o.value === value);
+    return opt ? opt.label : '';
+}
+
+function getFrameColorOptions() {
+    return [
+        { value: 'white', label: 'White' },
+        { value: 'mocha', label: 'Mocha' },
+        { value: 'taupe', label: 'Taupe' },
+        { value: 'brown', label: 'Brown' },
+        { value: 'bronze', label: 'Bronze' },
+        { value: 'black', label: 'Black' },
+        { value: 'grey', label: 'Grey' }
+    ];
+}
+
+function getFrameColorName(value) {
+    const opt = getFrameColorOptions().find(o => o.value === value);
+    return opt ? opt.label : '';
+}
+
+function escapeAttr(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function buildSelectOptionsHtml(options, selectedValue, placeholder) {
+    let html = `<option value="">${placeholder || '-- Select --'}</option>`;
+    options.forEach(opt => {
+        const sel = opt.value === selectedValue ? ' selected' : '';
+        html += `<option value="${escapeAttr(opt.value)}"${sel}>${escapeAttr(opt.label)}</option>`;
+    });
+    return html;
+}
+
+// ─── Project Defaults ──────────────────────────────────────────────────────────
+let projectDefaults = { trackType: '', operatorType: '', fabricColor: '', frameColor: '' };
+
+function toggleProjectDefaults() {
+    const body = document.getElementById('defaultsBody');
+    const icon = document.getElementById('defaultsToggleIcon');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.innerHTML = '&#9650;';
+    } else {
+        body.style.display = 'none';
+        icon.innerHTML = '&#9660;';
+    }
+}
+
+function updateDefaultOperatorOptions() {
+    const trackType = document.getElementById('defaultTrackType').value;
+    const operatorSelect = document.getElementById('defaultOperator');
+    const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
+
+    if (!trackType) {
+        operatorSelect.innerHTML = '<option value="">-- Select Track First --</option>';
+        operatorSelect.disabled = true;
+        projectDefaults.operatorType = '';
+    } else {
+        const options = getOperatorOptionsForTrack(trackType, isGuarantee);
+        operatorSelect.innerHTML = buildSelectOptionsHtml(options, projectDefaults.operatorType, '-- No Default --');
+        operatorSelect.disabled = false;
+    }
+
+    projectDefaults.trackType = trackType;
+    updateProjectDefaultsSummary();
+}
+
+function updateProjectDefaultsSummary() {
+    const summaryEl = document.getElementById('defaultsSummary');
+    if (!summaryEl) return;
+
+    const parts = [];
+    if (projectDefaults.trackType) parts.push(getTrackTypeName(projectDefaults.trackType).replace(' Track', ''));
+    if (projectDefaults.operatorType) parts.push(getOperatorTypeName(projectDefaults.trackType, projectDefaults.operatorType).replace(' Motor', '').replace(' Operation (Manual)', ''));
+    if (projectDefaults.fabricColor) parts.push(getFabricName(projectDefaults.fabricColor));
+    if (projectDefaults.frameColor) parts.push(getFrameColorName(projectDefaults.frameColor));
+
+    summaryEl.textContent = parts.length > 0 ? parts.join(' / ') : '';
+}
+
+function initProjectDefaults() {
+    // Populate default fabric select
+    const defaultFabric = document.getElementById('defaultFabric');
+    if (defaultFabric) {
+        defaultFabric.innerHTML = buildSelectOptionsHtml(getFabricOptions(), '', '-- No Default --');
+    }
+
+    // Wire up change handlers
+    document.getElementById('defaultTrackType').addEventListener('change', function() {
+        updateDefaultOperatorOptions();
+    });
+    document.getElementById('defaultOperator').addEventListener('change', function() {
+        projectDefaults.operatorType = this.value;
+        updateProjectDefaultsSummary();
+    });
+    document.getElementById('defaultFabric').addEventListener('change', function() {
+        projectDefaults.fabricColor = this.value;
+        updateProjectDefaultsSummary();
+    });
+    document.getElementById('defaultFrameColor').addEventListener('change', function() {
+        projectDefaults.frameColor = this.value;
+        updateProjectDefaultsSummary();
+    });
+}
+
+// ─── Quick Config (per-opening product preferences) ────────────────────────
+function toggleQuickConfig() {
+    const body = document.getElementById('quickConfigBody');
+    const icon = document.getElementById('quickConfigToggleIcon');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.innerHTML = '&#9650;';
+    } else {
+        body.style.display = 'none';
+        icon.innerHTML = '&#9660;';
+    }
+}
+
+function updatePrefOperatorOptions() {
+    const trackType = document.getElementById('prefTrackType').value;
+    const operatorSelect = document.getElementById('prefOperator');
+    const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
+
+    if (!trackType) {
+        operatorSelect.innerHTML = '<option value="">-- Use Default --</option>';
+        operatorSelect.disabled = true;
+    } else {
+        const options = getOperatorOptionsForTrack(trackType, isGuarantee);
+        operatorSelect.innerHTML = '<option value="">-- Use Default --</option>';
+        options.forEach(opt => {
+            operatorSelect.innerHTML += `<option value="${escapeAttr(opt.value)}">${escapeAttr(opt.label)}</option>`;
+        });
+        operatorSelect.disabled = false;
+    }
+}
+
+function resetQuickConfig() {
+    document.getElementById('prefTrackType').value = '';
+    document.getElementById('prefOperator').value = '';
+    document.getElementById('prefOperator').disabled = true;
+    document.getElementById('prefFabric').value = '';
+    document.getElementById('prefFrameColor').value = '';
+    document.getElementById('quickConfigBody').style.display = 'none';
+    document.getElementById('quickConfigToggleIcon').innerHTML = '&#9660;';
+}
+
+function initQuickConfig() {
+    // Populate pref fabric select
+    const prefFabric = document.getElementById('prefFabric');
+    if (prefFabric) {
+        prefFabric.innerHTML = '<option value="">-- Use Default --</option>';
+        getFabricOptions().forEach(opt => {
+            prefFabric.innerHTML += `<option value="${escapeAttr(opt.value)}">${escapeAttr(opt.label)}</option>`;
+        });
+    }
+
+    document.getElementById('prefTrackType').addEventListener('change', updatePrefOperatorOptions);
+}
+
 async function loadSalesReps() {
     try {
         const response = await fetch(`${WORKER_URL}/api/airtable/sales-reps`);
@@ -210,6 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById(id).addEventListener('input', function() {
             updatePricingDimensions();
             checkDimensionLimits();
+            updateDropdownCompatibility();
         });
     });
 
@@ -219,7 +437,17 @@ document.addEventListener('DOMContentLoaded', function() {
         comparisonOptions.style.display = this.checked ? 'grid' : 'none';
         if (!this.checked) {
             document.getElementById('comparisonMotor').value = '';
+            document.getElementById('comparisonTrack').value = '';
+            const warningEl = document.getElementById('comparisonTrackWarning');
+            if (warningEl) warningEl.style.display = 'none';
+        } else {
+            updateComparisonUI();
         }
+    });
+
+    // Comparison type radio toggle
+    document.querySelectorAll('input[name="comparisonType"]').forEach(radio => {
+        radio.addEventListener('change', updateComparisonUI);
     });
 
     // ── Airtable Opportunity Search ──
@@ -246,6 +474,64 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Set initial wiring field visibility based on default checkbox state
     updateWiringVisibility();
+
+    // Set initial Phase 1 header text
+    updatePhase1Header();
+
+    // Initialize project defaults panel
+    initProjectDefaults();
+
+    // Initialize quick config panel
+    initQuickConfig();
+
+    // ── Auto-save: blur handlers on Phase 1 fields ──
+    // When editing an existing opening and the user tabs away from a field,
+    // sync form values to the in-memory screen object and auto-save.
+    function syncPhase1FormToScreen() {
+        if (editingScreenIndex === null) return;
+        const screen = screensInOrder[editingScreenIndex];
+        if (!screen) return;
+
+        screen.screenName = document.getElementById('screenName').value.trim() || null;
+        screen.widthInputValue = document.getElementById('widthInches').value;
+        screen.widthFractionValue = document.getElementById('widthFraction').value;
+        screen.heightInputValue = document.getElementById('heightInches').value;
+        screen.heightFractionValue = document.getElementById('heightFraction').value;
+
+        const widthInches = parseInt(screen.widthInputValue) || 0;
+        const widthFraction = parseFraction(screen.widthFractionValue);
+        const heightInches = parseInt(screen.heightInputValue) || 0;
+        const heightFraction = parseFraction(screen.heightFractionValue);
+
+        screen.totalWidthInches = widthInches + widthFraction;
+        screen.totalHeightInches = heightInches + heightFraction;
+        screen.width = Math.ceil(screen.totalWidthInches / 12);
+        screen.height = Math.ceil(screen.totalHeightInches / 12);
+        screen.actualWidthDisplay = inchesToFeetAndInches(screen.totalWidthInches);
+        screen.actualHeightDisplay = inchesToFeetAndInches(screen.totalHeightInches);
+        screen.includeInstallation = document.getElementById('includeInstallation').checked;
+        screen.wiringDistance = parseInt(document.getElementById('wiringDistance').value) || 0;
+    }
+
+    const phase1AutoSaveFields = ['screenName', 'widthInches', 'widthFraction', 'heightInches', 'heightFraction', 'wiringDistance'];
+    phase1AutoSaveFields.forEach(fieldId => {
+        const el = document.getElementById(fieldId);
+        if (el) {
+            el.addEventListener('blur', function() {
+                if (editingScreenIndex !== null && currentQuoteId) {
+                    syncPhase1FormToScreen();
+                    debouncedAutoSaveOpening(editingScreenIndex);
+                }
+            });
+        }
+    });
+    // Installation checkbox change also triggers auto-save
+    document.getElementById('includeInstallation').addEventListener('change', function() {
+        if (editingScreenIndex !== null && currentQuoteId) {
+            syncPhase1FormToScreen();
+            debouncedAutoSaveOpening(editingScreenIndex);
+        }
+    });
 });
 
 // ─── Airtable Opportunity Search & Selection ────────────────────────────────
@@ -617,6 +903,67 @@ function calculateScreenWithAlternateMotor(screen, alternateMotorType) {
         motorCost: alternateMotorCost,
         materialPrice: customerPrice - screen.installationPrice
     };
+}
+
+function calculateScreenWithAlternateTrack(screen, altTrackType) {
+    // Calculate what the screen would cost with a different track type
+    const priceData = getPricingTable(altTrackType);
+    if (!priceData) return null;
+
+    const widthKey = String(screen.width);
+    const heightKey = String(screen.height);
+
+    if (!priceData[widthKey] || !priceData[widthKey][heightKey]) return null; // Incompatible dimensions
+
+    // Determine operator — Fenetex only supports gaposa-rts
+    let altOperator = screen.operatorType;
+    if (altTrackType === 'fenetex-keder') {
+        altOperator = 'gaposa-rts';
+    }
+
+    const guaranteeActive = document.getElementById('fourWeekGuarantee').checked;
+
+    const result = computeScreenPricing({
+        screenName: screen.screenName,
+        trackType: altTrackType,
+        trackTypeName: getTrackTypeName(altTrackType),
+        operatorType: altOperator,
+        operatorTypeName: getOperatorTypeName(altTrackType, altOperator),
+        fabricColor: screen.fabricColor,
+        fabricColorName: screen.fabricColorName,
+        frameColor: screen.frameColor,
+        frameColorName: screen.frameColorName,
+        width: screen.width,
+        height: screen.height,
+        totalWidthInches: screen.totalWidthInches,
+        totalHeightInches: screen.totalHeightInches,
+        actualWidthDisplay: screen.actualWidthDisplay,
+        actualHeightDisplay: screen.actualHeightDisplay,
+        noTracks: false, // No tracks only applies to zipper
+        includeInstallation: screen.includeInstallation,
+        wiringDistance: screen.wiringDistance,
+        accessories: [], // Different track may have different accessories — use none for comparison
+        guaranteeActive,
+        photos: screen.photos || [],
+        pendingPhotos: screen.pendingPhotos || [],
+        widthInputValue: screen.widthInputValue,
+        widthFractionValue: screen.widthFractionValue,
+        heightInputValue: screen.heightInputValue,
+        heightFractionValue: screen.heightFractionValue
+    });
+
+    if (!result) return null;
+
+    return {
+        customerPrice: result.customerPrice,
+        materialPrice: result.customerPrice - result.installationPrice - (result.wiringPrice || 0)
+    };
+}
+
+function updateComparisonUI() {
+    const compType = document.querySelector('input[name="comparisonType"]:checked')?.value || 'motor';
+    document.getElementById('comparisonMotorGroup').style.display = compType === 'motor' ? 'grid' : 'none';
+    document.getElementById('comparisonTrackGroup').style.display = compType === 'track' ? 'grid' : 'none';
 }
 
 function updateWiringVisibility() {
@@ -1070,6 +1417,112 @@ function displayQuoteSummary(quote) {
     quoteSummary.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// ─── Auto-Save (individual opening PATCH/POST) ──────────────────────────────
+let autoSaveTimers = {}; // Per-screen debounce timers, keyed by screen index
+const AUTO_SAVE_DEBOUNCE_MS = 1500;
+
+/**
+ * Auto-save a single opening to D1 via PATCH (update) or POST (create).
+ * Only fires when currentQuoteId exists and the opening has valid dimensions.
+ * Also uploads any pending photos to R2 and patches the opening's photos array.
+ * Silent — no alerts or UI disruption on success. Logs errors to console.
+ */
+async function autoSaveOpening(screenIndex) {
+    if (!currentQuoteId) return;
+    const screen = screensInOrder[screenIndex];
+    if (!screen) return;
+
+    // Only auto-save openings with non-zero width AND height
+    if (!screen.totalWidthInches || !screen.totalHeightInches) return;
+
+    // Upload pending photos first (if any) so they're included in the save
+    if (screen.pendingPhotos && screen.pendingPhotos.length > 0) {
+        try {
+            const uploaded = await uploadPendingPhotos(String(currentQuoteId), screenIndex, screen.pendingPhotos);
+            screen.photos = (screen.photos || []).concat(uploaded);
+            screen.pendingPhotos = [];
+            // Update photo globals and preview if this screen is currently being edited
+            if (editingScreenIndex === screenIndex) {
+                existingScreenPhotos = screen.photos.slice();
+                pendingScreenPhotos = [];
+                renderPhotoPreview();
+            }
+        } catch (err) {
+            console.error('Auto-save photo upload failed:', err);
+        }
+    }
+
+    const openingData = {
+        quoteId: String(currentQuoteId),
+        name: screen.screenName || null,
+        widthInches: screen.widthInputValue || null,
+        widthFraction: screen.widthFractionValue || null,
+        heightInches: screen.heightInputValue || null,
+        heightFraction: screen.heightFractionValue || null,
+        widthFeet: screen.width,
+        heightFeet: screen.height,
+        widthDisplay: screen.actualWidthDisplay,
+        heightDisplay: screen.actualHeightDisplay,
+        includeInstallation: screen.includeInstallation,
+        wiringDistance: screen.wiringDistance || 0,
+        photos: (screen.photos || []).filter(p => typeof p === 'object' && p.key),
+        sortOrder: screenIndex,
+        status: screen.phase === 'configured' ? 'configured' : 'documented'
+    };
+
+    try {
+        if (screen._openingId) {
+            // PATCH existing opening
+            await fetch(`${WORKER_URL}/api/openings/${screen._openingId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(openingData)
+            });
+        } else {
+            // POST new opening, store the ID back
+            const response = await fetch(`${WORKER_URL}/api/openings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(openingData)
+            });
+            const result = await response.json();
+            if (result.success && result.openingId) {
+                screensInOrder[screenIndex]._openingId = result.openingId;
+            }
+        }
+        showAutoSaveIndicator();
+    } catch (err) {
+        console.error('Auto-save opening failed:', err);
+    }
+}
+
+/**
+ * Debounced auto-save for a specific screen index.
+ */
+function debouncedAutoSaveOpening(screenIndex) {
+    clearTimeout(autoSaveTimers[screenIndex]);
+    autoSaveTimers[screenIndex] = setTimeout(() => autoSaveOpening(screenIndex), AUTO_SAVE_DEBOUNCE_MS);
+}
+
+/**
+ * Show a brief "Auto-saved" indicator near the save draft button.
+ */
+function showAutoSaveIndicator() {
+    let indicator = document.getElementById('autoSaveIndicator');
+    if (!indicator) {
+        indicator = document.createElement('span');
+        indicator.id = 'autoSaveIndicator';
+        indicator.style.cssText = 'font-size: 0.8rem; color: #28a745; margin-left: 10px; opacity: 0; transition: opacity 0.3s;';
+        const draftBtn = document.getElementById('saveDraftBtn');
+        if (draftBtn && draftBtn.parentNode) {
+            draftBtn.parentNode.insertBefore(indicator, draftBtn.nextSibling);
+        }
+    }
+    indicator.textContent = 'Auto-saved';
+    indicator.style.opacity = '1';
+    setTimeout(() => { indicator.style.opacity = '0'; }, 2000);
+}
+
 // ─── Save Draft (Phase 1 only — no pricing required) ────────────────────────
 async function saveDraft() {
     if (isSaving) return;
@@ -1141,7 +1594,10 @@ async function saveDraft() {
             discountAmount: 0,
             discountedMaterialsPrice: 0,
             enableComparison: false,
+            comparisonType: 'motor',
             comparisonMotor: '',
+            comparisonTrack: '',
+            comparisonSkippedCount: 0,
             comparisonTotalMaterialsPrice: 0,
             comparisonDiscountedMaterialsPrice: 0,
             comparisonTotalPrice: 0,
@@ -1158,6 +1614,8 @@ async function saveDraft() {
             salesRepId, salesRepName, salesRepEmail, salesRepPhone,
             fourWeekGuarantee: document.getElementById('fourWeekGuarantee').checked,
             totalGuaranteeDiscount: 0,
+            // Project defaults
+            projectDefaults: { ...projectDefaults },
             // Entity IDs for sync (passed back to worker)
             _contactId: currentContactId || null,
             _propertyId: currentPropertyId || null
@@ -1279,7 +1737,10 @@ async function saveQuote() {
             discountAmount: orderData.discountAmount,
             discountedMaterialsPrice: orderData.discountedMaterialsPrice,
             enableComparison: orderData.enableComparison,
+            comparisonType: orderData.comparisonType || 'motor',
             comparisonMotor: orderData.comparisonMotor,
+            comparisonTrack: orderData.comparisonTrack || '',
+            comparisonSkippedCount: orderData.comparisonSkippedCount || 0,
             comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
             comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
             comparisonTotalPrice: orderData.comparisonTotalPrice,
@@ -1304,6 +1765,8 @@ async function saveQuote() {
             // 4-Week Install Guarantee
             fourWeekGuarantee: orderData.fourWeekGuarantee || false,
             totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0,
+            // Project defaults
+            projectDefaults: orderData.projectDefaults || { ...projectDefaults },
             // Entity IDs for sync (passed back to worker)
             _contactId: currentContactId || null,
             _propertyId: currentPropertyId || null
@@ -1406,17 +1869,36 @@ async function loadSavedQuotes() {
             const isDraft = !quote.total_price || quote.total_price === 0;
             const totalPrice = isDraft ? null : formatCurrency(quote.total_price);
             const quoteNum = quote.quote_number ? `<p><strong>Quote #:</strong> ${quote.quote_number}</p>` : '';
-            const draftBadge = isDraft ? '<span style="background: #e67e22; color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; margin-left: 8px;">DRAFT</span>' : '';
+
+            // Status badge logic
+            const quoteStatus = quote.quote_status || 'draft';
+            const paymentStatus = quote.payment_status || 'unpaid';
+            let statusBadge = '';
+            let borderColor = '';
+            if (paymentStatus === 'paid') {
+                statusBadge = '<span style="background: #6f42c1; color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; margin-left: 8px;">PAID</span>';
+                borderColor = '#6f42c1';
+            } else if (quoteStatus === 'signed') {
+                statusBadge = '<span style="background: #28a745; color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; margin-left: 8px;">SIGNED</span>';
+                borderColor = '#28a745';
+            } else if (quoteStatus === 'sent') {
+                statusBadge = '<span style="background: #0071bc; color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; margin-left: 8px;">SENT</span>';
+                borderColor = '#0071bc';
+            } else if (isDraft) {
+                statusBadge = '<span style="background: #e67e22; color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; margin-left: 8px;">DRAFT</span>';
+                borderColor = '#e67e22';
+            }
 
             html += `
-                <div class="quote-card" ${isDraft ? 'style="border-left: 3px solid #e67e22;"' : ''}>
-                    <h4>${quote.customer_name}${draftBadge}</h4>
+                <div class="quote-card" ${borderColor ? `style="border-left: 3px solid ${borderColor};"` : ''}>
+                    <h4>${quote.customer_name}${statusBadge}</h4>
                     ${quoteNum}
                     <p><strong>Date:</strong> ${date}</p>
                     <p><strong>Screens:</strong> ${screenCount}</p>
                     ${totalPrice ? `<p><strong>Total:</strong> ${totalPrice}</p>` : ''}
                     <div class="quote-card-actions">
                         <button class="btn-primary" onclick="loadQuote('${quote.id}')">Load</button>
+                        <button class="btn-secondary" onclick="viewSentEmails('${quote.id}')">Emails</button>
                         <button class="btn-secondary" onclick="deleteQuote('${quote.id}')">Delete</button>
                     </div>
                 </div>
@@ -1548,11 +2030,34 @@ async function loadQuote(quoteId) {
             if (quote.enableComparison) {
                 document.getElementById('enableComparison').checked = true;
                 document.getElementById('comparisonOptions').style.display = 'grid';
+                // Restore comparison type radio
+                const compType = quote.comparisonType || 'motor';
+                const compRadio = document.querySelector(`input[name="comparisonType"][value="${compType}"]`);
+                if (compRadio) compRadio.checked = true;
+                updateComparisonUI();
+                // Restore motor/track selection
+                if (quote.comparisonMotor) {
+                    document.getElementById('comparisonMotor').value = quote.comparisonMotor;
+                }
+                if (quote.comparisonTrack) {
+                    document.getElementById('comparisonTrack').value = quote.comparisonTrack;
+                }
             }
 
             // Restore guarantee checkbox
             if (quote.fourWeekGuarantee) {
                 document.getElementById('fourWeekGuarantee').checked = true;
+            }
+
+            // Restore project defaults
+            if (quote.projectDefaults) {
+                projectDefaults = { ...quote.projectDefaults };
+                document.getElementById('defaultTrackType').value = projectDefaults.trackType || '';
+                updateDefaultOperatorOptions();
+                document.getElementById('defaultOperator').value = projectDefaults.operatorType || '';
+                document.getElementById('defaultFabric').value = projectDefaults.fabricColor || '';
+                document.getElementById('defaultFrameColor').value = projectDefaults.frameColor || '';
+                updateProjectDefaultsSummary();
             }
 
             // Only show order summary if all screens are configured (not a draft)
@@ -1592,10 +2097,83 @@ async function deleteQuote(quoteId) {
     }
 }
 
+// ─── Sent Emails Viewer ──────────────────────────────────────────────────────
+async function viewSentEmails(quoteId) {
+    try {
+        const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}/emails`);
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            alert('Failed to load emails: ' + (result.error || 'Unknown error'));
+            return;
+        }
+
+        const emails = result.emails || [];
+        showEmailsModal(emails);
+    } catch (error) {
+        console.error('Error loading emails:', error);
+        alert('Failed to load emails.');
+    }
+}
+
+function showEmailsModal(emails) {
+    // Remove existing modal if any
+    const existing = document.getElementById('emailsModal');
+    if (existing) existing.remove();
+
+    const typeLabels = {
+        'quote': 'Quote Email',
+        'signature-request': 'Signature Request',
+        'payment-confirmation': 'Payment Confirmation',
+        'production': 'Production Order'
+    };
+
+    let content = '';
+    if (emails.length === 0) {
+        content = '<p style="color: #666; text-align: center; padding: 20px;">No emails sent yet for this quote.</p>';
+    } else {
+        emails.forEach(email => {
+            const date = new Date(email.sentAt).toLocaleString();
+            const type = typeLabels[email.type] || email.type || 'Email';
+            const to = Array.isArray(email.to) ? email.to.join(', ') : email.to;
+            const cc = email.cc && email.cc.length > 0 ? `<br><span style="color: #888;">CC: ${email.cc.join(', ')}</span>` : '';
+            content += `
+                <div style="padding: 12px; border-bottom: 1px solid #eee;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="color: #004a95;">${type}</strong>
+                        <span style="color: #888; font-size: 0.85rem;">${date}</span>
+                    </div>
+                    <div style="font-size: 0.9rem; margin-top: 4px;">
+                        <strong>To:</strong> ${to}${cc}
+                    </div>
+                    <div style="font-size: 0.85rem; color: #555; margin-top: 2px;">${email.subject || ''}</div>
+                </div>
+            `;
+        });
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'emailsModal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+    modal.innerHTML = `
+        <div style="background: white; border-radius: 8px; max-width: 500px; width: 90%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="padding: 16px 20px; border-bottom: 2px solid #004a95; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #004a95;">Sent Emails (${emails.length})</h3>
+                <button onclick="document.getElementById('emailsModal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            <div style="overflow-y: auto; flex: 1;">${content}</div>
+        </div>
+    `;
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) modal.remove();
+    });
+    document.body.appendChild(modal);
+}
+
 // ─── Data Mapping: currentOrderData → PDF template format ────────────────────
 function mapOrderDataToTemplate(orderData) {
-    // Guard: block PDF generation for incomplete quotes
-    const unconfigured = (orderData.screens || []).filter(s => s.phase === 'opening');
+    // Guard: block PDF generation for incomplete quotes (exclude excluded screens from check)
+    const unconfigured = (orderData.screens || []).filter(s => s.phase === 'opening' && !s.excluded);
     if (unconfigured.length > 0) {
         throw new Error(`Cannot generate PDF — ${unconfigured.length} opening(s) still need configuration.`);
     }
@@ -1606,7 +2184,7 @@ function mapOrderDataToTemplate(orderData) {
         [orderData.city, orderData.state, orderData.zipCode].filter(Boolean).join(', ')
     ].filter(Boolean).join(', ');
 
-    const screens = (orderData.screens || []).map((screen, i) => ({
+    const screens = (orderData.screens || []).filter(s => !s.excluded).map((screen, i) => ({
         name: screen.screenName || `Screen ${i + 1}`,
         track: getClientFacingTrackName(screen.trackTypeName),
         operator: getClientFacingOperatorName(screen.operatorType, screen.operatorTypeName),
@@ -1615,7 +2193,7 @@ function mapOrderDataToTemplate(orderData) {
         width: screen.actualWidthDisplay || '',
         height: screen.actualHeightDisplay || '',
         price1: (screen.customerPrice || 0) - (screen.installationPrice || 0) - (screen.wiringPrice || 0),
-        price2: screen.comparisonMaterialPrice || null
+        price2: screen.comparisonMaterialPrice != null ? screen.comparisonMaterialPrice : null
     }));
 
     const materialsPrice = orderData.orderTotalMaterialsPrice || 0;
@@ -1681,14 +2259,24 @@ function mapOrderDataToTemplate(orderData) {
         const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice + wiringPrice + miscInstallAmount;
         const compTotal = orderData.comparisonTotalPrice || 0;
 
-        // Get the first screen's operator to use as label
-        const firstScreen = (orderData.screens || [])[0];
-        const option1Label = firstScreen
-            ? getClientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName)
-            : 'Option 1';
-        const option2Label = orderData.comparisonMotor
-            ? getClientFacingOperatorName(orderData.comparisonMotor, orderData.comparisonMotor)
-            : 'Option 2';
+        // Get comparison labels based on type (motor or track)
+        const firstScreen = (orderData.screens || []).find(s => !s.excluded);
+        let option1Label, option2Label;
+        if (orderData.comparisonType === 'track') {
+            option1Label = firstScreen
+                ? getClientFacingTrackName(firstScreen.trackTypeName)
+                : 'Option 1';
+            option2Label = orderData.comparisonTrack
+                ? getTrackTypeName(orderData.comparisonTrack).replace(' Track', '')
+                : 'Option 2';
+        } else {
+            option1Label = firstScreen
+                ? getClientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName)
+                : 'Option 1';
+            option2Label = orderData.comparisonMotor
+                ? getClientFacingOperatorName(orderData.comparisonMotor, orderData.comparisonMotor)
+                : 'Option 2';
+        }
 
         data.comparisonPricing = {
             option1Label: option1Label,
@@ -1957,7 +2545,10 @@ async function ensureQuoteSaved() {
             discountAmount: orderData.discountAmount,
             discountedMaterialsPrice: orderData.discountedMaterialsPrice,
             enableComparison: orderData.enableComparison,
+            comparisonType: orderData.comparisonType || 'motor',
             comparisonMotor: orderData.comparisonMotor,
+            comparisonTrack: orderData.comparisonTrack || '',
+            comparisonSkippedCount: orderData.comparisonSkippedCount || 0,
             comparisonTotalMaterialsPrice: orderData.comparisonTotalMaterialsPrice,
             comparisonDiscountedMaterialsPrice: orderData.comparisonDiscountedMaterialsPrice,
             comparisonTotalPrice: orderData.comparisonTotalPrice,
@@ -2207,6 +2798,12 @@ function resetForm() {
     document.getElementById('enableComparison').checked = false;
     document.getElementById('comparisonOptions').style.display = 'none';
     document.getElementById('comparisonMotor').value = '';
+    document.getElementById('comparisonTrack').value = '';
+    const compMotorRadio = document.querySelector('input[name="comparisonType"][value="motor"]');
+    if (compMotorRadio) compMotorRadio.checked = true;
+    updateComparisonUI();
+    const compWarningEl = document.getElementById('comparisonTrackWarning');
+    if (compWarningEl) compWarningEl.style.display = 'none';
     document.getElementById('discountLabel').value = '';
     document.getElementById('discountPercent').value = '0';
     document.getElementById('miscInstallLabel').value = '';
@@ -2295,15 +2892,23 @@ function addOpening() {
         heightFractionValue: heightFractionRaw,
         actualWidthDisplay: inchesToFeetAndInches(totalWidthInches),
         actualHeightDisplay: inchesToFeetAndInches(totalHeightInches),
-        frameColor: document.getElementById('frameColor').value,
-        frameColorName: document.getElementById('frameColor').selectedOptions[0]?.text || '',
+        frameColor: '',
+        frameColorName: '',
         includeInstallation: document.getElementById('includeInstallation').checked,
         wiringDistance: parseInt(document.getElementById('wiringDistance').value) || 0,
         photos: existingScreenPhotos.slice(),
-        pendingPhotos: pendingScreenPhotos.slice()
+        pendingPhotos: pendingScreenPhotos.slice(),
+        // Quick config preferences (override project defaults during batch apply)
+        preferredTrackType: document.getElementById('prefTrackType').value || '',
+        preferredOperator: document.getElementById('prefOperator').value || '',
+        preferredFabric: document.getElementById('prefFabric').value || '',
+        preferredFrameColor: document.getElementById('prefFrameColor').value || ''
     };
 
-    if (editingScreenIndex !== null) {
+    const wasEditing = editingScreenIndex !== null;
+    const editedIndex = editingScreenIndex; // Capture before clearing
+
+    if (wasEditing) {
         const existingScreen = screensInOrder[editingScreenIndex];
         if (existingScreen.phase === 'configured') {
             // Check if dimensions changed (rounded feet differ)
@@ -2321,8 +2926,7 @@ function addOpening() {
                 existingScreen.heightFractionValue = opening.heightFractionValue;
                 existingScreen.actualWidthDisplay = opening.actualWidthDisplay;
                 existingScreen.actualHeightDisplay = opening.actualHeightDisplay;
-                existingScreen.frameColor = opening.frameColor;
-                existingScreen.frameColorName = opening.frameColorName;
+                // frameColor preserved from Phase 2 configuration (not changed in Phase 1)
                 existingScreen.includeInstallation = opening.includeInstallation;
                 existingScreen.wiringDistance = opening.wiringDistance;
                 existingScreen.photos = opening.photos;
@@ -2340,9 +2944,14 @@ function addOpening() {
     resetFormForNextOpening();
     updateAddToOrderButton();
     renderScreensList();
+    updatePhase1Header();
+    if (!wasEditing) scrollToLastCard();
 
     document.getElementById('screensInOrder').classList.remove('hidden');
     document.getElementById('quoteSummary').classList.add('hidden');
+
+    // Auto-save the opening to D1 if quote has been saved before
+    autoSaveOpening(wasEditing ? editedIndex : screensInOrder.length - 1);
 }
 
 // ─── Add to Order (single-pass: all fields filled) ─────────────────────────
@@ -2351,7 +2960,9 @@ function addToOrder() {
     const screenData = calculateScreenData();
     if (!screenData) return; // Validation failed
 
-    if (editingScreenIndex !== null) {
+    const wasEditing = editingScreenIndex !== null;
+
+    if (wasEditing) {
         // Update existing screen
         screensInOrder[editingScreenIndex] = screenData;
         editingScreenIndex = null;
@@ -2368,6 +2979,8 @@ function addToOrder() {
 
     // Update screen list display
     renderScreensList();
+    updatePhase1Header();
+    if (!wasEditing) scrollToLastCard();
 
     // Show screens section and hide quote
     document.getElementById('screensInOrder').classList.remove('hidden');
@@ -2439,6 +3052,14 @@ async function handlePhotoSelect(event) {
 
     event.target.value = '';
     renderPhotoPreview();
+
+    // Auto-save if editing an existing opening with entity ID
+    if (editingScreenIndex !== null && currentQuoteId) {
+        // Sync pending photos to the screen object before auto-save
+        screensInOrder[editingScreenIndex].pendingPhotos = pendingScreenPhotos.slice();
+        screensInOrder[editingScreenIndex].photos = existingScreenPhotos.slice();
+        debouncedAutoSaveOpening(editingScreenIndex);
+    }
 }
 
 function renderPhotoPreview() {
@@ -2540,6 +3161,77 @@ async function deleteMarkedPhotos() {
         }
     }
     window._photosToDelete = [];
+}
+
+function toggleExclude(index) {
+    const screen = screensInOrder[index];
+    if (!screen) return;
+    screen.excluded = !screen.excluded;
+    renderScreensList();
+    // If quote summary is visible, recalculate
+    const quoteSummary = document.getElementById('quoteSummary');
+    if (quoteSummary && !quoteSummary.classList.contains('hidden')) {
+        calculateOrderQuote();
+    }
+}
+
+function updateMaxWidthHelp() {
+    const helpDiv = document.getElementById('maxWidthHelp');
+    if (!helpDiv) return;
+    helpDiv.textContent = "Max widths: Zipper 24', Cable 22', Keder 20'";
+}
+
+function updateDropdownCompatibility() {
+    const widthInches = parseFloat(document.getElementById('widthInches').value) || 0;
+    const widthFraction = parseFraction(document.getElementById('widthFraction').value);
+    const heightInches = parseFloat(document.getElementById('heightInches').value) || 0;
+    const heightFraction = parseFraction(document.getElementById('heightFraction').value);
+    const totalWidthInches = widthInches + widthFraction;
+    const totalHeightInches = heightInches + heightFraction;
+    const widthFt = Math.round(totalWidthInches / 12);
+    const heightFt = Math.round(totalHeightInches / 12);
+
+    const trackSelects = ['trackType', 'defaultTrackType', 'prefTrackType'];
+    const trackOptions = getTrackTypeOptions();
+
+    trackSelects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+
+        select.querySelectorAll('option').forEach(opt => {
+            if (!opt.value) return; // Skip placeholder
+
+            // Restore original label
+            if (!opt.dataset.originalText) opt.dataset.originalText = opt.textContent;
+
+            if (totalWidthInches === 0 && totalHeightInches === 0) {
+                opt.disabled = false;
+                opt.textContent = opt.dataset.originalText;
+                return;
+            }
+
+            const priceData = getPricingTable(opt.value);
+            if (!priceData) return;
+
+            const maxWidth = Math.max(...Object.keys(priceData).map(Number));
+            if (widthFt > maxWidth) {
+                opt.disabled = true;
+                opt.textContent = `${opt.dataset.originalText} (max ${maxWidth}ft W)`;
+            } else if (widthFt > 0 && priceData[String(widthFt)]) {
+                const maxHeight = getMaxHeightForWidth(priceData, String(widthFt));
+                if (heightFt > maxHeight && totalHeightInches > 0) {
+                    opt.disabled = true;
+                    opt.textContent = `${opt.dataset.originalText} (max ${maxHeight}ft H at ${widthFt}ft W)`;
+                } else {
+                    opt.disabled = false;
+                    opt.textContent = opt.dataset.originalText;
+                }
+            } else {
+                opt.disabled = false;
+                opt.textContent = opt.dataset.originalText;
+            }
+        });
+    });
 }
 
 function checkDimensionLimits() {
@@ -2892,8 +3584,9 @@ function calculateScreenData() {
     const trackType = document.getElementById('trackType').value;
     const operatorType = document.getElementById('operatorType').value;
     const fabricColor = document.getElementById('fabricColor').value;
+    const frameColor = document.getElementById('frameColor').value;
 
-    if (!trackType || !operatorType || !fabricColor) {
+    if (!trackType || !operatorType || !fabricColor || !frameColor) {
         alert('Please fill in all required fields (marked with *)');
         return null;
     }
@@ -3014,6 +3707,31 @@ function resetFormForNextScreen() {
 // ─── Reset form for next opening (Phase 1 only) ────────────────────────────
 // Clears name, dimensions, photos. Does NOT touch Phase 2 fields.
 // Copies frame color and installation from last opening.
+function updatePhase1Header() {
+    const headerEl = document.getElementById('phase1HeaderText');
+    if (!headerEl) return;
+    if (editingScreenIndex !== null) {
+        const screen = screensInOrder[editingScreenIndex];
+        const name = screen?.screenName || `Opening ${editingScreenIndex + 1}`;
+        headerEl.textContent = `Editing: ${name}`;
+    } else {
+        const nextNum = screensInOrder.length + 1;
+        headerEl.textContent = `Document Opening #${nextNum}`;
+    }
+}
+
+function scrollToLastCard() {
+    setTimeout(() => {
+        const cards = document.querySelectorAll('#screensList .screen-card');
+        if (cards.length > 0) {
+            const lastCard = cards[cards.length - 1];
+            lastCard.classList.add('screen-card-new');
+            lastCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            setTimeout(() => lastCard.classList.remove('screen-card-new'), 1600);
+        }
+    }, 50);
+}
+
 function resetFormForNextOpening() {
     document.getElementById('screenName').value = '';
     document.getElementById('widthInches').value = '';
@@ -3023,10 +3741,9 @@ function resetFormForNextOpening() {
     document.getElementById('dimensionsSummary').style.display = 'none';
     document.getElementById('dimensionWarning').style.display = 'none';
 
-    // Copy frame color and installation from last opening
+    // Copy installation setting from last opening
     if (screensInOrder.length > 0) {
         const last = screensInOrder[screensInOrder.length - 1];
-        document.getElementById('frameColor').value = last.frameColor || '';
         document.getElementById('includeInstallation').checked =
             last.includeInstallation !== undefined ? last.includeInstallation : true;
     }
@@ -3039,6 +3756,9 @@ function resetFormForNextOpening() {
     pendingScreenPhotos = [];
     existingScreenPhotos = [];
     renderPhotoPreview();
+
+    // Clear quick config
+    resetQuickConfig();
 }
 
 function renderScreensList() {
@@ -3093,11 +3813,11 @@ function renderScreensList() {
                     </div>
                     <div class="screen-card-details">
                         <strong>Size:</strong> ${screen.actualWidthDisplay} W × ${screen.actualHeightDisplay} H
-                        ${screen.frameColorName ? ` | <strong>Frame:</strong> ${screen.frameColorName}` : ''}
                         <br>
                         ${screen.includeInstallation ? '<strong>Installation:</strong> Included' : '<strong>Installation:</strong> Not included'}
                         ${screen.wiringDistance > 0 ? ` | <strong>Wiring:</strong> ${screen.wiringDistance}"` : ''}
                         ${photoCount > 0 ? ` | <strong>Photos:</strong> ${photoCount}` : ''}
+                        ${(screen.preferredTrackType || screen.preferredOperator || screen.preferredFabric || screen.preferredFrameColor) ? `<br><span style="color: #e67e22; font-size: 0.8rem;"><strong>Pref:</strong> ${[screen.preferredTrackType ? getTrackTypeName(screen.preferredTrackType) : '', screen.preferredOperator ? getOperatorTypeName(screen.preferredTrackType || '', screen.preferredOperator) : '', screen.preferredFabric ? getFabricName(screen.preferredFabric) : '', screen.preferredFrameColor ? getFrameColorName(screen.preferredFrameColor) : ''].filter(Boolean).join(' / ')}</span>` : ''}
                     </div>
                 </div>
             `;
@@ -3109,17 +3829,25 @@ function renderScreensList() {
                 ? screen.accessories.map(a => a.name).join(', ')
                 : 'None';
 
+            const isExcluded = screen.excluded;
+            const excludeBtn = isExcluded
+                ? `<button class="btn-include" onclick="toggleExclude(${index})">Include</button>`
+                : `<button class="btn-exclude" onclick="toggleExclude(${index})">Exclude</button>`;
+
+            const inlineEditorHtml = isEditing ? renderInlineEditor(index) : '';
+
             html += `
-                <div class="screen-card ${isEditing ? 'editing' : ''}">
+                <div class="screen-card ${isEditing ? 'editing' : ''} ${isExcluded ? 'excluded' : ''}">
                     <div class="screen-card-header">
                         <h4>
-                            <span style="background: #004a95; color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 8px; margin-right: 6px;">CONFIGURED</span>
+                            <span style="background: ${isExcluded ? '#999' : '#004a95'}; color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 8px; margin-right: 6px;">${isExcluded ? 'EXCLUDED' : 'CONFIGURED'}</span>
                             ${displayName}${isEditing ? ' <span style="color: #007bff;">(Editing...)</span>' : ''}
                         </h4>
                         <div class="screen-card-actions">
-                            <button class="btn-edit" onclick="editScreen(${index})">${isEditing ? 'Editing ↑' : 'Edit'}</button>
-                            <button class="btn-duplicate" onclick="duplicateScreen(${index})">Duplicate</button>
-                            <button class="btn-remove" onclick="removeScreen(${index})">Remove</button>
+                            ${isEditing ? '' : `<button class="btn-edit" onclick="editScreen(${index})">Edit</button>`}
+                            ${isEditing ? '' : `<button class="btn-duplicate" onclick="duplicateScreen(${index})">Duplicate</button>`}
+                            ${isEditing ? '' : excludeBtn}
+                            ${isEditing ? '' : `<button class="btn-remove" onclick="removeScreen(${index})">Remove</button>`}
                         </div>
                     </div>
                     <div class="screen-card-details">
@@ -3133,8 +3861,9 @@ function renderScreensList() {
                         ${screen.includeInstallation ? '<strong>Installation:</strong> Included<br>' : ''}
                         ${screen.wiringDistance > 0 ? `<strong>Wiring:</strong> ${screen.wiringDistance}"<br>` : ''}
                         ${photoCount > 0 ? `<strong>Photos:</strong> ${photoCount}<br>` : ''}
-                        <strong>Price:</strong> ${formatCurrency(screen.customerPrice)}
+                        <strong>Price:</strong> ${isExcluded ? '<s>' + formatCurrency(screen.customerPrice) + '</s>' : formatCurrency(screen.customerPrice)}
                     </div>
+                    ${inlineEditorHtml}
                 </div>
             `;
         }
@@ -3166,7 +3895,6 @@ function editScreen(index) {
 
     // Populate Phase 1 form fields (common to both openings and configured screens)
     document.getElementById('screenName').value = screen.screenName || '';
-    document.getElementById('frameColor').value = screen.frameColor || '';
     document.getElementById('includeInstallation').checked = screen.includeInstallation;
     document.getElementById('wiringDistance').value = screen.wiringDistance || '';
     updateWiringVisibility();
@@ -3191,37 +3919,38 @@ function editScreen(index) {
     updatePricingDimensions();
     checkDimensionLimits();
 
+    // Restore quick config preferences for openings
+    if (screen.phase === 'opening') {
+        if (screen.preferredTrackType) {
+            document.getElementById('prefTrackType').value = screen.preferredTrackType;
+            updatePrefOperatorOptions();
+            if (screen.preferredOperator) {
+                document.getElementById('prefOperator').value = screen.preferredOperator;
+            }
+        }
+        if (screen.preferredFabric) document.getElementById('prefFabric').value = screen.preferredFabric;
+        if (screen.preferredFrameColor) document.getElementById('prefFrameColor').value = screen.preferredFrameColor;
+        if (screen.preferredTrackType || screen.preferredOperator || screen.preferredFabric || screen.preferredFrameColor) {
+            document.getElementById('quickConfigBody').style.display = 'block';
+            document.getElementById('quickConfigToggleIcon').innerHTML = '&#9650;';
+        }
+    }
+
     if (screen.phase === 'configured') {
-        // Also populate Phase 2 fields for configured screens
-        document.getElementById('trackType').value = screen.trackType;
-        const trackTypeSelect = document.getElementById('trackType');
-        trackTypeSelect.dispatchEvent(new Event('change'));
-
+        // Use inline editing for configured screens — no scroll, no form population
+        editingScreenIndex = index;
+        renderScreensList();
+        // Scroll to the card being edited
         setTimeout(() => {
-            document.getElementById('operatorType').value = screen.operatorType;
-            document.getElementById('fabricColor').value = screen.fabricColor;
-            document.getElementById('noTracks').checked = screen.noTracks;
-            updateAccessories();
-
-            setTimeout(() => {
-                (screen.accessories || []).forEach(acc => {
-                    const checkboxes = document.querySelectorAll('.accessory-item input[type="checkbox"]');
-                    checkboxes.forEach(cb => {
-                        if (cb.dataset.name === acc.name) {
-                            cb.checked = true;
-                        }
-                    });
-                });
-            }, 50);
-        }, 10);
-
-        // Show Add to Order button for configured screen editing
-        document.getElementById('addToOrderBtn').style.display = '';
-        document.getElementById('addOpeningBtn').style.display = '';
+            const cards = document.querySelectorAll('#screensList .screen-card');
+            if (cards[index]) cards[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+        return; // Exit early — inline editor handles the rest
     }
 
     // Update button text to show we're editing
     updateAddToOrderButton();
+    updatePhase1Header();
 
     // Update the screen card display to show editing state
     renderScreensList();
@@ -3229,7 +3958,251 @@ function editScreen(index) {
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    alert(`Editing "${displayName}". Make changes above and click "${screen.phase === 'configured' ? 'Update Screen' : 'Add Opening'}" to save.`);
+    alert(`Editing "${displayName}". Make changes above and click "Add Opening" to save.`);
+}
+
+// ─── Inline Card Editing (configured screens) ──────────────────────────────
+
+function renderInlineEditor(index) {
+    const screen = screensInOrder[index];
+    if (!screen || screen.phase !== 'configured') return '';
+
+    const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
+    const trackOptions = getTrackTypeOptions();
+    const operatorOptions = getOperatorOptionsForTrack(screen.trackType, isGuarantee);
+    const fabricOptions = getFabricOptions();
+    const frameOptions = getFrameColorOptions();
+
+    // Build accessories HTML
+    const accHtml = renderInlineAccessoriesHtml(index, screen);
+
+    return `
+        <div class="inline-editor">
+            <div class="ie-dimensions">
+                <strong>Dimensions:</strong> ${screen.actualWidthDisplay} W × ${screen.actualHeightDisplay} H
+                <a href="javascript:void(0)" onclick="remeasureScreen(${index})" style="margin-left: 10px; font-size: 0.8rem;">Re-measure</a>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Screen Name</label>
+                    <input type="text" id="ie-name-${index}" value="${escapeAttr(screen.screenName || '')}">
+                </div>
+                <div class="form-group">
+                    <label>Track Type</label>
+                    <select id="ie-track-${index}" onchange="inlineTrackChanged(${index})">
+                        ${buildSelectOptionsHtml(trackOptions, screen.trackType, '-- Select Track --')}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Operator/Motor</label>
+                    <select id="ie-operator-${index}">
+                        ${buildSelectOptionsHtml(operatorOptions, screen.operatorType, '-- Select Motor --')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Fabric Color</label>
+                    <select id="ie-fabric-${index}">
+                        ${buildSelectOptionsHtml(fabricOptions, screen.fabricColor, '-- Select Fabric --')}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Frame Color</label>
+                    <select id="ie-frame-${index}">
+                        ${buildSelectOptionsHtml(frameOptions, screen.frameColor, '-- Select Frame --')}
+                    </select>
+                </div>
+                <div class="form-group" id="ie-notracks-group-${index}" style="${screen.trackType === 'sunair-zipper' ? '' : 'display:none;'}">
+                    <label style="display: flex; align-items: center; gap: 6px; margin-top: 20px;">
+                        <input type="checkbox" id="ie-notracks-${index}" ${screen.noTracks ? 'checked' : ''}>
+                        No Tracks
+                    </label>
+                </div>
+            </div>
+            <div class="ie-accessories" id="ie-accessories-${index}">
+                ${accHtml}
+            </div>
+            <div class="ie-actions">
+                <button class="btn-primary" onclick="saveInlineEdit(${index})" style="padding: 6px 16px; font-size: 0.85rem;">Save</button>
+                <button class="btn-secondary" onclick="cancelInlineEdit(${index})" style="padding: 6px 16px; font-size: 0.85rem;">Cancel</button>
+            </div>
+        </div>
+    `;
+}
+
+function renderInlineAccessoriesHtml(index, screen) {
+    const trackType = screen.trackType;
+    const operatorType = screen.operatorType;
+
+    // Determine which accessories apply
+    let accList = [];
+    if (operatorType && operatorType !== 'gear') {
+        if (operatorType.startsWith('gaposa')) {
+            accList = typeof gaposaAccessories !== 'undefined' ? gaposaAccessories : [];
+        } else if (operatorType.startsWith('somfy')) {
+            accList = typeof somfyAccessories !== 'undefined' ? somfyAccessories : [];
+        }
+    }
+
+    if (accList.length === 0) return '<p style="font-size: 0.8rem; color: #888;">No accessories for this motor type.</p>';
+
+    const existingNames = (screen.accessories || []).map(a => a.name);
+    let html = '<label style="font-weight: 600; font-size: 0.8rem; margin-bottom: 4px; display: block;">Accessories</label>';
+    accList.forEach(acc => {
+        const checked = existingNames.includes(acc.name) ? 'checked' : '';
+        html += `
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 2px 0;">
+                <input type="checkbox" class="ie-acc-${index}" data-name="${escapeAttr(acc.name)}" data-cost="${acc.cost}" data-markup="${acc.needsMarkup ? 'true' : 'false'}" ${checked}>
+                ${escapeAttr(acc.name)} (${formatCurrency(acc.cost * CUSTOMER_MARKUP)})
+            </label>
+        `;
+    });
+    return html;
+}
+
+function inlineTrackChanged(index) {
+    const trackType = document.getElementById(`ie-track-${index}`).value;
+    const operatorSelect = document.getElementById(`ie-operator-${index}`);
+    const noTracksGroup = document.getElementById(`ie-notracks-group-${index}`);
+    const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
+
+    // Update operator options
+    const options = getOperatorOptionsForTrack(trackType, isGuarantee);
+    operatorSelect.innerHTML = buildSelectOptionsHtml(options, '', '-- Select Motor --');
+
+    // Toggle no-tracks visibility
+    noTracksGroup.style.display = trackType === 'sunair-zipper' ? '' : 'none';
+    if (trackType !== 'sunair-zipper') {
+        document.getElementById(`ie-notracks-${index}`).checked = false;
+    }
+
+    // Rebuild accessories (need to update after operator change)
+    const screen = screensInOrder[index];
+    const accContainer = document.getElementById(`ie-accessories-${index}`);
+    accContainer.innerHTML = renderInlineAccessoriesHtml(index, { ...screen, trackType, operatorType: '' });
+}
+
+function saveInlineEdit(index) {
+    const screen = screensInOrder[index];
+
+    const trackType = document.getElementById(`ie-track-${index}`).value;
+    const operatorType = document.getElementById(`ie-operator-${index}`).value;
+    const fabricColor = document.getElementById(`ie-fabric-${index}`).value;
+    const frameColor = document.getElementById(`ie-frame-${index}`).value;
+
+    if (!trackType || !operatorType || !fabricColor || !frameColor) {
+        alert('Please fill all required fields.');
+        return;
+    }
+
+    const trackTypeName = getTrackTypeName(trackType);
+    const operatorTypeName = getOperatorTypeName(trackType, operatorType);
+    const fabricColorName = getFabricName(fabricColor);
+    const frameColorName = getFrameColorName(frameColor);
+    const noTracks = document.getElementById(`ie-notracks-${index}`).checked;
+    const screenName = document.getElementById(`ie-name-${index}`).value.trim();
+    const guaranteeActive = document.getElementById('fourWeekGuarantee').checked;
+
+    // Collect inline accessories
+    const accessories = [];
+    document.querySelectorAll(`.ie-acc-${index}:checked`).forEach(cb => {
+        let accCost = parseFloat(cb.dataset.cost);
+        const needsMarkup = cb.dataset.markup === 'true';
+        if (needsMarkup) accCost = accCost * (1 - SUNAIR_DISCOUNT);
+        accessories.push({ name: cb.dataset.name, cost: accCost, needsMarkup });
+    });
+
+    const result = computeScreenPricing({
+        screenName: screenName || screen.screenName,
+        trackType, trackTypeName,
+        operatorType, operatorTypeName,
+        fabricColor, fabricColorName,
+        frameColor, frameColorName,
+        width: screen.width,
+        height: screen.height,
+        totalWidthInches: screen.totalWidthInches,
+        totalHeightInches: screen.totalHeightInches,
+        actualWidthDisplay: screen.actualWidthDisplay,
+        actualHeightDisplay: screen.actualHeightDisplay,
+        noTracks,
+        includeInstallation: screen.includeInstallation,
+        wiringDistance: screen.wiringDistance,
+        accessories,
+        guaranteeActive,
+        photos: screen.photos || [],
+        pendingPhotos: screen.pendingPhotos || [],
+        widthInputValue: screen.widthInputValue,
+        widthFractionValue: screen.widthFractionValue,
+        heightInputValue: screen.heightInputValue,
+        heightFractionValue: screen.heightFractionValue
+    });
+
+    if (!result) {
+        alert('Pricing failed — check dimensions against the selected track type.');
+        return;
+    }
+
+    // Preserve entity IDs and exclude state
+    result._openingId = screen._openingId;
+    result._lineItemId = screen._lineItemId;
+    result.excluded = screen.excluded;
+
+    screensInOrder[index] = result;
+    editingScreenIndex = null;
+    renderScreensList();
+
+    // Recalculate if summary is visible
+    const quoteSummary = document.getElementById('quoteSummary');
+    if (quoteSummary && !quoteSummary.classList.contains('hidden')) {
+        calculateOrderQuote();
+    }
+}
+
+function cancelInlineEdit(index) {
+    editingScreenIndex = null;
+    renderScreensList();
+}
+
+function remeasureScreen(index) {
+    const screen = screensInOrder[index];
+    if (!screen) return;
+
+    // Reset to opening phase (keep product config for re-apply after)
+    editingScreenIndex = index;
+
+    // Populate Phase 1 form with opening's dimensions
+    document.getElementById('screenName').value = screen.screenName || '';
+    document.getElementById('includeInstallation').checked = screen.includeInstallation;
+    document.getElementById('wiringDistance').value = screen.wiringDistance || '';
+    updateWiringVisibility();
+
+    if (screen.widthInputValue !== undefined) {
+        document.getElementById('widthInches').value = screen.widthInputValue;
+        document.getElementById('widthFraction').value = screen.widthFractionValue || '';
+        document.getElementById('heightInches').value = screen.heightInputValue;
+        document.getElementById('heightFraction').value = screen.heightFractionValue || '';
+    } else {
+        document.getElementById('widthInches').value = screen.width * 12;
+        document.getElementById('widthFraction').value = '';
+        document.getElementById('heightInches').value = screen.height * 12;
+        document.getElementById('heightFraction').value = '';
+    }
+    updatePricingDimensions();
+    checkDimensionLimits();
+
+    existingScreenPhotos = (screen.photos || []).slice();
+    pendingScreenPhotos = (screen.pendingPhotos || []).slice();
+    renderPhotoPreview();
+
+    updateAddToOrderButton();
+    updatePhase1Header();
+    renderScreensList();
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    alert(`Re-measuring "${screen.screenName || 'Screen'}". Update dimensions and click "Add Opening" to save.`);
 }
 
 function updateAddToOrderButton() {
@@ -3305,8 +4278,32 @@ function updatePhase2Visibility() {
     const unconfiguredOpenings = screensInOrder.filter(s => s.phase === 'opening');
 
     if (unconfiguredOpenings.length > 0) {
+        const wasHidden = phase2Section.style.display === 'none';
         phase2Section.style.display = '';
         renderOpeningSelector();
+
+        // Auto-fill Phase 2 fields from project defaults when section first appears
+        if (wasHidden) {
+            const trackSelect = document.getElementById('trackType');
+            const fabricSelect = document.getElementById('fabricColor');
+            if (!trackSelect.value && projectDefaults.trackType) {
+                trackSelect.value = projectDefaults.trackType;
+                trackSelect.dispatchEvent(new Event('change'));
+                if (projectDefaults.operatorType) {
+                    setTimeout(() => {
+                        document.getElementById('operatorType').value = projectDefaults.operatorType;
+                        document.getElementById('operatorType').dispatchEvent(new Event('change'));
+                    }, 10);
+                }
+            }
+            if (!fabricSelect.value && projectDefaults.fabricColor) {
+                fabricSelect.value = projectDefaults.fabricColor;
+            }
+            const frameSelect = document.getElementById('frameColor');
+            if (!frameSelect.value && projectDefaults.frameColor) {
+                frameSelect.value = projectDefaults.frameColor;
+            }
+        }
     } else {
         phase2Section.style.display = 'none';
     }
@@ -3398,15 +4395,17 @@ function applyConfiguration() {
     const trackType = document.getElementById('trackType').value;
     const operatorType = document.getElementById('operatorType').value;
     const fabricColor = document.getElementById('fabricColor').value;
+    const frameColor = document.getElementById('frameColor').value;
 
-    if (!trackType || !operatorType || !fabricColor) {
-        alert('Please select Track Type, Operator/Motor, and Fabric Color before applying.');
+    if (!trackType || !operatorType || !fabricColor || !frameColor) {
+        alert('Please select Track Type, Operator/Motor, Fabric Color, and Frame Color before applying.');
         return;
     }
 
     const trackTypeName = document.getElementById('trackType').selectedOptions[0].text;
     const operatorTypeName = document.getElementById('operatorType').selectedOptions[0].text;
     const fabricColorName = document.getElementById('fabricColor').selectedOptions[0].text;
+    const frameColorName = document.getElementById('frameColor').selectedOptions[0].text;
     const noTracks = document.getElementById('noTracks').checked;
     const guaranteeActive = document.getElementById('fourWeekGuarantee').checked;
 
@@ -3437,13 +4436,22 @@ function applyConfiguration() {
         const opening = screensInOrder[idx];
         if (!opening || opening.phase !== 'opening') return;
 
+        // Resolve effective config: opening preference > Phase 2 form value
+        const effTrackType = opening.preferredTrackType || trackType;
+        const effOperatorType = opening.preferredOperator || operatorType;
+        const effFabricColor = opening.preferredFabric || fabricColor;
+        const effFrameColor = opening.preferredFrameColor || frameColor;
+        const effTrackTypeName = effTrackType !== trackType ? getTrackTypeName(effTrackType) : trackTypeName;
+        const effOperatorTypeName = effOperatorType !== operatorType ? getOperatorTypeName(effTrackType, effOperatorType) : operatorTypeName;
+        const effFabricColorName = effFabricColor !== fabricColor ? getFabricName(effFabricColor) : fabricColorName;
+        const effFrameColorName = effFrameColor !== frameColor ? getFrameColorName(effFrameColor) : frameColorName;
+
         const result = computeScreenPricing({
             screenName: opening.screenName,
-            trackType, trackTypeName,
-            operatorType, operatorTypeName,
-            fabricColor, fabricColorName,
-            frameColor: opening.frameColor,
-            frameColorName: opening.frameColorName,
+            trackType: effTrackType, trackTypeName: effTrackTypeName,
+            operatorType: effOperatorType, operatorTypeName: effOperatorTypeName,
+            fabricColor: effFabricColor, fabricColorName: effFabricColorName,
+            frameColor: effFrameColor, frameColorName: effFrameColorName,
             width: opening.width,
             height: opening.height,
             totalWidthInches: opening.totalWidthInches,
@@ -3483,13 +4491,14 @@ function applyConfiguration() {
 }
 
 function calculateOrderQuote() {
-    if (screensInOrder.length === 0) {
-        alert('Please add at least one screen to the order');
+    const includedScreens = screensInOrder.filter(s => !s.excluded);
+    if (includedScreens.length === 0) {
+        alert('Please add at least one screen to the order (all screens are excluded)');
         return;
     }
 
-    // Block if any screens are unconfigured
-    const unconfigured = screensInOrder.filter(s => s.phase === 'opening');
+    // Block if any non-excluded screens are unconfigured
+    const unconfigured = screensInOrder.filter(s => s.phase === 'opening' && !s.excluded);
     if (unconfigured.length > 0) {
         const names = unconfigured.map((s, i) => s.screenName || `Opening ${screensInOrder.indexOf(s) + 1}`);
         alert(`Cannot calculate quote — ${unconfigured.length} opening${unconfigured.length !== 1 ? 's need' : ' needs'} configuration:\n\n• ${names.join('\n• ')}\n\nUse "Configure Screens" (Step 2) to set track, motor, and fabric for these openings.`);
@@ -3521,6 +4530,8 @@ function calculateOrderQuote() {
     const fourWeekGuarantee = document.getElementById('fourWeekGuarantee').checked;
 
     screensInOrder.forEach((screen, index) => {
+        if (screen.excluded) return; // Skip excluded screens
+
         // Materials price (excluding installation and wiring)
         let screenMaterialsPrice = screen.customerPrice - screen.installationPrice - (screen.wiringPrice || 0);
 
@@ -3581,35 +4592,88 @@ function calculateOrderQuote() {
 
     // Get comparison information
     const enableComparison = document.getElementById('enableComparison').checked;
+    const comparisonType = document.querySelector('input[name="comparisonType"]:checked')?.value || 'motor';
     const comparisonMotor = document.getElementById('comparisonMotor').value;
+    const comparisonTrack = document.getElementById('comparisonTrack').value;
 
     // Calculate comparison totals if enabled
     let comparisonTotalMaterialsPrice = 0;
     let comparisonTotalPrice = 0;
     let comparisonDiscountedMaterialsPrice = 0;
     const comparisonScreens = [];
+    let comparisonSkippedCount = 0;
 
-    if (enableComparison && comparisonMotor) {
+    const comparisonActive = enableComparison && (
+        (comparisonType === 'motor' && comparisonMotor) ||
+        (comparisonType === 'track' && comparisonTrack)
+    );
+
+    if (comparisonActive) {
         screensInOrder.forEach(screen => {
-            // Compare all screens (motorized or gear) against the selected alternative
-            if (screen.operatorType !== comparisonMotor) {
-                const comparisonData = calculateScreenWithAlternateMotor(screen, comparisonMotor);
-                comparisonScreens.push({
-                    ...screen,
-                    comparisonPrice: comparisonData.customerPrice,
-                    comparisonMaterialPrice: comparisonData.materialPrice
-                });
-                comparisonTotalMaterialsPrice += comparisonData.materialPrice;
+            if (screen.excluded) {
+                comparisonScreens.push({ ...screen });
+                return;
+            }
+
+            if (comparisonType === 'motor') {
+                // Motor comparison (existing logic)
+                if (screen.operatorType !== comparisonMotor) {
+                    const comparisonData = calculateScreenWithAlternateMotor(screen, comparisonMotor);
+                    comparisonScreens.push({
+                        ...screen,
+                        comparisonPrice: comparisonData.customerPrice,
+                        comparisonMaterialPrice: comparisonData.materialPrice
+                    });
+                    comparisonTotalMaterialsPrice += comparisonData.materialPrice;
+                } else {
+                    comparisonScreens.push({
+                        ...screen,
+                        comparisonPrice: screen.customerPrice,
+                        comparisonMaterialPrice: screen.customerPrice - screen.installationPrice
+                    });
+                    comparisonTotalMaterialsPrice += (screen.customerPrice - screen.installationPrice);
+                }
             } else {
-                // Screen already uses the comparison operator — pass through same price
-                comparisonScreens.push({
-                    ...screen,
-                    comparisonPrice: screen.customerPrice,
-                    comparisonMaterialPrice: screen.customerPrice - screen.installationPrice
-                });
-                comparisonTotalMaterialsPrice += (screen.customerPrice - screen.installationPrice);
+                // Track comparison
+                if (screen.trackType !== comparisonTrack) {
+                    const comparisonData = calculateScreenWithAlternateTrack(screen, comparisonTrack);
+                    if (comparisonData) {
+                        comparisonScreens.push({
+                            ...screen,
+                            comparisonPrice: comparisonData.customerPrice,
+                            comparisonMaterialPrice: comparisonData.materialPrice
+                        });
+                        comparisonTotalMaterialsPrice += comparisonData.materialPrice;
+                    } else {
+                        // Dimensions incompatible with this track type
+                        comparisonScreens.push({
+                            ...screen,
+                            comparisonPrice: null,
+                            comparisonMaterialPrice: null
+                        });
+                        comparisonSkippedCount++;
+                    }
+                } else {
+                    comparisonScreens.push({
+                        ...screen,
+                        comparisonPrice: screen.customerPrice,
+                        comparisonMaterialPrice: screen.customerPrice - screen.installationPrice - (screen.wiringPrice || 0)
+                    });
+                    comparisonTotalMaterialsPrice += (screen.customerPrice - screen.installationPrice - (screen.wiringPrice || 0));
+                }
             }
         });
+
+        // Show track comparison warning if any screens were skipped
+        const warningEl = document.getElementById('comparisonTrackWarning');
+        if (warningEl) {
+            if (comparisonSkippedCount > 0) {
+                warningEl.textContent = `${comparisonSkippedCount} screen(s) incompatible with ${getTrackTypeName(comparisonTrack)} (dimensions too large) — shown as N/A.`;
+                warningEl.style.display = 'block';
+            } else {
+                warningEl.style.display = 'none';
+            }
+        }
 
         // Apply discount to comparison totals
         const comparisonDiscountAmount = (comparisonTotalMaterialsPrice * discountPercent) / 100;
@@ -3655,7 +4719,7 @@ function calculateOrderQuote() {
         city,
         state,
         zipCode,
-        screens: enableComparison && comparisonMotor ? comparisonScreens : screensInOrder,
+        screens: comparisonActive ? comparisonScreens : screensInOrder,
         orderTotalCost,
         orderTotalMaterialsPrice,
         orderTotalInstallationPrice,
@@ -3675,7 +4739,10 @@ function calculateOrderQuote() {
         discountAmount,
         discountedMaterialsPrice,
         enableComparison,
+        comparisonType,
         comparisonMotor,
+        comparisonTrack,
+        comparisonSkippedCount,
         comparisonTotalMaterialsPrice,
         comparisonDiscountedMaterialsPrice,
         comparisonTotalPrice,
@@ -3695,6 +4762,8 @@ function calculateOrderQuote() {
         salesRepPhone,
         fourWeekGuarantee,
         totalGuaranteeDiscount,
+        // Project defaults
+        projectDefaults: { ...projectDefaults },
         // Entity IDs for sync
         _contactId: currentContactId || null,
         _propertyId: currentPropertyId || null
@@ -3711,15 +4780,22 @@ function displayOrderQuoteSummary(orderData) {
     const internalInfo = document.getElementById('internalInfo');
     const quoteSummary = document.getElementById('quoteSummary');
 
-    // Get operator names for comparison if enabled
-    let comparisonMotorName = '';
-    let clientMotorName = '';
-    if (orderData.enableComparison && orderData.comparisonMotor && orderData.screens.length > 0) {
-        comparisonMotorName = getClientFacingOperatorName(orderData.comparisonMotor, '');
-        // Get the first screen's operator name for the header
-        const firstScreen = orderData.screens[0];
-        if (firstScreen) {
-            clientMotorName = getClientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName);
+    // Get operator/track names for comparison if enabled
+    let comparisonLabel = '';
+    let primaryLabel = '';
+    const hasComparison = orderData.enableComparison && (
+        (orderData.comparisonType === 'motor' && orderData.comparisonMotor) ||
+        (orderData.comparisonType === 'track' && orderData.comparisonTrack)
+    );
+    if (hasComparison && orderData.screens.length > 0) {
+        if (orderData.comparisonType === 'track') {
+            comparisonLabel = getTrackTypeName(orderData.comparisonTrack).replace(' Track', '');
+            const firstScreen = orderData.screens.find(s => !s.excluded);
+            primaryLabel = firstScreen ? getClientFacingTrackName(firstScreen.trackTypeName) : 'Current';
+        } else {
+            comparisonLabel = getClientFacingOperatorName(orderData.comparisonMotor, '');
+            const firstScreen = orderData.screens.find(s => !s.excluded);
+            primaryLabel = firstScreen ? getClientFacingOperatorName(firstScreen.operatorType, firstScreen.operatorTypeName) : 'Current';
         }
     }
 
@@ -3774,14 +4850,16 @@ function displayOrderQuoteSummary(orderData) {
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #0056A3; padding-bottom: 8px; margin-bottom: 8px;">
                     <strong style="flex: 1;">${displayName}</strong>
                     <div style="display: flex; gap: 20px; align-items: center;">
-                        ${orderData.enableComparison && orderData.comparisonMotor ? `
+                        ${hasComparison ? `
                             <div style="text-align: right;">
-                                <div style="font-size: 0.75rem; color: #666; margin-bottom: 2px;">${clientMotorName}</div>
+                                <div style="font-size: 0.75rem; color: #666; margin-bottom: 2px;">${primaryLabel}</div>
                                 <strong>${formatCurrency(screenMaterialsPrice)}</strong>
                             </div>
                             <div style="text-align: right;">
-                                <div style="font-size: 0.75rem; color: #666; margin-bottom: 2px;">${comparisonMotorName}</div>
-                                <strong style="color: #007bff;">${formatCurrency(screen.comparisonMaterialPrice || screenMaterialsPrice)}</strong>
+                                <div style="font-size: 0.75rem; color: #666; margin-bottom: 2px;">${comparisonLabel}</div>
+                                ${screen.comparisonMaterialPrice !== null && screen.comparisonMaterialPrice !== undefined
+                                    ? `<strong style="color: #007bff;">${formatCurrency(screen.comparisonMaterialPrice)}</strong>`
+                                    : `<strong style="color: #999;">N/A</strong>`}
                             </div>
                         ` : `
                             <strong>${formatCurrency(screenMaterialsPrice)}</strong>
@@ -3834,19 +4912,28 @@ function displayOrderQuoteSummary(orderData) {
         customerHTML += '</div>';
     }
 
+    // Show track comparison skipped warning in summary
+    if (hasComparison && orderData.comparisonSkippedCount > 0) {
+        customerHTML += `
+            <div style="margin-bottom: 12px; padding: 8px 12px; background: #fff3e0; border-left: 4px solid #e67e22; border-radius: 4px; font-size: 0.9rem;">
+                <strong style="color: #e67e22;">${orderData.comparisonSkippedCount} screen(s)</strong> incompatible with ${comparisonLabel} — shown as N/A. Comparison totals reflect compatible screens only.
+            </div>
+        `;
+    }
+
     // Add subtotal, discount, installation, and grand total
-    if (orderData.enableComparison && orderData.comparisonMotor) {
+    if (hasComparison) {
         // Show comparison columns
         customerHTML += `
             <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 1.05rem; border-top: 2px solid #0056A3; padding-top: 10px; margin-bottom: 8px;">
                 <strong>Materials Subtotal:</strong>
                 <div style="display: flex; gap: 20px;">
                     <div style="min-width: 120px; text-align: right;">
-                        <div style="font-size: 0.75rem; color: #666; font-weight: normal; margin-bottom: 2px;">${clientMotorName}</div>
+                        <div style="font-size: 0.75rem; color: #666; font-weight: normal; margin-bottom: 2px;">${primaryLabel}</div>
                         <strong>${formatCurrency(orderData.orderTotalMaterialsPrice)}</strong>
                     </div>
                     <div style="min-width: 120px; text-align: right;">
-                        <div style="font-size: 0.75rem; color: #666; font-weight: normal; margin-bottom: 2px;">${comparisonMotorName}</div>
+                        <div style="font-size: 0.75rem; color: #666; font-weight: normal; margin-bottom: 2px;">${comparisonLabel}</div>
                         <strong style="color: #007bff;">${formatCurrency(orderData.comparisonTotalMaterialsPrice)}</strong>
                     </div>
                 </div>

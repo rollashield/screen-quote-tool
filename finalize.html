@@ -247,10 +247,13 @@
             .measurement-group .measurement-input {
                 width: 100%;
             }
-            /* Fraction inputs: shrink from 80px to 60px */
+            /* Fraction inputs: use flex-grow to share row evenly */
             .fraction-input {
-                flex: 0 0 60px !important;
+                flex: 1 1 50px !important;
+                min-width: 50px !important;
+                max-width: 80px !important;
                 font-size: 0.8rem !important;
+                padding: 8px 4px !important;
             }
         }
     </style>
@@ -296,8 +299,42 @@
                 <textarea id="productionComments" rows="4" style="width: 100%;" placeholder="Any additional notes for the production team..."></textarea>
             </div>
 
-            <!-- Complete Button -->
-            <button class="complete-button" id="completeButton" disabled>Generate Production Email</button>
+            <!-- Action Buttons -->
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <button class="complete-button" id="saveQuoteButton" style="flex: 1; min-width: 200px; background: #28a745;">Save Quote</button>
+                <button class="complete-button" id="completeButton" disabled style="flex: 1; min-width: 200px;">Generate Production Email</button>
+            </div>
+
+            <!-- Payment Close-Out -->
+            <div class="form-section" id="paymentCloseoutSection" style="margin-top: 24px; border: 2px solid #6f42c1; background: #f8f5ff;">
+                <h3 style="color: #6f42c1; border-bottom-color: #6f42c1;">Payment Close-Out</h3>
+                <div id="paymentStatus" style="margin-bottom: 12px;"></div>
+                <div id="paymentForm">
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: end;">
+                        <div style="flex: 1; min-width: 180px;">
+                            <label for="paymentMethod" style="display: block; font-weight: 600; margin-bottom: 4px;">Payment Method</label>
+                            <select id="paymentMethod" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                                <option value="">-- Select --</option>
+                                <option value="credit-card">Credit Card (Clover)</option>
+                                <option value="echeck">eCheck (Stripe ACH)</option>
+                                <option value="ach-direct">ACH Direct Transfer</option>
+                                <option value="zelle">Zelle</option>
+                                <option value="check">Check</option>
+                                <option value="cash">Cash</option>
+                                <option value="financing">Financing</option>
+                            </select>
+                        </div>
+                        <div style="flex: 0 0 auto;">
+                            <button class="complete-button" id="markPaidButton" disabled style="background: #6f42c1; margin: 0;">Mark as Paid</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="paymentConfirmed" style="display: none; padding: 16px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 1.5rem; margin-bottom: 8px;">&#10003;</div>
+                    <strong style="color: #155724; font-size: 1.1rem;">Payment Received</strong>
+                    <div id="paymentConfirmedDetails" style="color: #155724; margin-top: 6px;"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -318,6 +355,7 @@
             loadSavedMeasurements();
             displayProjectInfo();
             displayScreenList();
+            initPaymentStatus();
         });
 
         function checkSignatureStatus() {
@@ -474,6 +512,73 @@
             displayMeasurementForm(screenIndex);
         }
 
+        // ── Auto-save on blur: debounced measurement persistence ──
+        let measurementAutoSaveTimer = null;
+        const MEASUREMENT_AUTO_SAVE_MS = 2000;
+
+        function autoSaveCurrentMeasurements() {
+            if (currentScreenIndex === null) return;
+            const screen = orderData.screens[currentScreenIndex];
+            if (!screen) return;
+
+            // Gather whatever measurements exist so far (no validation)
+            const partial = {
+                widthTop: getMeasurement('widthTop'),
+                widthMiddle: getMeasurement('widthMiddle'),
+                widthBottom: getMeasurement('widthBottom'),
+                heightLeft: getMeasurement('heightLeft'),
+                heightMiddle: getMeasurement('heightMiddle'),
+                heightRight: getMeasurement('heightRight'),
+                widthTopFrac: document.getElementById('widthTopFrac')?.value || '',
+                widthMiddleFrac: document.getElementById('widthMiddleFrac')?.value || '',
+                widthBottomFrac: document.getElementById('widthBottomFrac')?.value || '',
+                heightLeftFrac: document.getElementById('heightLeftFrac')?.value || '',
+                heightMiddleFrac: document.getElementById('heightMiddleFrac')?.value || '',
+                heightRightFrac: document.getElementById('heightRightFrac')?.value || '',
+                operatorSide: document.getElementById('operatorSide')?.value || '',
+                mountType: document.getElementById('mountType')?.value || '',
+                hemBarBrush: document.getElementById('hemBarBrush')?.value || '',
+                surfaceMaterial: document.getElementById('surfaceMaterial')?.value || '',
+                screenComments: document.getElementById('screenComments')?.value || '',
+                // Installation flags
+                tracksRecess: document.getElementById('tracksRecess')?.checked || false,
+                lowHeadspace: document.getElementById('lowHeadspace')?.checked || false,
+                restrictedHoriz: document.getElementById('restrictedHoriz')?.checked || false,
+                complicatedInstall: document.getElementById('complicatedInstall')?.checked || false,
+                complete: false // Partial save — not validated
+            };
+
+            // Conditional fields based on screen config
+            if (screen.operatorType === 'gear') {
+                partial.crankLength = document.getElementById('crankLength')?.value || '';
+                partial.crankLocation = document.getElementById('crankLocation')?.value || '';
+            }
+            if (screen.operatorType !== 'gear') {
+                partial.cordExit = document.getElementById('cordExit')?.value || '';
+            }
+            if (screen.operatorType === 'gaposa-rts' || screen.operatorType === 'somfy-rts') {
+                partial.distanceFromPower = document.getElementById('distanceFromPower')?.value || '';
+            }
+            if (screen.operatorType === 'gaposa-solar') {
+                partial.extensionCord = document.getElementById('extensionCord')?.checked || false;
+                partial.sunlightExposure = document.getElementById('sunlightExposure')?.value || '';
+            }
+
+            // Preserve existing complete flag if already fully saved
+            const existing = finalMeasurements[currentScreenIndex];
+            if (existing && existing.complete) {
+                partial.complete = true;
+            }
+
+            finalMeasurements[currentScreenIndex] = partial;
+            saveMeasurements();
+        }
+
+        function debouncedAutoSaveMeasurements() {
+            clearTimeout(measurementAutoSaveTimer);
+            measurementAutoSaveTimer = setTimeout(autoSaveCurrentMeasurements, MEASUREMENT_AUTO_SAVE_MS);
+        }
+
         async function saveMeasurements() {
             // Embed measurements into the order data and save back to D1
             orderData.measurements = finalMeasurements;
@@ -499,14 +604,68 @@
 
         function displayProjectInfo() {
             const details = document.getElementById('projectDetails');
+
+            // Build address
+            let addressParts = [];
+            if (orderData.streetAddress) addressParts.push(orderData.streetAddress);
+            if (orderData.aptSuite) addressParts.push(orderData.aptSuite);
+            let cityStateZip = [];
+            if (orderData.city) cityStateZip.push(orderData.city);
+            if (orderData.state) cityStateZip.push(orderData.state);
+            let csz = cityStateZip.join(', ');
+            if (orderData.zipCode) csz = csz ? csz + ' ' + orderData.zipCode : orderData.zipCode;
+            if (csz) addressParts.push(csz);
+            const fullAddress = addressParts.join(', ');
+
+            // Format currency
+            const fmt = (n) => n != null ? '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A';
+
+            // Build screen config summary
+            let screensHTML = '';
+            orderData.screens.forEach((s, i) => {
+                const name = s.screenName || `Screen ${i + 1}`;
+                const accNames = (s.accessories || []).map(a => a.name).join(', ');
+                screensHTML += `
+                    <div style="padding: 8px 10px; margin-bottom: 6px; background: #f0f8ff; border-radius: 4px; font-size: 0.85rem;">
+                        <strong>${name}</strong> — ${s.actualWidthDisplay} x ${s.actualHeightDisplay}<br>
+                        <span style="color: #555;">${s.trackTypeName} / ${s.operatorTypeName} / ${s.fabricColorName} / ${s.frameColorName || 'N/A'}</span>
+                        ${accNames ? `<br><span style="color: #888;">Acc: ${accNames}</span>` : ''}
+                    </div>
+                `;
+            });
+
+            // Project accessories
+            const projAcc = orderData.projectAccessories || [];
+            let projAccHTML = '';
+            if (projAcc.length > 0) {
+                projAccHTML = '<div style="margin-top: 8px;"><strong>Project Accessories:</strong> ' +
+                    projAcc.map(a => a.name + (a.quantity > 1 ? ' (x' + a.quantity + ')' : '')).join(', ') +
+                    '</div>';
+            }
+
+            // Warranty info
+            const warrantyHTML = orderData.fourWeekGuarantee
+                ? '<div style="margin-top: 8px; padding: 6px 10px; background: #e8f5e9; border-left: 3px solid #4caf50; border-radius: 4px;"><strong style="color: #2e7d32;">4-Week Install Guarantee</strong></div>'
+                : '';
+
             details.innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                    <div><strong>Customer:</strong> ${orderData.customerName}</div>
-                    ${orderData.companyName ? `<div><strong>Company:</strong> ${orderData.companyName}</div>` : ''}
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px;">
+                    <div><strong>Customer:</strong> ${orderData.customerName}${orderData.companyName ? ' (' + orderData.companyName + ')' : ''}</div>
                     <div><strong>Phone:</strong> ${orderData.customerPhone || 'N/A'}</div>
                     <div><strong>Email:</strong> ${orderData.customerEmail || 'N/A'}</div>
-                    <div><strong>Total Screens:</strong> ${orderData.screens.length}</div>
+                    ${fullAddress ? `<div><strong>Address:</strong> ${fullAddress}</div>` : ''}
                 </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
+                    <div><strong>Total Screens:</strong> ${orderData.screens.length}</div>
+                    <div><strong>Quote Total:</strong> ${fmt(orderData.orderTotalPrice)}</div>
+                    ${orderData.salesRepName ? `<div><strong>Sales Rep:</strong> ${orderData.salesRepName}</div>` : ''}
+                </div>
+                <div style="margin-top: 8px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
+                    <strong>Screen Configurations:</strong>
+                    <div style="margin-top: 6px;">${screensHTML}</div>
+                </div>
+                ${projAccHTML}
+                ${warrantyHTML}
             `;
         }
 
@@ -774,11 +933,14 @@
                 </div>
 
                 <!-- Conditional Fields for Cable Screen -->
-                <div class="form-section ${screen.trackType === 'cable' ? '' : 'hidden'}" id="cableFields">
+                <div class="form-section ${screen.trackType === 'sunair-cable' ? '' : 'hidden'}" id="cableFields">
                     <h3>Cable Screen Options</h3>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="floorMount" ${saved.floorMount ? 'checked' : ''}>
-                        <label for="floorMount">Floor Mount</label>
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label>Bracket Mount *</label>
+                        <select id="bracketMount">
+                            <option value="floor" ${!saved.bracketMount || saved.bracketMount === 'floor' ? 'selected' : ''}>Floor Mount</option>
+                            <option value="wall" ${saved.bracketMount === 'wall' ? 'selected' : ''}>Wall Mount</option>
+                        </select>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="magneticLocks" ${saved.magneticLocks ? 'checked' : ''}>
@@ -818,10 +980,12 @@
                 <!-- Installation Flags -->
                 <div class="form-section">
                     <h3>Installation Flags</h3>
+                    ${screen.trackType !== 'sunair-cable' ? `
                     <div class="checkbox-group">
                         <input type="checkbox" id="tracksRecess" ${saved.tracksRecess ? 'checked' : ''}>
                         <label for="tracksRecess">Tracks Recess-Mounted</label>
                     </div>
+                    ` : '<input type="hidden" id="tracksRecess">'}
                     <div class="checkbox-group">
                         <input type="checkbox" id="lowHeadspace" ${saved.lowHeadspace ? 'checked' : ''}>
                         <label for="lowHeadspace">&lt;7.5" Headspace</label>
@@ -900,6 +1064,39 @@
             document.getElementById('heightLeftFrac').addEventListener('input', updateHeightSelection);
             document.getElementById('heightMiddleFrac').addEventListener('input', updateHeightSelection);
             document.getElementById('heightRightFrac').addEventListener('input', updateHeightSelection);
+
+            // Auto-save on blur for all measurement inputs
+            const autoSaveFields = [
+                'widthTop', 'widthMiddle', 'widthBottom',
+                'widthTopFrac', 'widthMiddleFrac', 'widthBottomFrac',
+                'heightLeft', 'heightMiddle', 'heightRight',
+                'heightLeftFrac', 'heightMiddleFrac', 'heightRightFrac',
+                'screenComments'
+            ];
+            autoSaveFields.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('blur', debouncedAutoSaveMeasurements);
+            });
+            // Auto-save on change for selects and checkboxes (including conditional fields)
+            const autoSaveSelects = [
+                'operatorSide', 'mountType', 'hemBarBrush', 'surfaceMaterial',
+                'crankLength', 'crankLocation', 'cordExit', 'sunlightExposure', 'bracketMount'
+            ];
+            autoSaveSelects.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', debouncedAutoSaveMeasurements);
+            });
+            const autoSaveChecks = [
+                'tracksRecess', 'lowHeadspace', 'restrictedHoriz', 'complicatedInstall',
+                'magneticLocks', 'extensionCord'
+            ];
+            autoSaveChecks.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', debouncedAutoSaveMeasurements);
+            });
+            // Auto-save on blur for distance from power (number input)
+            const distancePower = document.getElementById('distanceFromPower');
+            if (distancePower) distancePower.addEventListener('blur', debouncedAutoSaveMeasurements);
         }
 
         function updateWidthSelection() {
@@ -1042,8 +1239,8 @@
             }
 
             // Conditional fields - Cable
-            if (screen.trackType === 'cable') {
-                measurements.floorMount = document.getElementById('floorMount').checked;
+            if (screen.trackType === 'sunair-cable') {
+                measurements.bracketMount = document.getElementById('bracketMount').value;
                 measurements.magneticLocks = document.getElementById('magneticLocks').checked;
             }
 
@@ -1098,11 +1295,123 @@
             document.getElementById('completeButton').disabled = !allComplete;
         }
 
+        document.getElementById('saveQuoteButton').addEventListener('click', async function() {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            try {
+                await saveMeasurements();
+                btn.textContent = 'Saved!';
+                setTimeout(() => { btn.textContent = 'Save Quote'; btn.disabled = false; }, 2000);
+            } catch (error) {
+                console.error('Error saving:', error);
+                alert('Failed to save. Please try again.');
+                btn.textContent = 'Save Quote';
+                btn.disabled = false;
+            }
+        });
+
         document.getElementById('completeButton').addEventListener('click', function() {
             generateProductionEmail();
         });
 
+        // Payment close-out
+        document.getElementById('paymentMethod').addEventListener('change', function() {
+            document.getElementById('markPaidButton').disabled = !this.value;
+        });
+
+        document.getElementById('markPaidButton').addEventListener('click', async function() {
+            const method = document.getElementById('paymentMethod').value;
+            if (!method) return;
+
+            const methodLabels = {
+                'credit-card': 'Credit Card (Clover)',
+                'echeck': 'eCheck (Stripe ACH)',
+                'ach-direct': 'ACH Direct Transfer',
+                'zelle': 'Zelle',
+                'check': 'Check',
+                'cash': 'Cash',
+                'financing': 'Financing'
+            };
+
+            const totalPrice = orderData.orderTotalPrice || 0;
+            const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            if (!confirm(`Mark this quote as PAID?\n\nPayment Method: ${methodLabels[method] || method}\nAmount: ${fmt(totalPrice)}\n\nThis action cannot be undone.`)) {
+                return;
+            }
+
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const orderId = urlParams.get('orderId');
+                const response = await fetch(`${WORKER_URL}/api/quote/${orderId}/mark-paid`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        paymentMethod: method,
+                        paymentAmount: totalPrice
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showPaymentConfirmed(methodLabels[method] || method, result.payment_date);
+                } else {
+                    alert('Failed to record payment: ' + (result.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = 'Mark as Paid';
+                }
+            } catch (error) {
+                console.error('Error marking paid:', error);
+                alert('Failed to record payment. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Mark as Paid';
+            }
+        });
+
+        function showPaymentConfirmed(methodLabel, dateStr) {
+            document.getElementById('paymentForm').style.display = 'none';
+            const confirmed = document.getElementById('paymentConfirmed');
+            confirmed.style.display = 'block';
+            const date = dateStr ? new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Today';
+            document.getElementById('paymentConfirmedDetails').textContent = `${methodLabel} — ${date}`;
+        }
+
+        function initPaymentStatus() {
+            const statusDiv = document.getElementById('paymentStatus');
+            if (!orderData) return;
+
+            // Check if already paid (from loaded quote data)
+            // payment_status is on the quote row, not in quote_data JSON
+            // We need to fetch it separately or it's included in the customer-view response
+            if (orderData.payment_status === 'paid') {
+                const methodLabels = {
+                    'credit-card': 'Credit Card (Clover)',
+                    'echeck': 'eCheck (Stripe ACH)',
+                    'ach-direct': 'ACH Direct Transfer',
+                    'zelle': 'Zelle',
+                    'check': 'Check',
+                    'cash': 'Cash',
+                    'financing': 'Financing'
+                };
+                showPaymentConfirmed(methodLabels[orderData.payment_method] || orderData.payment_method || 'Unknown', orderData.payment_date);
+                statusDiv.innerHTML = '';
+            } else {
+                const total = orderData.orderTotalPrice || 0;
+                const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                statusDiv.innerHTML = `<div style="font-size: 0.9rem; color: #666;">Quote Total: <strong>${fmt(total)}</strong></div>`;
+            }
+        }
+
         async function generateProductionEmail() {
+            // Auto-save before sending
+            await saveMeasurements();
+
             const productionComments = document.getElementById('productionComments').value;
             const difficultInstall = document.getElementById('difficultInstall').checked;
 
@@ -1133,6 +1442,37 @@
                 `;
             }
 
+            // Pricing breakdown
+            const pFmt = (n) => n != null ? '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$0.00';
+            const materialsPrice = orderData.orderTotalMaterialsPrice || 0;
+            const installPrice = orderData.orderTotalInstallationPrice || 0;
+            const wiringTotal = orderData.screens.reduce((sum, s) => sum + (s.wiringPrice || 0), 0);
+            const miscLabel = orderData.miscInstallLabel || '';
+            const miscAmount = orderData.miscInstallAmount || 0;
+            const projAccPrice = orderData.projectAccessoriesTotalPrice || 0;
+            const discountAmt = orderData.discountAmount || 0;
+            const discountLabel = orderData.discountLabel || '';
+            const guaranteeDiscount = orderData.totalGuaranteeDiscount || 0;
+            const totalPrice = orderData.orderTotalPrice || 0;
+            const depositAmount = totalPrice / 2;
+
+            htmlBody += `
+                <div style="border: 2px solid #28a745; padding: 20px; margin: 20px 0; background: #f0fff4;">
+                    <h2 style="color: #28a745; margin-top: 0;">PRICING SUMMARY</h2>
+                    <table style="width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace;">
+                        <tr><td style="padding: 6px 0;"><strong>Materials (${orderData.screens.length} screens):</strong></td><td style="text-align: right; padding: 6px 0;">${pFmt(materialsPrice)}</td></tr>
+                        ${installPrice > 0 ? `<tr><td style="padding: 6px 0;"><strong>Installation:</strong></td><td style="text-align: right; padding: 6px 0;">${pFmt(installPrice)}</td></tr>` : ''}
+                        ${wiringTotal > 0 ? `<tr><td style="padding: 6px 0;"><strong>Wiring:</strong></td><td style="text-align: right; padding: 6px 0;">${pFmt(wiringTotal)}</td></tr>` : ''}
+                        ${miscAmount > 0 ? `<tr><td style="padding: 6px 0;"><strong>${miscLabel || 'Additional Install'}:</strong></td><td style="text-align: right; padding: 6px 0;">${pFmt(miscAmount)}</td></tr>` : ''}
+                        ${projAccPrice > 0 ? `<tr><td style="padding: 6px 0;"><strong>Project Accessories:</strong></td><td style="text-align: right; padding: 6px 0;">${pFmt(projAccPrice)}</td></tr>` : ''}
+                        ${discountAmt > 0 ? `<tr style="color: #dc3545;"><td style="padding: 6px 0;"><strong>Discount${discountLabel ? ' (' + discountLabel + ')' : ''}:</strong></td><td style="text-align: right; padding: 6px 0;">-${pFmt(discountAmt)}</td></tr>` : ''}
+                        ${guaranteeDiscount > 0 ? `<tr style="color: #28a745;"><td style="padding: 6px 0;"><strong>4-Week Guarantee Savings:</strong></td><td style="text-align: right; padding: 6px 0;">-${pFmt(guaranteeDiscount)}</td></tr>` : ''}
+                        <tr style="border-top: 2px solid #28a745;"><td style="padding: 10px 0; font-size: 18px;"><strong>TOTAL:</strong></td><td style="text-align: right; padding: 10px 0; font-size: 18px;"><strong>${pFmt(totalPrice)}</strong></td></tr>
+                        <tr><td style="padding: 4px 0; color: #666;"><strong>50% Deposit:</strong></td><td style="text-align: right; padding: 4px 0; color: #666;"><strong>${pFmt(depositAmount)}</strong></td></tr>
+                    </table>
+                </div>
+            `;
+
             // Also build plain text version
             let textBody = `ROLL-A-SHIELD PRODUCTION ORDER\n`;
             textBody += `================================\n\n`;
@@ -1155,7 +1495,16 @@
                 if (orderData.nearestIntersection) textBody += `Nearest Intersection: ${orderData.nearestIntersection}\n`;
             }
 
-            textBody += `\n\n`;
+            textBody += `\nPRICING SUMMARY:\n`;
+            textBody += `Materials (${orderData.screens.length} screens): ${pFmt(materialsPrice)}\n`;
+            if (installPrice > 0) textBody += `Installation: ${pFmt(installPrice)}\n`;
+            if (wiringTotal > 0) textBody += `Wiring: ${pFmt(wiringTotal)}\n`;
+            if (miscAmount > 0) textBody += `${miscLabel || 'Additional Install'}: ${pFmt(miscAmount)}\n`;
+            if (projAccPrice > 0) textBody += `Project Accessories: ${pFmt(projAccPrice)}\n`;
+            if (discountAmt > 0) textBody += `Discount${discountLabel ? ' (' + discountLabel + ')' : ''}: -${pFmt(discountAmt)}\n`;
+            if (guaranteeDiscount > 0) textBody += `4-Week Guarantee Savings: -${pFmt(guaranteeDiscount)}\n`;
+            textBody += `>>> TOTAL: ${pFmt(totalPrice)}\n`;
+            textBody += `>>> 50% Deposit: ${pFmt(depositAmount)}\n\n`;
 
             orderData.screens.forEach((screen, index) => {
                 const meas = finalMeasurements[index];
@@ -1181,7 +1530,7 @@
                         <p><strong>Height (Middle):</strong> ${meas.heightMiddle}"</p>
                         <p><strong>Height (Right):</strong> ${meas.heightRight}"</p>
                         <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> OPENING HEIGHT: ${meas.selectedHeight}"</p>
-                ${screen.trackType && screen.trackType.startsWith('sunair') ? `
+                ${screen.trackType === 'sunair-zipper' ? `
                         <h3 style="color: #0056A3; margin-top: 20px;">SUNAIR ORDERING MEASUREMENTS</h3>
                         <p style="font-size: 12px; color: #666; margin-bottom: 8px;">Opening measurements + headbox/tracks for Sunair ordering</p>
                         <p style="background: #0056A3; color: white; padding: 10px; font-weight: bold;">
@@ -1230,7 +1579,7 @@
                 textBody += `Height (Right): ${meas.heightRight}"\n`;
                 textBody += `>>> OPENING HEIGHT: ${meas.selectedHeight}"\n\n`;
 
-                if (screen.trackType && screen.trackType.startsWith('sunair')) {
+                if (screen.trackType === 'sunair-zipper') {
                     const orderWidth = screen.noTracks ? parseFloat(meas.selectedWidth) : parseFloat(meas.selectedWidth) + 5;
                     const orderHeight = meas.mountType === 'ceiling'
                         ? parseFloat(meas.selectedHeight) + 5.25
@@ -1271,14 +1620,14 @@
                     textBody += `Cord Exit: ${meas.cordExit}\n\n`;
                 }
 
-                if (screen.trackType === 'cable') {
+                if (screen.trackType === 'sunair-cable') {
                     htmlBody += `
                         <h3 style="color: #333; margin-top: 20px;">CABLE SCREEN OPTIONS</h3>
-                        <p><strong>Floor Mount:</strong> ${meas.floorMount ? 'YES' : 'NO'}</p>
+                        <p><strong>Bracket Mount:</strong> ${meas.bracketMount === 'wall' ? 'Wall Mount' : 'Floor Mount'}</p>
                         <p><strong>Magnetic Locks:</strong> ${meas.magneticLocks ? 'YES' : 'NO'}</p>
                     `;
                     textBody += `CABLE SCREEN OPTIONS:\n`;
-                    textBody += `Floor Mount: ${meas.floorMount ? 'YES' : 'NO'}\n`;
+                    textBody += `Bracket Mount: ${meas.bracketMount === 'wall' ? 'Wall Mount' : 'Floor Mount'}\n`;
                     textBody += `Magnetic Locks: ${meas.magneticLocks ? 'YES' : 'NO'}\n\n`;
                 }
 
@@ -1412,16 +1761,19 @@
                     body: JSON.stringify({
                         from: 'Roll-A-Shield Production <noreply@updates.rollashield.com>',
                         to: ['derek@rollashield.com'],
+                        cc: ['ap@rollashield.com'],
                         subject: subject,
                         html: htmlBody,
-                        text: textBody
+                        text: textBody,
+                        quoteId: new URLSearchParams(window.location.search).get('orderId'),
+                        emailType: 'production'
                     })
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    alert(`✅ Production order email sent successfully to derek@rollashield.com!\n\nEmail ID: ${result.emailId}`);
+                    alert(`✅ Production order email sent successfully!\n\nTo: derek@rollashield.com\nCC: ap@rollashield.com\n\nEmail ID: ${result.emailId}`);
                 } else {
                     console.error('Email API error:', result);
                     alert('❌ Failed to send email: ' + (result.error || 'Unknown error'));

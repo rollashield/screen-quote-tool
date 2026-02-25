@@ -89,6 +89,18 @@ export default {
       return await handleCreateEcheckSession(quoteId, request, env);
     }
 
+    // Route: Get sent emails for a quote
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/emails$/) && request.method === 'GET') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleGetEmails(quoteId, env);
+    }
+
+    // Route: Mark quote as paid
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/mark-paid$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleMarkPaid(quoteId, request, env);
+    }
+
     // Route: Send quote for remote signature (must come before generic /api/quote/ GET)
     if (url.pathname.match(/^\/api\/quote\/[^/]+\/send-for-signature$/) && request.method === 'POST') {
       const quoteId = url.pathname.split('/')[3];
@@ -712,6 +724,45 @@ async function handleAirtableSave(env, quoteData, quoteNumber, quoteId, existing
 }
 
 // ─── Email Handler ─────────────────────────────────────────────────────────────
+// ─── Store Email Record ─────────────────────────────────────────────────────
+async function storeEmailRecord(env, quoteId, emailRecord) {
+  if (!quoteId) return;
+  try {
+    const row = await env.DB.prepare('SELECT sent_emails_json FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!row) return;
+    const emails = JSON.parse(row.sent_emails_json || '[]');
+    emails.push({
+      type: emailRecord.type || 'unknown',
+      to: emailRecord.to,
+      cc: emailRecord.cc || [],
+      subject: emailRecord.subject,
+      sentAt: new Date().toISOString(),
+      resendId: emailRecord.resendId || null
+    });
+    await env.DB.prepare('UPDATE quotes SET sent_emails_json = ? WHERE id = ?')
+      .bind(JSON.stringify(emails), quoteId).run();
+  } catch (err) {
+    console.error('Failed to store email record (non-fatal):', err);
+  }
+}
+
+// ─── Get Sent Emails ────────────────────────────────────────────────────────
+async function handleGetEmails(quoteId, env) {
+  try {
+    const row = await env.DB.prepare('SELECT sent_emails_json FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!row) {
+      return jsonResponse({ success: false, error: 'Quote not found' }, 404);
+    }
+    return jsonResponse({
+      success: true,
+      emails: JSON.parse(row.sent_emails_json || '[]')
+    });
+  } catch (error) {
+    console.error('Error in handleGetEmails:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
 async function handleSendEmail(request, env) {
   try {
     const emailData = await request.json();
@@ -746,6 +797,17 @@ async function handleSendEmail(request, env) {
         success: false,
         error: result.message || 'Failed to send email'
       }, resendResponse.status);
+    }
+
+    // Store email record if quoteId provided
+    if (emailData.quoteId) {
+      await storeEmailRecord(env, emailData.quoteId, {
+        type: emailData.emailType || 'quote',
+        to: Array.isArray(emailData.to) ? emailData.to : [emailData.to],
+        cc: emailData.cc || [],
+        subject: emailData.subject,
+        resendId: result.id
+      });
     }
 
     return jsonResponse({
@@ -987,6 +1049,8 @@ async function handleGetQuotes(request, env) {
         total_price,
         screen_count,
         quote_number,
+        quote_status,
+        payment_status,
         created_at,
         updated_at
       FROM quotes
@@ -1025,6 +1089,8 @@ async function handleGetQuote(quoteId, env) {
     quoteData.quoteNumber = result.quote_number || null;
     quoteData.quote_status = result.quote_status || 'draft';
     quoteData.payment_status = result.payment_status || 'unpaid';
+    quoteData.payment_method = result.payment_method || null;
+    quoteData.payment_date = result.payment_date || null;
 
     // Lazy migration: extract entities from JSON blob if not yet migrated
     let entities = null;
@@ -1580,6 +1646,14 @@ async function handleSendForSignature(quoteId, request, env) {
       })
     });
 
+    // Store email record
+    await storeEmailRecord(env, quoteId, {
+      type: 'signature-request',
+      to: [customerEmail],
+      cc: salesRepEmail ? [salesRepEmail] : [],
+      subject: `Review & Sign Your Roll-A-Shield Quote - ${quoteNumber}`
+    });
+
     return jsonResponse({
       success: true,
       message: `Signing link${pdfBase64 ? ' with quote PDF' : ''} sent to ${customerEmail}`,
@@ -1718,10 +1792,6 @@ async function handleSubmitRemoteSignature(token, request, env) {
     `).bind(signatureData, signerName, signerIp, signedAt, signedAt, row.id).run();
 
     // Send confirmation email to sales rep (non-fatal)
-    // TODO: Future Airtable integration enhancements:
-    // - Create an Airtable "Activity" record for the signature event
-    // - Update the Contact record with signature timestamp
-    // - Trigger Make.com automation for post-signature workflow
     try {
       const quoteData = JSON.parse(row.quote_data);
       const salesRepEmail = quoteData.salesRepEmail;
@@ -1885,6 +1955,221 @@ async function handleGetPaymentInfo(env) {
       }
     }
   });
+}
+
+// ─── Mark Quote as Paid ─────────────────────────────────────────────────────
+async function handleMarkPaid(quoteId, request, env) {
+  try {
+    const { paymentMethod, paymentAmount } = await request.json();
+
+    if (!paymentMethod) {
+      return jsonResponse({ success: false, error: 'Payment method is required' }, 400);
+    }
+
+    const quote = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!quote) {
+      return jsonResponse({ success: false, error: 'Quote not found' }, 404);
+    }
+
+    const timestamp = new Date().toISOString();
+
+    await env.DB.prepare(`
+      UPDATE quotes SET
+        payment_status = 'paid',
+        payment_method = ?,
+        payment_amount = ?,
+        payment_date = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).bind(
+      paymentMethod,
+      paymentAmount || null,
+      timestamp,
+      timestamp,
+      quoteId
+    ).run();
+
+    // Send customer confirmation email (non-fatal)
+    let confirmationSent = false;
+    try {
+      const quoteData = JSON.parse(quote.quote_data);
+      if (quoteData.customerEmail) {
+        confirmationSent = await sendPaymentConfirmationEmail(env, quoteId, quoteData, quote.quote_number, paymentAmount, timestamp);
+      }
+    } catch (emailErr) {
+      console.error('Confirmation email failed (non-fatal):', emailErr);
+    }
+
+    // Airtable close-out sync (non-fatal)
+    let airtableSync = false;
+    try {
+      const quoteData = JSON.parse(quote.quote_data);
+      if (quote.airtable_opportunity_id) {
+        airtableSync = await syncAirtableCloseOut(env, quote, quoteData, paymentAmount, timestamp);
+      }
+    } catch (atErr) {
+      console.error('Airtable close-out sync failed (non-fatal):', atErr);
+    }
+
+    return jsonResponse({
+      success: true,
+      payment_status: 'paid',
+      payment_method: paymentMethod,
+      payment_date: timestamp,
+      confirmationSent,
+      airtableSync
+    });
+  } catch (error) {
+    console.error('Error in handleMarkPaid:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Customer Payment Confirmation Email ────────────────────────────────────
+async function sendPaymentConfirmationEmail(env, quoteId, quoteData, quoteNumber, paymentAmount, paymentDate) {
+  const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const dateStr = new Date(paymentDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const screenCount = (quoteData.screens || []).length;
+  const customerFirst = (quoteData.customerName || '').split(/\s+/)[0] || 'Valued Customer';
+
+  const htmlBody = `
+    <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #2a2d2c;">
+      <div style="background: #004a95; padding: 24px 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-family: 'Montserrat', Arial, sans-serif; font-size: 22px;">Roll-A-Shield</h1>
+        <p style="color: #19cbfa; margin: 4px 0 0; font-size: 14px;">Order Confirmation</p>
+      </div>
+      <div style="padding: 30px; background: #ffffff;">
+        <p style="font-size: 16px;">Dear ${customerFirst},</p>
+        <p>Thank you for your order! We have received your payment and your rolling screen project is now confirmed.</p>
+
+        <div style="background: #f0fff4; border: 1px solid #c3e6cb; border-radius: 6px; padding: 16px; margin: 20px 0;">
+          <h3 style="color: #28a745; margin: 0 0 10px;">Order Summary</h3>
+          ${quoteNumber ? `<p style="margin: 4px 0;"><strong>Quote #:</strong> ${quoteNumber}</p>` : ''}
+          <p style="margin: 4px 0;"><strong>Screens:</strong> ${screenCount}</p>
+          <p style="margin: 4px 0;"><strong>Total:</strong> ${fmt(paymentAmount || quoteData.orderTotalPrice)}</p>
+          <p style="margin: 4px 0;"><strong>Payment Date:</strong> ${dateStr}</p>
+        </div>
+
+        <h3 style="color: #004a95; margin-top: 24px;">What Happens Next</h3>
+        <ol style="line-height: 1.8;">
+          <li>Our production team will process your order</li>
+          <li>We will contact you to schedule your installation date</li>
+          <li>A technician will perform final measurements before installation</li>
+        </ol>
+
+        <h3 style="color: #004a95; margin-top: 24px;">Warranty Coverage</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr><td style="padding: 4px 0;">Installation / Labor</td><td style="text-align: right;">1 Year</td></tr>
+          <tr><td style="padding: 4px 0;">Fabric (fading)</td><td style="text-align: right;">10 Years</td></tr>
+          <tr><td style="padding: 4px 0;">Motor</td><td style="text-align: right;">5 Years</td></tr>
+          <tr><td style="padding: 4px 0;">Electronics</td><td style="text-align: right;">2 Years</td></tr>
+          <tr><td style="padding: 4px 0;">Extrusions / Parts</td><td style="text-align: right;">5 Years (Manufacturer)</td></tr>
+        </table>
+
+        <p style="margin-top: 24px; color: #666; font-size: 13px;">If you have any questions, please don't hesitate to contact us at (480) 993-9090 or info@rollashield.com.</p>
+      </div>
+      <div style="background: #f5f5f5; padding: 16px 30px; text-align: center; font-size: 12px; color: #888;">
+        <p style="margin: 0;">Roll-A-Shield &mdash; Serving Arizona Since 1979</p>
+        <p style="margin: 4px 0 0;">AZ Contractor's License: ROC342265</p>
+      </div>
+    </div>
+  `;
+
+  const textBody = `Dear ${customerFirst},
+
+Thank you for your order! We have received your payment and your rolling screen project is now confirmed.
+
+ORDER SUMMARY
+${quoteNumber ? `Quote #: ${quoteNumber}\n` : ''}Screens: ${screenCount}
+Total: ${fmt(paymentAmount || quoteData.orderTotalPrice)}
+Payment Date: ${dateStr}
+
+WHAT HAPPENS NEXT
+1. Our production team will process your order
+2. We will contact you to schedule your installation date
+3. A technician will perform final measurements before installation
+
+WARRANTY COVERAGE
+- Installation / Labor: 1 Year
+- Fabric (fading): 10 Years
+- Motor: 5 Years
+- Electronics: 2 Years
+- Extrusions / Parts: 5 Years (Manufacturer)
+
+Questions? Call (480) 993-9090 or email info@rollashield.com.
+
+Roll-A-Shield — Serving Arizona Since 1979
+AZ Contractor's License: ROC342265`;
+
+  const emailPayload = {
+    from: 'Roll-A-Shield <noreply@updates.rollashield.com>',
+    to: [quoteData.customerEmail],
+    subject: `Order Confirmation${quoteNumber ? ' — Quote #' + quoteNumber : ''} — Roll-A-Shield`,
+    html: htmlBody,
+    text: textBody
+  };
+
+  // CC the sales rep if available
+  if (quoteData.salesRepEmail) {
+    emailPayload.cc = [quoteData.salesRepEmail];
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(emailPayload)
+  });
+
+  // Store email record
+  if (response.ok) {
+    await storeEmailRecord(env, quoteId, {
+      type: 'payment-confirmation',
+      to: [quoteData.customerEmail],
+      cc: emailPayload.cc || [],
+      subject: emailPayload.subject
+    });
+  }
+
+  return response.ok;
+}
+
+// ─── Airtable Close-Out Sync ────────────────────────────────────────────────
+async function syncAirtableCloseOut(env, quoteRow, quoteData, paymentAmount, paymentDate) {
+  const oppId = quoteRow.airtable_opportunity_id;
+  if (!oppId) return false;
+
+  // Calculate materials amount (total - installation - wiring)
+  const totalPrice = paymentAmount || quoteData.orderTotalPrice || 0;
+  const installPrice = quoteData.orderTotalInstallationPrice || 0;
+  const wiringTotal = (quoteData.screens || []).reduce((sum, s) => sum + (s.wiringPrice || 0), 0);
+  const materialsAmount = totalPrice - installPrice - wiringTotal - (quoteData.miscInstallAmount || 0);
+
+  // PATCH Airtable Opportunity → "Closed Won"
+  const oppFields = {
+    [AT_FIELDS.opportunities.status]: 'Closed Won'
+  };
+
+  await airtableFetch(env, `/${AT_TABLES.opportunities}/${oppId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields: oppFields })
+  });
+
+  // PATCH Airtable Quote record if it exists
+  if (quoteRow.airtable_quote_id) {
+    const quoteFields = {
+      [AT_FIELDS.quotes.status]: 'Accepted',
+      [AT_FIELDS.quotes.totalAmount]: totalPrice
+    };
+    await airtableFetch(env, `/${AT_TABLES.quotes}/${quoteRow.airtable_quote_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ fields: quoteFields })
+    });
+  }
+
+  return true;
 }
 
 // ─── Stripe eCheck (ACH) Checkout Session ───────────────────────────────────

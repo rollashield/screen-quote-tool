@@ -383,6 +383,96 @@
         .screen-card-details strong {
             color: #333;
         }
+
+        .screen-card.excluded {
+            opacity: 0.5;
+            border: 2px dashed #ccc !important;
+            background: #f5f5f5 !important;
+        }
+        .screen-card.excluded .screen-card-details strong {
+            color: #999;
+        }
+        .btn-exclude {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-exclude:hover {
+            background: #5a6268;
+        }
+        .btn-include {
+            background: #17a2b8;
+            color: white;
+        }
+        .btn-include:hover {
+            background: #138496;
+        }
+
+        .inline-editor {
+            border-top: 2px solid #e0e0e0;
+            margin-top: 10px;
+            padding-top: 12px;
+            background: #f9f9f9;
+            border-radius: 0 0 4px 4px;
+            padding: 12px;
+            margin: 10px -12px -12px;
+        }
+        .inline-editor .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .inline-editor .form-group {
+            margin-bottom: 0;
+        }
+        .inline-editor label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #555;
+            display: block;
+            margin-bottom: 3px;
+        }
+        .inline-editor select,
+        .inline-editor input[type="text"] {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        .inline-editor .ie-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .inline-editor .ie-dimensions {
+            font-size: 0.85rem;
+            color: #555;
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            background: #fff;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+        .inline-editor .ie-accessories {
+            margin-top: 8px;
+        }
+        .inline-editor .ie-accessories label {
+            font-weight: normal;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+        }
+
+        @keyframes cardHighlight {
+            0% { box-shadow: 0 0 0 3px rgba(0, 74, 149, 0.6); }
+            100% { box-shadow: 0 0 0 3px transparent; }
+        }
+        .screen-card-new {
+            animation: cardHighlight 1.5s ease-out;
+        }
+
         /* Airtable Opportunity Search */
         .opp-search-container {
             flex: 1;
@@ -779,6 +869,63 @@
                 </div>
             </div>
 
+            <!-- ═══ PROJECT DEFAULTS ═══ -->
+            <div class="form-section" id="projectDefaultsPanel" style="border: 2px solid #e0e0e0; background: #fafafa;">
+                <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleProjectDefaults()">
+                    <h2 style="margin: 0; font-size: 1rem;">
+                        <span style="display: inline-flex; align-items: center; gap: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.5 4.5l-5 5-2-2M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="#004a95" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Project Defaults
+                        </span>
+                    </h2>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="defaultsSummary" style="font-size: 0.8rem; color: #666;"></span>
+                        <span id="defaultsToggleIcon" style="font-size: 1.2rem; color: #999;">&#9660;</span>
+                    </div>
+                </div>
+                <div id="defaultsBody" style="display: none; margin-top: 12px;">
+                    <p class="info-text">Set defaults applied to all screens. Override per-opening with Quick Config.</p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="defaultTrackType">Track Type</label>
+                            <select id="defaultTrackType">
+                                <option value="">-- No Default --</option>
+                                <option value="sunair-zipper">Sunair Zipper Track</option>
+                                <option value="sunair-cable">Sunair Cable</option>
+                                <option value="fenetex-keder">Fenetex Keder Track</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="defaultOperator">Operator/Motor</label>
+                            <select id="defaultOperator" disabled>
+                                <option value="">-- Select Track First --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="defaultFabric">Fabric Color</label>
+                            <select id="defaultFabric">
+                                <option value="">-- No Default --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="defaultFrameColor">Frame Color</label>
+                            <select id="defaultFrameColor">
+                                <option value="">-- No Default --</option>
+                                <option value="white">White</option>
+                                <option value="mocha">Mocha</option>
+                                <option value="taupe">Taupe</option>
+                                <option value="brown">Brown</option>
+                                <option value="bronze">Bronze</option>
+                                <option value="black">Black</option>
+                                <option value="grey">Grey</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ═══ PHASE 1: Document Opening ═══ -->
             <div class="screen-entry-group" id="phase1Section">
 
@@ -786,7 +933,7 @@
                 <h2>
                     <span style="display: inline-flex; align-items: center; gap: 8px;">
                         <span style="background: #004a95; color: white; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;">1</span>
-                        Document Opening
+                        <span id="phase1HeaderText">Document Opening</span>
                     </span>
                 </h2>
                 <p class="info-text">Walk the site — name each opening, measure, and snap a photo</p>
@@ -823,6 +970,11 @@
                     </div>
                 </div>
 
+                <!-- Max Width Help -->
+                <div id="maxWidthHelp" style="font-size: 0.8rem; color: #888; margin-top: 6px;">
+                    Max widths: Zipper 24', Cable 22', Keder 20'
+                </div>
+
                 <!-- Dimension Limit Warning -->
                 <div id="dimensionWarning" style="display: none; background: #fff3f3; border: 2px solid #dc3545; border-radius: 6px; padding: 10px 14px; margin-top: 8px;">
                     <div style="display: flex; align-items: flex-start; gap: 8px; color: #dc3545; font-size: 0.9rem; font-weight: 600;">
@@ -836,22 +988,6 @@
 
                 <div id="dimensionsSummary" class="alert alert-info" style="display: none; margin-top: 15px;">
                     <strong>Pricing Dimensions:</strong> <span id="pricingDimensions"></span>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="frameColor">Frame Color</label>
-                        <select id="frameColor">
-                            <option value="">-- Select Frame Color --</option>
-                            <option value="white">White</option>
-                            <option value="mocha">Mocha</option>
-                            <option value="taupe">Taupe</option>
-                            <option value="brown">Brown</option>
-                            <option value="bronze">Bronze</option>
-                            <option value="black">Black</option>
-                            <option value="grey">Grey</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="checkbox-group">
@@ -883,6 +1019,55 @@
                             Add Photo
                         </span>
                     </label>
+                </div>
+
+                <!-- Quick Config (optional per-opening product preferences) -->
+                <div id="quickConfigPanel" style="margin-top: 15px; border: 1px dashed #ccc; border-radius: 6px; background: #f8f8f8;">
+                    <div style="padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleQuickConfig()">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: #555;">Quick Config (optional)</span>
+                        <span id="quickConfigToggleIcon" style="font-size: 1rem; color: #999;">&#9660;</span>
+                    </div>
+                    <div id="quickConfigBody" style="display: none; padding: 0 12px 12px;">
+                        <p style="font-size: 0.8rem; color: #888; margin: 0 0 8px;">Override project defaults for this opening only.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="prefTrackType" style="font-size: 0.85rem;">Track Type</label>
+                                <select id="prefTrackType">
+                                    <option value="">-- Use Default --</option>
+                                    <option value="sunair-zipper">Sunair Zipper Track</option>
+                                    <option value="sunair-cable">Sunair Cable</option>
+                                    <option value="fenetex-keder">Fenetex Keder Track</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prefOperator" style="font-size: 0.85rem;">Operator/Motor</label>
+                                <select id="prefOperator" disabled>
+                                    <option value="">-- Use Default --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="prefFabric" style="font-size: 0.85rem;">Fabric Color</label>
+                                <select id="prefFabric">
+                                    <option value="">-- Use Default --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prefFrameColor" style="font-size: 0.85rem;">Frame Color</label>
+                                <select id="prefFrameColor">
+                                    <option value="">-- Use Default --</option>
+                                    <option value="white">White</option>
+                                    <option value="mocha">Mocha</option>
+                                    <option value="taupe">Taupe</option>
+                                    <option value="brown">Brown</option>
+                                    <option value="bronze">Bronze</option>
+                                    <option value="black">Black</option>
+                                    <option value="grey">Grey</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -942,12 +1127,39 @@
                         <label for="fabricColor">Fabric Color *</label>
                         <select id="fabricColor" required>
                             <option value="">-- Select Fabric Color --</option>
-                            <option value="T18FVT061-Espresso">Espresso Texture</option>
-                            <option value="T18FVT054-Tobacco">Tobacco</option>
-                            <option value="T18FVT061-Charcoal">Charcoal</option>
-                            <option value="T18FVT059-Granite">Granite</option>
-                            <option value="T18FVT060-Black">Black</option>
-                            <option value="T18FVT056-Sable">Sable</option>
+                            <optgroup label="Standard Fabrics">
+                                <option value="T18FVT061-Espresso">Espresso Texture</option>
+                                <option value="T18FVT054-Tobacco">Tobacco</option>
+                                <option value="T18FVT061-Charcoal">Charcoal</option>
+                                <option value="T18FVT059-Granite">Granite</option>
+                                <option value="T18FVT060-Black">Black</option>
+                                <option value="T18FVT056-Sable">Sable</option>
+                            </optgroup>
+                            <optgroup label="90% Fabrics">
+                                <option value="T18FVT-Black90">Black 90</option>
+                                <option value="T18FVT-Brown90">Brown 90</option>
+                            </optgroup>
+                            <optgroup label="97% Fabrics">
+                                <option value="T18FVT-Black97">Black 97</option>
+                                <option value="T18FVT-Charcoal97">Charcoal 97</option>
+                                <option value="T18FVT-Tobacco97">Tobacco 97</option>
+                            </optgroup>
+                            <optgroup label="Specialty">
+                                <option value="T18FVT-Tuffscreen">Tuffscreen / Bugscreen</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="frameColor">Frame Color *</label>
+                        <select id="frameColor" required>
+                            <option value="">-- Select Frame Color --</option>
+                            <option value="white">White</option>
+                            <option value="mocha">Mocha</option>
+                            <option value="taupe">Taupe</option>
+                            <option value="brown">Brown</option>
+                            <option value="bronze">Bronze</option>
+                            <option value="black">Black</option>
+                            <option value="grey">Grey</option>
                         </select>
                     </div>
                 </div>
@@ -1018,16 +1230,38 @@
 
                     <div class="checkbox-group">
                         <input type="checkbox" id="enableComparison">
-                        <label for="enableComparison">Show Pricing Comparison with Alternative Operator</label>
+                        <label for="enableComparison">Show Pricing Comparison</label>
                     </div>
 
-                    <div id="comparisonOptions" class="form-row" style="display: none; margin-top: 15px;">
-                        <div class="form-group">
-                            <label for="comparisonMotor">Compare Against:</label>
-                            <select id="comparisonMotor">
-                                <option value="">-- Select Option to Compare --</option>
-                            </select>
+                    <div id="comparisonOptions" style="display: none; margin-top: 15px;">
+                        <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+                            <label style="display: flex; align-items: center; gap: 4px; font-size: 0.9rem; cursor: pointer;">
+                                <input type="radio" name="comparisonType" value="motor" checked> Motor
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px; font-size: 0.9rem; cursor: pointer;">
+                                <input type="radio" name="comparisonType" value="track"> Track Type
+                            </label>
                         </div>
+                        <div id="comparisonMotorGroup" class="form-row">
+                            <div class="form-group">
+                                <label for="comparisonMotor">Compare Motor:</label>
+                                <select id="comparisonMotor">
+                                    <option value="">-- Select Option to Compare --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="comparisonTrackGroup" class="form-row" style="display: none;">
+                            <div class="form-group">
+                                <label for="comparisonTrack">Compare Track:</label>
+                                <select id="comparisonTrack">
+                                    <option value="">-- Select Track to Compare --</option>
+                                    <option value="sunair-zipper">Sunair Zipper Track</option>
+                                    <option value="sunair-cable">Sunair Cable</option>
+                                    <option value="fenetex-keder">Fenetex Keder Track</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="comparisonTrackWarning" style="display: none; font-size: 0.85rem; color: #e67e22; margin-top: 6px;"></div>
                     </div>
 
                     <div class="form-row" style="margin-top: 15px;">

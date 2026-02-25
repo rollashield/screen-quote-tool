@@ -199,7 +199,9 @@ async function emailQuote() {
                 cc: ['derek@rollashield.com'],
                 subject: `Your Roll-A-Shield Screen Quote - ${customerName}`,
                 html: htmlBody,
-                text: textBody
+                text: textBody,
+                quoteId: window.currentOrderData?.id || null,
+                emailType: 'quote'
             })
         });
 

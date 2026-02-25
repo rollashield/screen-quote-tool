@@ -73,7 +73,7 @@ function generateQuotePDF(data) {
       <td style="padding: 8px; color: #4d4d4d;">${screen.width}</td>
       <td style="padding: 8px; color: #4d4d4d;">${screen.height}</td>
       <td style="padding: 8px; text-align: right; color: #2a2d2c;">$${formatCurrency(screen.price1)}</td>
-      ${hasComparison ? `<td style="padding: 8px; text-align: right; color: #0071bc;">$${formatCurrency(screen.price2)}</td>` : ''}
+      ${hasComparison ? `<td style="padding: 8px; text-align: right; color: #0071bc;">${screen.price2 != null ? '$' + formatCurrency(screen.price2) : 'N/A'}</td>` : ''}
     </tr>
   `).join('');
 
