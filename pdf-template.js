@@ -219,7 +219,7 @@ function generateQuotePDF(data) {
           <tr>
             <td colspan="7"></td>
             <td style="padding: 8px 12px; text-align: right; color: #4d4d4d;">
-              Materials (${data.screens.length} screens):
+              Materials (${data.screens.length} screen${data.screens.length !== 1 ? 's' : ''}):
             </td>
             <td style="padding: 8px 12px; text-align: right; color: #2a2d2c; width: ${hasComparison ? '120px' : '140px'};">
               $${formatCurrency(data.pricing.materials)}

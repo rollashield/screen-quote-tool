@@ -2463,17 +2463,26 @@ async function sendQuoteForSignature() {
 
         if (response.ok && result.success) {
             alert(`Quote PDF and signing link sent to ${customerEmail}!`);
+            // Show checkmark on button to reflect it's been sent
+            if (btn) {
+                btn.innerHTML = '✓ Quote Sent & Signature Requested';
+                btn.style.background = '#28a745';
+                btn.disabled = true;
+            }
+            // Refresh email history if visible (function created in Phase 7.6)
+            if (currentQuoteId && typeof refreshEmailHistory === 'function') refreshEmailHistory();
+            return; // Skip finally block's reset
         } else {
             alert('Failed to send: ' + (result.error || 'Unknown error'));
         }
     } catch (error) {
         console.error('Error sending quote for signature:', error);
         alert('Failed to send. Please check your internet connection.');
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Send Quote & Request Signature';
-        }
+    }
+    // Only restore button if send failed (success returns early above)
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Send Quote & Request Signature';
     }
 }
 
@@ -2846,6 +2855,10 @@ function resetForm() {
     // Hide screens section and quote summary
     document.getElementById('screensInOrder').classList.add('hidden');
     document.getElementById('quoteSummary').classList.add('hidden');
+
+    // Reset Phase 1 header to "Document Opening #1"
+    editingScreenIndex = null;
+    updatePhase1Header();
 
     // Reset quote and entity IDs so next save creates new records
     currentQuoteId = null;
