@@ -299,15 +299,9 @@
                 <textarea id="productionComments" rows="4" style="width: 100%;" placeholder="Any additional notes for the production team..."></textarea>
             </div>
 
-            <!-- Action Buttons -->
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                <button class="complete-button" id="saveQuoteButton" style="flex: 1; min-width: 200px; background: #28a745;">Save Quote</button>
-                <button class="complete-button" id="completeButton" disabled style="flex: 1; min-width: 200px;">Generate Production Email</button>
-            </div>
-
-            <!-- Payment Close-Out -->
+            <!-- Payment Close-Out & Production Order -->
             <div class="form-section" id="paymentCloseoutSection" style="margin-top: 24px; border: 2px solid #6f42c1; background: #f8f5ff;">
-                <h3 style="color: #6f42c1; border-bottom-color: #6f42c1;">Payment Close-Out</h3>
+                <h3 style="color: #6f42c1; border-bottom-color: #6f42c1;">Payment Close-Out & Production Order</h3>
                 <div id="paymentStatus" style="margin-bottom: 12px;"></div>
                 <div id="paymentForm">
                     <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: end;">
@@ -324,16 +318,33 @@
                                 <option value="financing">Financing</option>
                             </select>
                         </div>
-                        <div style="flex: 0 0 auto;">
-                            <button class="complete-button" id="markPaidButton" disabled style="background: #6f42c1; margin: 0;">Mark as Paid</button>
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 4px;">Amount</label>
+                            <div style="display: flex; gap: 12px;">
+                                <label style="display: flex; align-items: center; gap: 4px; font-size: 0.9rem; cursor: pointer;">
+                                    <input type="radio" name="paymentAmount" value="deposit" checked> Deposit (50%)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px; font-size: 0.9rem; cursor: pointer;">
+                                    <input type="radio" name="paymentAmount" value="full"> Full Amount
+                                </label>
+                            </div>
+                            <div id="paymentAmountDisplay" style="font-weight: 600; margin-top: 4px; color: #6f42c1;"></div>
                         </div>
+                    </div>
+                    <div style="margin-top: 16px;">
+                        <button class="complete-button" id="markPaidButton" disabled style="background: #6f42c1; width: 100%; font-size: 1rem;">Mark as Paid & Send Production Order</button>
                     </div>
                 </div>
                 <div id="paymentConfirmed" style="display: none; padding: 16px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; text-align: center;">
                     <div style="font-size: 1.5rem; margin-bottom: 8px;">&#10003;</div>
-                    <strong style="color: #155724; font-size: 1.1rem;">Payment Received</strong>
+                    <strong style="color: #155724; font-size: 1.1rem;">Payment Recorded & Production Order Sent</strong>
                     <div id="paymentConfirmedDetails" style="color: #155724; margin-top: 6px;"></div>
                 </div>
+            </div>
+
+            <!-- Secondary Actions -->
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px;">
+                <button class="complete-button" id="saveQuoteButton" style="flex: 1; min-width: 200px; background: #6c757d;">Save Measurements</button>
             </div>
         </div>
     </div>
@@ -1292,8 +1303,8 @@
             const allComplete = orderData.screens.every((screen, index) =>
                 finalMeasurements[index] && finalMeasurements[index].complete
             );
-
-            document.getElementById('completeButton').disabled = !allComplete;
+            // Update combined button state
+            updateCombinedButtonState();
         }
 
         document.getElementById('saveQuoteButton').addEventListener('click', async function() {
@@ -1303,49 +1314,72 @@
             try {
                 await saveMeasurements();
                 btn.textContent = 'Saved!';
-                setTimeout(() => { btn.textContent = 'Save Quote'; btn.disabled = false; }, 2000);
+                setTimeout(() => { btn.textContent = 'Save Measurements'; btn.disabled = false; }, 2000);
             } catch (error) {
                 console.error('Error saving:', error);
                 alert('Failed to save. Please try again.');
-                btn.textContent = 'Save Quote';
+                btn.textContent = 'Save Measurements';
                 btn.disabled = false;
             }
         });
 
-        document.getElementById('completeButton').addEventListener('click', function() {
-            generateProductionEmail();
-        });
-
         // Payment close-out
         document.getElementById('paymentMethod').addEventListener('change', function() {
-            document.getElementById('markPaidButton').disabled = !this.value;
+            updateCombinedButtonState();
         });
+
+        // Deposit/full amount toggle
+        document.querySelectorAll('input[name="paymentAmount"]').forEach(radio => {
+            radio.addEventListener('change', updatePaymentAmountDisplay);
+        });
+
+        function updatePaymentAmountDisplay() {
+            const total = orderData ? (orderData.orderTotalPrice || 0) : 0;
+            const isDeposit = document.querySelector('input[name="paymentAmount"]:checked')?.value === 'deposit';
+            const amount = isDeposit ? total / 2 : total;
+            const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const display = document.getElementById('paymentAmountDisplay');
+            if (display) display.textContent = fmt(amount);
+        }
+
+        function updateCombinedButtonState() {
+            const method = document.getElementById('paymentMethod').value;
+            const btn = document.getElementById('markPaidButton');
+            if (btn) btn.disabled = !method;
+        }
+
+        const PAYMENT_METHOD_LABELS = {
+            'credit-card': 'Credit Card (Clover)',
+            'echeck': 'eCheck (Stripe ACH)',
+            'ach-direct': 'ACH Direct Transfer',
+            'zelle': 'Zelle',
+            'check': 'Check',
+            'cash': 'Cash',
+            'financing': 'Financing'
+        };
 
         document.getElementById('markPaidButton').addEventListener('click', async function() {
             const method = document.getElementById('paymentMethod').value;
             if (!method) return;
 
-            const methodLabels = {
-                'credit-card': 'Credit Card (Clover)',
-                'echeck': 'eCheck (Stripe ACH)',
-                'ach-direct': 'ACH Direct Transfer',
-                'zelle': 'Zelle',
-                'check': 'Check',
-                'cash': 'Cash',
-                'financing': 'Financing'
-            };
-
             const totalPrice = orderData.orderTotalPrice || 0;
+            const paymentType = document.querySelector('input[name="paymentAmount"]:checked')?.value || 'deposit';
+            const paymentAmount = paymentType === 'deposit' ? totalPrice / 2 : totalPrice;
             const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const typeLabel = paymentType === 'deposit' ? 'Deposit (50%)' : 'Full Amount';
 
-            if (!confirm(`Mark this quote as PAID?\n\nPayment Method: ${methodLabels[method] || method}\nAmount: ${fmt(totalPrice)}\n\nThis action cannot be undone.`)) {
+            if (!confirm(`Record ${typeLabel} payment of ${fmt(paymentAmount)} via ${PAYMENT_METHOD_LABELS[method] || method} and send production order to Derek?\n\nThis action cannot be undone.`)) {
                 return;
             }
 
             const btn = this;
             btn.disabled = true;
-            btn.textContent = 'Processing...';
+            btn.textContent = 'Recording payment...';
 
+            let paymentSuccess = false;
+            let productionSuccess = false;
+
+            // Step 1: Mark as paid
             try {
                 const urlParams = new URLSearchParams(window.location.search);
                 const orderId = urlParams.get('orderId');
@@ -1354,58 +1388,76 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         paymentMethod: method,
-                        paymentAmount: totalPrice
+                        paymentAmount: paymentAmount,
+                        paymentType: paymentType
                     })
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showPaymentConfirmed(methodLabels[method] || method, result.payment_date);
+                    paymentSuccess = true;
+                    // Store payment info for production email
+                    orderData._paymentMethod = PAYMENT_METHOD_LABELS[method] || method;
+                    orderData._paymentAmount = paymentAmount;
+                    orderData._paymentType = typeLabel;
+                    orderData._paymentDate = result.payment_date || new Date().toISOString();
                 } else {
                     alert('Failed to record payment: ' + (result.error || 'Unknown error'));
                     btn.disabled = false;
-                    btn.textContent = 'Mark as Paid';
+                    btn.textContent = 'Mark as Paid & Send Production Order';
+                    return;
                 }
             } catch (error) {
                 console.error('Error marking paid:', error);
                 alert('Failed to record payment. Please try again.');
                 btn.disabled = false;
-                btn.textContent = 'Mark as Paid';
+                btn.textContent = 'Mark as Paid & Send Production Order';
+                return;
+            }
+
+            // Step 2: Send production email
+            btn.textContent = 'Sending production order...';
+            try {
+                await generateProductionEmail();
+                productionSuccess = true;
+            } catch (prodError) {
+                console.error('Production email failed:', prodError);
+            }
+
+            // Show result
+            if (paymentSuccess && productionSuccess) {
+                showPaymentConfirmed(PAYMENT_METHOD_LABELS[method] || method, orderData._paymentDate, typeLabel, fmt(paymentAmount));
+            } else if (paymentSuccess && !productionSuccess) {
+                showPaymentConfirmed(PAYMENT_METHOD_LABELS[method] || method, orderData._paymentDate, typeLabel, fmt(paymentAmount));
+                alert('Payment recorded successfully, but the production email failed to send. Please try sending it manually or contact Derek.');
             }
         });
 
-        function showPaymentConfirmed(methodLabel, dateStr) {
+        function showPaymentConfirmed(methodLabel, dateStr, typeLabel, amountStr) {
             document.getElementById('paymentForm').style.display = 'none';
             const confirmed = document.getElementById('paymentConfirmed');
             confirmed.style.display = 'block';
             const date = dateStr ? new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Today';
-            document.getElementById('paymentConfirmedDetails').textContent = `${methodLabel} — ${date}`;
+            let details = `${methodLabel} — ${date}`;
+            if (typeLabel && amountStr) details += ` — ${typeLabel}: ${amountStr}`;
+            document.getElementById('paymentConfirmedDetails').textContent = details;
         }
 
         function initPaymentStatus() {
             const statusDiv = document.getElementById('paymentStatus');
             if (!orderData) return;
 
-            // Check if already paid (from loaded quote data)
-            // payment_status is on the quote row, not in quote_data JSON
-            // We need to fetch it separately or it's included in the customer-view response
             if (orderData.payment_status === 'paid') {
-                const methodLabels = {
-                    'credit-card': 'Credit Card (Clover)',
-                    'echeck': 'eCheck (Stripe ACH)',
-                    'ach-direct': 'ACH Direct Transfer',
-                    'zelle': 'Zelle',
-                    'check': 'Check',
-                    'cash': 'Cash',
-                    'financing': 'Financing'
-                };
-                showPaymentConfirmed(methodLabels[orderData.payment_method] || orderData.payment_method || 'Unknown', orderData.payment_date);
+                const methodLabel = PAYMENT_METHOD_LABELS[orderData.payment_method] || orderData.payment_method || 'Unknown';
+                showPaymentConfirmed(methodLabel, orderData.payment_date);
                 statusDiv.innerHTML = '';
             } else {
                 const total = orderData.orderTotalPrice || 0;
                 const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 statusDiv.innerHTML = `<div style="font-size: 0.9rem; color: #666;">Quote Total: <strong>${fmt(total)}</strong></div>`;
+                // Initialize the deposit/full amount display
+                updatePaymentAmountDisplay();
             }
         }
 
@@ -1474,6 +1526,19 @@
                 </div>
             `;
 
+            // Payment info section (if payment was just recorded via combined button)
+            if (orderData._paymentMethod) {
+                const payDate = orderData._paymentDate ? new Date(orderData._paymentDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Today';
+                htmlBody += `
+                    <div style="border: 2px solid #6f42c1; padding: 15px; margin: 15px 0; background: #f8f5ff; border-radius: 6px;">
+                        <h3 style="color: #6f42c1; margin: 0 0 10px 0;">PAYMENT INFO</h3>
+                        <p style="margin: 4px 0;"><strong>Method:</strong> ${orderData._paymentMethod}</p>
+                        <p style="margin: 4px 0;"><strong>Amount:</strong> ${pFmt(orderData._paymentAmount)} (${orderData._paymentType})</p>
+                        <p style="margin: 4px 0;"><strong>Date:</strong> ${payDate}</p>
+                    </div>
+                `;
+            }
+
             // Also build plain text version
             let textBody = `ROLL-A-SHIELD PRODUCTION ORDER\n`;
             textBody += `================================\n\n`;
@@ -1506,6 +1571,15 @@
             if (guaranteeDiscount > 0) textBody += `4-Week Guarantee Savings: -${pFmt(guaranteeDiscount)}\n`;
             textBody += `>>> TOTAL: ${pFmt(totalPrice)}\n`;
             textBody += `>>> 50% Deposit: ${pFmt(depositAmount)}\n\n`;
+
+            // Payment info (if payment was just recorded via combined button)
+            if (orderData._paymentMethod) {
+                const payDate = orderData._paymentDate ? new Date(orderData._paymentDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Today';
+                textBody += `=== PAYMENT INFO ===\n`;
+                textBody += `Method: ${orderData._paymentMethod}\n`;
+                textBody += `Amount: ${pFmt(orderData._paymentAmount)} (${orderData._paymentType})\n`;
+                textBody += `Date: ${payDate}\n\n`;
+            }
 
             orderData.screens.forEach((screen, index) => {
                 const meas = finalMeasurements[index];
@@ -1746,13 +1820,6 @@
             const subject = difficultInstall
                 ? `⚠ DIFFICULT INSTALL - Production Order - ${orderData.customerName}`
                 : `Production Order - ${orderData.customerName}`;
-            const completeButton = document.getElementById('completeButton');
-            
-            if (completeButton) {
-                completeButton.disabled = true;
-                completeButton.textContent = 'Sending Email...';
-            }
-
             try {
                 const response = await fetch(`${WORKER_URL}/api/send-email`, {
                     method: 'POST',
@@ -1773,20 +1840,14 @@
 
                 const result = await response.json();
 
-                if (response.ok && result.success) {
-                    alert(`✅ Production order email sent successfully!\n\nTo: derek@rollashield.com\nCC: ap@rollashield.com\n\nEmail ID: ${result.emailId}`);
-                } else {
+                if (!response.ok || !result.success) {
                     console.error('Email API error:', result);
-                    alert('❌ Failed to send email: ' + (result.error || 'Unknown error'));
+                    throw new Error(result.error || 'Failed to send production email');
                 }
+                // Success — combined button handler shows confirmation
             } catch (error) {
                 console.error('Error sending email:', error);
-                alert('❌ Failed to send email. Please check your internet connection and try again.\n\nError: ' + error.message);
-            } finally {
-                if (completeButton) {
-                    completeButton.disabled = false;
-                    completeButton.textContent = 'Generate Production Email';
-                }
+                throw error; // Re-throw so combined button handler can catch it
             }
         }
     </script>
