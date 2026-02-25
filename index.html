@@ -869,62 +869,7 @@
                 </div>
             </div>
 
-            <!-- ═══ PROJECT DEFAULTS ═══ -->
-            <div class="form-section" id="projectDefaultsPanel" style="border: 2px solid #e0e0e0; background: #fafafa;">
-                <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleProjectDefaults()">
-                    <h2 style="margin: 0; font-size: 1rem;">
-                        <span style="display: inline-flex; align-items: center; gap: 8px;">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.5 4.5l-5 5-2-2M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="#004a95" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            Project Defaults
-                        </span>
-                    </h2>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="defaultsSummary" style="font-size: 0.8rem; color: #666;"></span>
-                        <span id="defaultsToggleIcon" style="font-size: 1.2rem; color: #999;">&#9660;</span>
-                    </div>
-                </div>
-                <div id="defaultsBody" style="display: none; margin-top: 12px;">
-                    <p class="info-text">Set defaults applied to all screens. Override per-opening with Quick Config.</p>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="defaultTrackType">Track Type</label>
-                            <select id="defaultTrackType">
-                                <option value="">-- No Default --</option>
-                                <option value="sunair-zipper">Sunair Zipper Track</option>
-                                <option value="sunair-cable">Sunair Cable</option>
-                                <option value="fenetex-keder">Fenetex Keder Track</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="defaultOperator">Operator/Motor</label>
-                            <select id="defaultOperator" disabled>
-                                <option value="">-- Select Track First --</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="defaultFabric">Fabric Color</label>
-                            <select id="defaultFabric">
-                                <option value="">-- No Default --</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="defaultFrameColor">Frame Color</label>
-                            <select id="defaultFrameColor">
-                                <option value="">-- No Default --</option>
-                                <option value="white">White</option>
-                                <option value="mocha">Mocha</option>
-                                <option value="taupe">Taupe</option>
-                                <option value="brown">Brown</option>
-                                <option value="bronze">Bronze</option>
-                                <option value="black">Black</option>
-                                <option value="grey">Grey</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- Project Defaults removed (Phase 7.1) — Quick Config per-opening handles all defaults -->
 
             <!-- ═══ PHASE 1: Document Opening ═══ -->
             <div class="screen-entry-group" id="phase1Section">
@@ -1028,12 +973,12 @@
                         <span id="quickConfigToggleIcon" style="font-size: 1rem; color: #999;">&#9660;</span>
                     </div>
                     <div id="quickConfigBody" style="display: none; padding: 0 12px 12px;">
-                        <p style="font-size: 0.8rem; color: #888; margin: 0 0 8px;">Override project defaults for this opening only.</p>
+                        <p style="font-size: 0.8rem; color: #888; margin: 0 0 8px;">Set product preferences for this opening (overrides Configure Screens batch settings).</p>
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="prefTrackType" style="font-size: 0.85rem;">Track Type</label>
                                 <select id="prefTrackType">
-                                    <option value="">-- Use Default --</option>
+                                    <option value="">-- Select --</option>
                                     <option value="sunair-zipper">Sunair Zipper Track</option>
                                     <option value="sunair-cable">Sunair Cable</option>
                                     <option value="fenetex-keder">Fenetex Keder Track</option>
@@ -1042,7 +987,7 @@
                             <div class="form-group">
                                 <label for="prefOperator" style="font-size: 0.85rem;">Operator/Motor</label>
                                 <select id="prefOperator" disabled>
-                                    <option value="">-- Use Default --</option>
+                                    <option value="">-- Select --</option>
                                 </select>
                             </div>
                         </div>
@@ -1050,13 +995,13 @@
                             <div class="form-group">
                                 <label for="prefFabric" style="font-size: 0.85rem;">Fabric Color</label>
                                 <select id="prefFabric">
-                                    <option value="">-- Use Default --</option>
+                                    <option value="">-- Select --</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label for="prefFrameColor" style="font-size: 0.85rem;">Frame Color</label>
                                 <select id="prefFrameColor">
-                                    <option value="">-- Use Default --</option>
+                                    <option value="">-- Select --</option>
                                     <option value="white">White</option>
                                     <option value="mocha">Mocha</option>
                                     <option value="taupe">Taupe</option>
@@ -1077,7 +1022,17 @@
             <div class="button-group">
                 <button id="addOpeningBtn" class="btn-primary" onclick="addOpening()">Add Opening</button>
                 <button id="addToOrderBtn" class="btn-primary" onclick="addToOrder()" style="display: none;">Add to Order</button>
-                <button class="btn-secondary" onclick="resetForm()">Clear Form</button>
+            </div>
+
+            <!-- 4-Week Install Guarantee (between Phase 1 and Phase 2) -->
+            <div id="guaranteeSection" style="display: none; background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px; border-radius: 6px; margin: 15px 0;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
+                    <input type="checkbox" id="fourWeekGuarantee" onchange="handleGuaranteeToggle()">
+                    4-Week Install Guarantee
+                </label>
+                <p style="margin-top: 6px; font-size: 13px; color: #4d4d4d; margin-bottom: 0;">
+                    Limits motor selection to Gaposa only. Solar motors priced at RTS rate (saves ~$350/screen).
+                </p>
             </div>
 
             <!-- ═══ PHASE 2: Configure Screens ═══ -->
@@ -1217,17 +1172,6 @@
                 <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #e0e0e0;">
                     <h3 style="margin: 0 0 12px 0; font-size: 1rem; color: #333;">Additional Options</h3>
 
-                    <!-- 4-Week Install Guarantee (quote-level option) -->
-                    <div id="guaranteeSection" style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
-                            <input type="checkbox" id="fourWeekGuarantee" onchange="handleGuaranteeToggle()">
-                            4-Week Install Guarantee
-                        </label>
-                        <p style="margin-top: 6px; font-size: 13px; color: #4d4d4d; margin-bottom: 0;">
-                            Limits motor selection to Gaposa only. Solar motors priced at RTS rate (saves ~$350/screen).
-                        </p>
-                    </div>
-
                     <div class="checkbox-group">
                         <input type="checkbox" id="enableComparison">
                         <label for="enableComparison">Show Pricing Comparison</label>
@@ -1292,6 +1236,7 @@
                 <div class="button-group" style="margin-top: 15px;">
                     <button class="btn-primary" onclick="calculateOrderQuote()">Calculate Order Quote</button>
                     <button class="btn-secondary" onclick="saveDraft()" id="saveDraftBtn">Save Draft</button>
+                    <button class="btn-secondary" onclick="resetForm()" style="background: #6c757d; color: white;">Clear Form</button>
                 </div>
             </div>
 
@@ -1318,11 +1263,19 @@
                 </div>
 
                 <div class="button-group" style="margin-top: 15px;">
-                    <button class="btn-success" onclick="saveQuote()">Save Quote</button>
                     <button class="btn-secondary" onclick="generatePDF()">Download PDF</button>
                     <button class="btn-primary" onclick="sendQuoteForSignature()">Send Quote & Request Signature</button>
                     <button class="btn-success" onclick="presentForSignature()">Present for Signature (In-Person)</button>
                     <button class="btn-primary" onclick="finalizeProjectDetails()" style="background: #28a745; margin-top: 10px; width: 100%; font-weight: 600;">Finalize Project Details</button>
+                </div>
+                <div id="autoSaveQuoteIndicator" style="display: none; text-align: center; margin-top: 8px; font-size: 0.85rem; color: #28a745; font-weight: 600;">Saved ✓</div>
+
+                <!-- Email History -->
+                <div id="emailHistorySection" style="display: none; margin-top: 15px; border-top: 2px solid #e0e0e0; padding-top: 12px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 0.95rem; color: #333;">
+                        Sent Emails <span id="emailHistoryCount" style="color: #888; font-weight: normal;"></span>
+                    </h4>
+                    <div id="emailHistoryList"></div>
                 </div>
             </div>
 

@@ -165,77 +165,9 @@ function buildSelectOptionsHtml(options, selectedValue, placeholder) {
     return html;
 }
 
-// ─── Project Defaults ──────────────────────────────────────────────────────────
-let projectDefaults = { trackType: '', operatorType: '', fabricColor: '', frameColor: '' };
-
-function toggleProjectDefaults() {
-    const body = document.getElementById('defaultsBody');
-    const icon = document.getElementById('defaultsToggleIcon');
-    if (body.style.display === 'none') {
-        body.style.display = 'block';
-        icon.innerHTML = '&#9650;';
-    } else {
-        body.style.display = 'none';
-        icon.innerHTML = '&#9660;';
-    }
-}
-
-function updateDefaultOperatorOptions() {
-    const trackType = document.getElementById('defaultTrackType').value;
-    const operatorSelect = document.getElementById('defaultOperator');
-    const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
-
-    if (!trackType) {
-        operatorSelect.innerHTML = '<option value="">-- Select Track First --</option>';
-        operatorSelect.disabled = true;
-        projectDefaults.operatorType = '';
-    } else {
-        const options = getOperatorOptionsForTrack(trackType, isGuarantee);
-        operatorSelect.innerHTML = buildSelectOptionsHtml(options, projectDefaults.operatorType, '-- No Default --');
-        operatorSelect.disabled = false;
-    }
-
-    projectDefaults.trackType = trackType;
-    updateProjectDefaultsSummary();
-}
-
-function updateProjectDefaultsSummary() {
-    const summaryEl = document.getElementById('defaultsSummary');
-    if (!summaryEl) return;
-
-    const parts = [];
-    if (projectDefaults.trackType) parts.push(getTrackTypeName(projectDefaults.trackType).replace(' Track', ''));
-    if (projectDefaults.operatorType) parts.push(getOperatorTypeName(projectDefaults.trackType, projectDefaults.operatorType).replace(' Motor', '').replace(' Operation (Manual)', ''));
-    if (projectDefaults.fabricColor) parts.push(getFabricName(projectDefaults.fabricColor));
-    if (projectDefaults.frameColor) parts.push(getFrameColorName(projectDefaults.frameColor));
-
-    summaryEl.textContent = parts.length > 0 ? parts.join(' / ') : '';
-}
-
-function initProjectDefaults() {
-    // Populate default fabric select
-    const defaultFabric = document.getElementById('defaultFabric');
-    if (defaultFabric) {
-        defaultFabric.innerHTML = buildSelectOptionsHtml(getFabricOptions(), '', '-- No Default --');
-    }
-
-    // Wire up change handlers
-    document.getElementById('defaultTrackType').addEventListener('change', function() {
-        updateDefaultOperatorOptions();
-    });
-    document.getElementById('defaultOperator').addEventListener('change', function() {
-        projectDefaults.operatorType = this.value;
-        updateProjectDefaultsSummary();
-    });
-    document.getElementById('defaultFabric').addEventListener('change', function() {
-        projectDefaults.fabricColor = this.value;
-        updateProjectDefaultsSummary();
-    });
-    document.getElementById('defaultFrameColor').addEventListener('change', function() {
-        projectDefaults.frameColor = this.value;
-        updateProjectDefaultsSummary();
-    });
-}
+// ─── Project Defaults (REMOVED Phase 7.1) ─────────────────────────────────────
+// Quick Config per-opening handles all product preferences now.
+// projectDefaults variable kept as empty object for backward compat with saved quotes.
 
 // ─── Quick Config (per-opening product preferences) ────────────────────────
 function toggleQuickConfig() {
@@ -256,11 +188,11 @@ function updatePrefOperatorOptions() {
     const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
 
     if (!trackType) {
-        operatorSelect.innerHTML = '<option value="">-- Use Default --</option>';
+        operatorSelect.innerHTML = '<option value="">-- Select --</option>';
         operatorSelect.disabled = true;
     } else {
         const options = getOperatorOptionsForTrack(trackType, isGuarantee);
-        operatorSelect.innerHTML = '<option value="">-- Use Default --</option>';
+        operatorSelect.innerHTML = '<option value="">-- Select --</option>';
         options.forEach(opt => {
             operatorSelect.innerHTML += `<option value="${escapeAttr(opt.value)}">${escapeAttr(opt.label)}</option>`;
         });
@@ -282,7 +214,7 @@ function initQuickConfig() {
     // Populate pref fabric select
     const prefFabric = document.getElementById('prefFabric');
     if (prefFabric) {
-        prefFabric.innerHTML = '<option value="">-- Use Default --</option>';
+        prefFabric.innerHTML = '<option value="">-- Select --</option>';
         getFabricOptions().forEach(opt => {
             prefFabric.innerHTML += `<option value="${escapeAttr(opt.value)}">${escapeAttr(opt.label)}</option>`;
         });
@@ -477,9 +409,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Set initial Phase 1 header text
     updatePhase1Header();
-
-    // Initialize project defaults panel
-    initProjectDefaults();
 
     // Initialize quick config panel
     initQuickConfig();
@@ -1614,8 +1543,6 @@ async function saveDraft() {
             salesRepId, salesRepName, salesRepEmail, salesRepPhone,
             fourWeekGuarantee: document.getElementById('fourWeekGuarantee').checked,
             totalGuaranteeDiscount: 0,
-            // Project defaults
-            projectDefaults: { ...projectDefaults },
             // Entity IDs for sync (passed back to worker)
             _contactId: currentContactId || null,
             _propertyId: currentPropertyId || null
@@ -1676,9 +1603,7 @@ async function saveQuote() {
     }
 
     isSaving = true;
-    const saveBtn = document.querySelector('button[onclick="saveQuote()"]');
     const finalizeBtn = document.querySelector('button[onclick="finalizeProjectDetails()"]');
-    if (saveBtn) saveBtn.disabled = true;
     if (finalizeBtn) finalizeBtn.disabled = true;
 
     try {
@@ -1765,8 +1690,6 @@ async function saveQuote() {
             // 4-Week Install Guarantee
             fourWeekGuarantee: orderData.fourWeekGuarantee || false,
             totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0,
-            // Project defaults
-            projectDefaults: orderData.projectDefaults || { ...projectDefaults },
             // Entity IDs for sync (passed back to worker)
             _contactId: currentContactId || null,
             _propertyId: currentPropertyId || null
@@ -1837,7 +1760,6 @@ async function saveQuote() {
         alert('Failed to save quote. Please check your internet connection.\n\nError: ' + error.message);
     } finally {
         isSaving = false;
-        if (saveBtn) saveBtn.disabled = false;
         if (finalizeBtn) finalizeBtn.disabled = false;
     }
 }
@@ -2049,17 +1971,6 @@ async function loadQuote(quoteId) {
                 document.getElementById('fourWeekGuarantee').checked = true;
             }
 
-            // Restore project defaults
-            if (quote.projectDefaults) {
-                projectDefaults = { ...quote.projectDefaults };
-                document.getElementById('defaultTrackType').value = projectDefaults.trackType || '';
-                updateDefaultOperatorOptions();
-                document.getElementById('defaultOperator').value = projectDefaults.operatorType || '';
-                document.getElementById('defaultFabric').value = projectDefaults.fabricColor || '';
-                document.getElementById('defaultFrameColor').value = projectDefaults.frameColor || '';
-                updateProjectDefaultsSummary();
-            }
-
             // Only show order summary if all screens are configured (not a draft)
             const hasUnconfigured = quote.screens.some(s => s.phase === 'opening');
             if (!hasUnconfigured) {
@@ -2168,6 +2079,72 @@ function showEmailsModal(emails) {
         if (e.target === modal) modal.remove();
     });
     document.body.appendChild(modal);
+}
+
+/**
+ * Refresh the inline email history in the quote summary.
+ * Fetches sent emails for the current quote and renders them inline.
+ */
+async function refreshEmailHistory() {
+    if (!currentQuoteId) return;
+
+    const section = document.getElementById('emailHistorySection');
+    const listEl = document.getElementById('emailHistoryList');
+    const countEl = document.getElementById('emailHistoryCount');
+    if (!section || !listEl) return;
+
+    try {
+        const response = await fetch(`${WORKER_URL}/api/quote/${currentQuoteId}/emails`);
+        const result = await response.json();
+
+        if (!response.ok || !result.success) return;
+
+        const emails = result.emails || [];
+
+        if (emails.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        const typeLabels = {
+            'quote': 'Quote Email',
+            'signature-request': 'Signature Request',
+            'signature-customer-confirmation': 'Signature Confirmation',
+            'payment-confirmation': 'Payment Confirmation',
+            'production': 'Production Order'
+        };
+
+        const typeColors = {
+            'quote': '#0071bc',
+            'signature-request': '#e67e22',
+            'signature-customer-confirmation': '#28a745',
+            'payment-confirmation': '#6f42c1',
+            'production': '#dc3545'
+        };
+
+        let html = '';
+        emails.forEach(email => {
+            const date = new Date(email.sentAt).toLocaleString();
+            const type = typeLabels[email.type] || email.type || 'Email';
+            const color = typeColors[email.type] || '#666';
+            const to = Array.isArray(email.to) ? email.to.join(', ') : email.to;
+            html += `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.85rem;">
+                    <div>
+                        <span style="font-weight: 600; color: ${color};">${type}</span>
+                        <span style="color: #888;"> → ${to}</span>
+                    </div>
+                    <span style="color: #999; font-size: 0.8rem; white-space: nowrap; margin-left: 12px;">${date}</span>
+                </div>
+            `;
+        });
+
+        countEl.textContent = `(${emails.length})`;
+        listEl.innerHTML = html;
+        section.style.display = '';
+    } catch (err) {
+        console.error('Failed to load email history:', err);
+    }
 }
 
 // ─── Data Mapping: currentOrderData → PDF template format ────────────────────
@@ -2493,6 +2470,26 @@ async function sendQuoteForSignature() {
  * If already saved (has a quote_number from D1), does nothing.
  * Returns true if save succeeded, false otherwise.
  */
+/**
+ * Auto-save the current quote silently after calculate.
+ * Shows a brief "Saved ✓" indicator on success.
+ */
+async function autoSaveQuote() {
+    if (!window.currentOrderData) return;
+    try {
+        await saveQuote();
+        // Show brief saved indicator
+        const indicator = document.getElementById('autoSaveQuoteIndicator');
+        if (indicator) {
+            indicator.style.display = '';
+            setTimeout(() => { indicator.style.display = 'none'; }, 2500);
+        }
+    } catch (err) {
+        console.error('Auto-save failed:', err);
+        // Silent failure — user can still manually trigger save actions
+    }
+}
+
 async function ensureQuoteSaved() {
     const orderData = window.currentOrderData;
     if (!orderData) return false;
@@ -2675,9 +2672,7 @@ async function finalizeProjectDetails() {
     }
 
     isSaving = true;
-    const saveBtn = document.querySelector('button[onclick="saveQuote()"]');
     const finalizeBtn = document.querySelector('button[onclick="finalizeProjectDetails()"]');
-    if (saveBtn) saveBtn.disabled = true;
     if (finalizeBtn) finalizeBtn.disabled = true;
 
     const orderData = window.currentOrderData;
@@ -2772,7 +2767,6 @@ async function finalizeProjectDetails() {
         alert('Failed to save quote. Please check your internet connection.\n\nError: ' + error.message);
     } finally {
         isSaving = false;
-        if (saveBtn) saveBtn.disabled = false;
         if (finalizeBtn) finalizeBtn.disabled = false;
     }
 }
@@ -2849,8 +2843,10 @@ function resetForm() {
     existingScreenPhotos = [];
     renderPhotoPreview();
 
-    // Clear guarantee
+    // Clear guarantee and hide its section
     document.getElementById('fourWeekGuarantee').checked = false;
+    const guaranteeSec = document.getElementById('guaranteeSection');
+    if (guaranteeSec) guaranteeSec.style.display = 'none';
 
     // Hide screens section and quote summary
     document.getElementById('screensInOrder').classList.add('hidden');
@@ -3785,6 +3781,12 @@ function renderScreensList() {
 
     screenCount.textContent = screensInOrder.length;
 
+    // Show/hide guarantee section based on whether any screens exist
+    const guaranteeEl = document.getElementById('guaranteeSection');
+    if (guaranteeEl) {
+        guaranteeEl.style.display = screensInOrder.length > 0 ? '' : 'none';
+    }
+
     if (screensInOrder.length === 0) {
         screensList.innerHTML = '<p>No screens added yet.</p>';
         statusBar.style.display = 'none';
@@ -4292,42 +4294,20 @@ function updatePhase2Visibility() {
     const phase2Section = document.getElementById('phase2Section');
     if (!phase2Section) return;
 
-    const unconfiguredOpenings = screensInOrder.filter(s => s.phase === 'opening');
-
-    if (unconfiguredOpenings.length > 0) {
-        const wasHidden = phase2Section.style.display === 'none';
+    // Show Phase 2 whenever there are any screens (configured or unconfigured)
+    // Users can re-apply configuration to override existing settings
+    if (screensInOrder.length > 0) {
         phase2Section.style.display = '';
         renderOpeningSelector();
-
-        // Auto-fill Phase 2 fields from project defaults when section first appears
-        if (wasHidden) {
-            const trackSelect = document.getElementById('trackType');
-            const fabricSelect = document.getElementById('fabricColor');
-            if (!trackSelect.value && projectDefaults.trackType) {
-                trackSelect.value = projectDefaults.trackType;
-                trackSelect.dispatchEvent(new Event('change'));
-                if (projectDefaults.operatorType) {
-                    setTimeout(() => {
-                        document.getElementById('operatorType').value = projectDefaults.operatorType;
-                        document.getElementById('operatorType').dispatchEvent(new Event('change'));
-                    }, 10);
-                }
-            }
-            if (!fabricSelect.value && projectDefaults.fabricColor) {
-                fabricSelect.value = projectDefaults.fabricColor;
-            }
-            const frameSelect = document.getElementById('frameColor');
-            if (!frameSelect.value && projectDefaults.frameColor) {
-                frameSelect.value = projectDefaults.frameColor;
-            }
-        }
     } else {
         phase2Section.style.display = 'none';
     }
 }
 
 /**
- * Render checkboxes for each unconfigured opening in the Phase 2 selector.
+ * Render checkboxes for ALL openings in the Phase 2 selector.
+ * Unconfigured openings are checked by default; configured screens are unchecked
+ * but enabled so users can re-apply configuration to override existing settings.
  */
 function renderOpeningSelector() {
     const listEl = document.getElementById('openingSelectorList');
@@ -4335,28 +4315,32 @@ function renderOpeningSelector() {
 
     let html = '';
     screensInOrder.forEach((screen, index) => {
-        if (screen.phase === 'opening') {
-            const name = screen.screenName || `Opening ${index + 1}`;
-            const photoCount = (screen.photos || []).length + (screen.pendingPhotos || []).length;
-            html += `
-                <label style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; border-radius: 4px;" onmouseover="this.style.background='#eee'" onmouseout="this.style.background=''">
-                    <input type="checkbox" class="opening-selector-cb" data-index="${index}" checked onchange="updateApplyButtonCount()">
-                    <span style="font-weight: 600; font-size: 0.9rem;">${name}</span>
-                    <span style="color: #666; font-size: 0.85rem;">(${screen.actualWidthDisplay} × ${screen.actualHeightDisplay})</span>
-                    ${photoCount > 0 ? `<span style="color: #888; font-size: 0.8rem;">— ${photoCount} photo${photoCount !== 1 ? 's' : ''}</span>` : ''}
-                </label>
-            `;
-        } else {
-            // Already configured — show disabled
-            const name = screen.screenName || `Screen ${index + 1}`;
-            html += `
-                <label style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; opacity: 0.5;">
-                    <input type="checkbox" disabled>
-                    <span style="font-size: 0.9rem; text-decoration: line-through;">${name}</span>
-                    <span style="color: #28a745; font-size: 0.8rem;">(already configured)</span>
-                </label>
-            `;
+        const isConfigured = screen.phase === 'configured';
+        const name = screen.screenName || (isConfigured ? `Screen ${index + 1}` : `Opening ${index + 1}`);
+        const photoCount = (screen.photos || []).length + (screen.pendingPhotos || []).length;
+        const checked = isConfigured ? '' : 'checked';
+
+        // Config summary for configured screens
+        let configSummary = '';
+        if (isConfigured) {
+            const parts = [];
+            if (screen.trackTypeName) parts.push(screen.trackTypeName.replace(' Track', ''));
+            if (screen.operatorTypeName) parts.push(screen.operatorTypeName.replace(' Motor', '').replace(' Operation (Manual)', ''));
+            if (screen.fabricColorName) parts.push(screen.fabricColorName);
+            configSummary = parts.length > 0 ? `<span style="color: #004a95; font-size: 0.8rem;">(${parts.join(' / ')})</span>` : '';
         }
+
+        const labelColor = isConfigured ? 'color: #004a95;' : 'color: #b8860b;';
+
+        html += `
+            <label style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; border-radius: 4px;" onmouseover="this.style.background='#eee'" onmouseout="this.style.background=''">
+                <input type="checkbox" class="opening-selector-cb" data-index="${index}" ${checked} onchange="updateApplyButtonCount()">
+                <span style="font-weight: 600; font-size: 0.9rem; ${labelColor}">${escapeAttr(name)}</span>
+                <span style="color: #666; font-size: 0.85rem;">(${screen.actualWidthDisplay} × ${screen.actualHeightDisplay})</span>
+                ${configSummary}
+                ${photoCount > 0 ? `<span style="color: #888; font-size: 0.8rem;">— ${photoCount} photo${photoCount !== 1 ? 's' : ''}</span>` : ''}
+            </label>
+        `;
     });
 
     listEl.innerHTML = html;
@@ -4451,7 +4435,12 @@ function applyConfiguration() {
 
     selectedIndices.forEach(idx => {
         const opening = screensInOrder[idx];
-        if (!opening || opening.phase !== 'opening') return;
+        if (!opening) return;
+
+        // Preserve entity IDs and excluded state when overriding configured screens
+        const preservedOpeningId = opening._openingId;
+        const preservedLineItemId = opening._lineItemId;
+        const preservedExcluded = opening.excluded || false;
 
         // Resolve effective config: opening preference > Phase 2 form value
         const effTrackType = opening.preferredTrackType || trackType;
@@ -4492,13 +4481,17 @@ function applyConfiguration() {
             const name = opening.screenName || `Opening ${idx + 1}`;
             failures.push(`${name}: ${result.error}`);
         } else {
+            // Preserve entity IDs and excluded state from previous configuration
+            result._openingId = preservedOpeningId;
+            result._lineItemId = preservedLineItemId;
+            result.excluded = preservedExcluded;
             screensInOrder[idx] = result;
             successCount++;
         }
     });
 
     if (failures.length > 0) {
-        alert(`Configured ${successCount} opening${successCount !== 1 ? 's' : ''}.\n\nFailed for:\n${failures.join('\n')}`);
+        alert(`Configured ${successCount} screen${successCount !== 1 ? 's' : ''}.\n\nFailed for:\n${failures.join('\n')}`);
     }
 
     renderScreensList();
@@ -4779,12 +4772,13 @@ function calculateOrderQuote() {
         salesRepPhone,
         fourWeekGuarantee,
         totalGuaranteeDiscount,
-        // Project defaults
-        projectDefaults: { ...projectDefaults },
         // Entity IDs for sync
         _contactId: currentContactId || null,
         _propertyId: currentPropertyId || null
     });
+
+    // Auto-save after calculating quote
+    autoSaveQuote();
 }
 
 function displayOrderQuoteSummary(orderData) {
@@ -5164,6 +5158,22 @@ function displayOrderQuoteSummary(orderData) {
             commentsEl.value = orderData.internalComments;
         }
     }, 0);
+
+    // Load email history if quote has been saved
+    if (currentQuoteId) {
+        refreshEmailHistory();
+    }
+
+    // Update send button state if quote was already sent
+    const quoteStatus = orderData.quote_status;
+    if (quoteStatus === 'sent' || quoteStatus === 'signed') {
+        const sendBtn = document.querySelector('button[onclick="sendQuoteForSignature()"]');
+        if (sendBtn) {
+            sendBtn.innerHTML = '✓ Quote Sent & Signature Requested';
+            sendBtn.style.background = '#28a745';
+            sendBtn.disabled = true;
+        }
+    }
 
     // Scroll to quote
     quoteSummary.scrollIntoView({ behavior: 'smooth' });
