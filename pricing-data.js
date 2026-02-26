@@ -9,6 +9,22 @@ const CUSTOMER_MARKUP = 1.8;
 const FENETEX_MARKUP = 1.20;
 const CABLE_SURCHARGE = 125;
 
+// Fabric price multipliers relative to Nano 95 baseline (from Sunair SC4500 pricelist)
+// Existing pricing tables assume Textiline Nano 95; ratios adjust for other fabric types
+const FABRIC_PRICE_MULTIPLIERS = {
+    standard:   1.0000,  // Textiline Nano 95 (baseline)
+    '90':       0.9636,  // Textiline 90 Stock (-3.6%)
+    '97':       1.1261,  // Textiline Nano 97 Twill (+12.6%)
+    tuffscreen: 0.8112   // Phifer Tuffscreen/NoSeeum (-18.9%)
+};
+
+function getFabricPriceMultiplier(fabricColor) {
+    if (['T18FVT-Black90', 'T18FVT-Brown90'].includes(fabricColor)) return FABRIC_PRICE_MULTIPLIERS['90'];
+    if (['T18FVT-Black97', 'T18FVT-Charcoal97', 'T18FVT-Tobacco97'].includes(fabricColor)) return FABRIC_PRICE_MULTIPLIERS['97'];
+    if (fabricColor === 'T18FVT-Tuffscreen') return FABRIC_PRICE_MULTIPLIERS.tuffscreen;
+    return FABRIC_PRICE_MULTIPLIERS.standard;
+}
+
 // Screens Array for Multi-Screen Orders
 let screensInOrder = [];
 let editingScreenIndex = null;

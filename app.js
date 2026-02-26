@@ -3461,6 +3461,7 @@ function computeScreenPricing(p) {
     if (priceData && priceData[width] && priceData[width][height] !== null && priceData[width][height] !== undefined) {
         let screenCost = priceData[width][height];
         if (!isFenetex) {
+            screenCost = screenCost * getFabricPriceMultiplier(p.fabricColor);
             screenCost = screenCost * (1 - SUNAIR_DISCOUNT);
         }
         screenCostOnly = screenCost;
