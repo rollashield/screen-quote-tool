@@ -259,4 +259,5 @@ Schema in `d1-schema.sql`. Five tables: `quotes`, `contacts`, `properties`, `ope
 - All pricing logic is in `pricing-data.js`. If pricing changes, update ONLY that file.
 - The D1 database ID is in `wrangler.toml`. This is a Cloudflare resource identifier, not a secret.
 - Motor pricing: `gaposa-rts` $225, `gaposa-solar` $425, `somfy-rts` $375. Customer markup: 1.8x.
+- Fabric pricing: Sunair screen base cost is multiplied by fabric type (Nano 95 baseline 1.0x, 90% 0.9636x, 97% Twill 1.1261x, Tuffscreen 0.8112x). Multiplier applied before Sunair discount. Fenetex unaffected. See `FABRIC_PRICE_MULTIPLIERS` in `pricing-data.js`.
 - 4-Week Install Guarantee: solar motors priced at RTS rate → saves ($425-$225) × 1.8 = $360/screen. Somfy excluded.
