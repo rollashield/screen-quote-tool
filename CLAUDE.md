@@ -98,7 +98,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
 |------|-----------------|--------------|---------|
 | `cloudflare-worker.js` | `handleSendEmail()` | Roll-A-Shield | Quote PDF email to customer |
 | `cloudflare-worker.js` | `handleSendForSignature()` | Roll-A-Shield | Signing link email to customer |
-| `cloudflare-worker.js` | `handleSubmitRemoteSignature()` | Roll-A-Shield | Signature confirmation to sales rep |
+| `cloudflare-worker.js` | `handleSubmitRemoteSignature()` | Roll-A-Shield | Signature confirmation to sales rep + customer confirmation with payment link |
 | `email-templates.js` | `buildEmailPayload()` | Roll-A-Shield Quotes | Quote email (called by app.js) |
 | `finalize.html` | inline `generateProductionEmail()` | Roll-A-Shield Production | Production order email (CC: ap@rollashield.com) |
 | `cloudflare-worker.js` | `sendPaymentConfirmationEmail()` | Roll-A-Shield | Customer order confirmation on payment close-out |
@@ -114,12 +114,11 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
     - Draft save: save after Phase 1 only (`orderTotalPrice: 0`), load later to finish configuration
     - `calculateOrderQuote()` blocks if any screens have `phase: 'opening'` (excludes excluded screens from this check)
   - **Screen object states**: `phase: 'opening'` (Phase 1 only, no pricing) or `phase: 'configured'` (full pricing)
-  - **Key functions**: `addOpening()`, `applyConfiguration()`, `computeScreenPricing()` (pure, no DOM), `saveDraft()`, `renderInlineEditor()`, `saveInlineEdit()`, `calculateScreenWithAlternateTrack()`
-  - **Shared helper functions**: `getTrackTypeOptions()`, `getTrackTypeName()`, `getOperatorOptionsForTrack()`, `getOperatorTypeName()`, `getFabricOptions()`, `getFabricName()`, `getFrameColorOptions()`, `getFrameColorName()`, `escapeAttr()`, `buildSelectOptionsHtml()` — used across project defaults, quick config, inline editor, and comparison
+  - **Key functions**: `addOpening()`, `applyConfiguration()`, `computeScreenPricing()` (pure, no DOM), `saveDraft()`, `renderInlineEditor()`, `saveInlineEdit()`, `calculateScreenWithAlternateTrack()`, `autoSaveQuote()`, `refreshEmailHistory()`
+  - **Shared helper functions**: `getTrackTypeOptions()`, `getTrackTypeName()`, `getOperatorOptionsForTrack()`, `getOperatorTypeName()`, `getFabricOptions()`, `getFabricName()`, `getFrameColorOptions()`, `getFrameColorName()`, `escapeAttr()`, `buildSelectOptionsHtml()` — used across quick config, inline editor, and comparison
   - **Quote ID persistence**: `currentQuoteId` global tracks the active quote's DB ID across recalculate/re-save cycles. Set on `loadQuote()`, reused by `calculateOrderQuote()`, `saveDraft()`, `saveQuote()`. Cleared by `resetForm()`. Prevents duplicate DB rows when editing existing quotes.
   - **Quote number stability**: Worker preserves the existing `quote_number` on re-save (only generates new numbers for brand-new quotes). Also preserves `created_at` timestamp on re-save.
-  - **Project defaults panel**: Collapsible panel between customer info and Phase 1. Sets default track, operator, fabric, frame color for the project. Auto-fills Phase 2 form when fields are empty. Saved/restored with quote data. State: `projectDefaults` global object.
-  - **Quick config (per-opening preferences)**: Collapsible "Quick Config" panel in Phase 1. Sets per-opening preferences for track, operator, fabric, frame color (each has "Use Default" option). Preferences override project defaults during `applyConfiguration()`. Displayed on opening cards.
+  - **Quick config (per-opening preferences)**: Collapsible "Quick Config" panel in Phase 1. Sets per-opening preferences for track, operator, fabric, frame color. Preferences applied during `applyConfiguration()`. Displayed on opening cards.
   - **Inline card editing**: Configured screens edited in-place via `renderInlineEditor()`. Fields: track, operator, fabric, frame, accessories (dimensions read-only, "Re-measure" link). `editingScreenIndex` global tracks which card is open. `saveInlineEdit()` calls `computeScreenPricing()` and preserves entity IDs + excluded state.
   - **Exclude/include toggle**: `screen.excluded` boolean on configured screens. Excluded screens shown with `.excluded` CSS (faded, dashed border). Excluded screens skipped in pricing calculations and PDF output. `toggleExclude(index)` function.
   - **Pricing comparison**: Two modes — motor comparison (existing) and track type comparison (new). Radio toggle switches between them. Track comparison calls `calculateScreenWithAlternateTrack()` which returns null for dimension-incompatible screens (shown as N/A with warning). Both modes show side-by-side pricing in summary and PDF.
@@ -128,7 +127,10 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - Screen-level accessories (per screen, in Phase 2)
   - Project-level accessories (per order, with quantities)
   - Site photo upload (stored in R2, captured in Phase 1)
-  - 4-Week Install Guarantee option (in Phase 2; restricts to Gaposa motors, solar priced at RTS rate)
+  - **4-Week Install Guarantee**: Standalone section between Phase 1 buttons and Phase 2. Hidden when no screens exist. Restricts to Gaposa motors, solar priced at RTS rate.
+  - **Configure Screens override**: Phase 2 opening selector shows ALL screens (configured + unconfigured). Unconfigured checked by default (amber), configured unchecked (blue, with config summary). Allows re-configuring already-configured screens while preserving entity IDs and excluded state.
+  - **Auto-save on calculate**: `calculateOrderQuote()` automatically calls `autoSaveQuote()` after computing pricing. Shows brief "Auto-saved" indicator. No separate Save Quote button.
+  - **Inline email history**: `refreshEmailHistory()` fetches and displays sent email records inline in quote summary when `currentQuoteId` exists. Color-coded type labels (quote/signature/payment/production). Send button shows green checkmark when quote already sent/signed.
   - Dimension validation with dropdown disabling (max widths: Zipper 24', Cable 22', Keder 20'). `updateDropdownCompatibility()` disables track options in all dropdowns when dimensions exceed limits.
   - Max width help text shown below dimension inputs
   - New-screen UX: auto-scroll to last card + 1.5s highlight animation on add. Dynamic Phase 1 header ("Adding Opening #N").
@@ -142,10 +144,12 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - Renders quote PDF template inline for review
   - Uses `signature_pad` v4.2.0 for signature capture
   - Shows deposit amount (50%) and payment terms
+  - **Remote signing auto-redirect**: After remote signature submission, 3-second countdown then auto-redirect to payment page with `fromSignature=1` param
 - `pay.html` — Payment page with deposit/full toggle
   - Toggle between 50% deposit and full payment amount
   - Multi-method: Clover CC, Stripe eCheck, ACH, Zelle (with QR code), check
   - Stripe eCheck sessions dynamically priced based on deposit/full selection
+  - **Signature success banner**: Green "Thank you" banner shown when arriving from remote signing (`fromSignature=1` URL param)
 - `finalize.html` — Final measurements and production order form
   - **Project info panel**: Full customer info, address, per-screen config summaries (track/operator/fabric/frame/accessories), project accessories, pricing totals, warranty badge
   - Screen selection cards show screen name, track/operator/dimensions, photo count badge, measurement status
@@ -158,10 +162,10 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - Site photos displayed read-only per screen; installation photos uploadable (up to 5 per screen)
   - Difficult Install checkbox (flags production email with red banner + subject line prefix)
   - Production comments textarea
-  - **Production email**: Includes pricing breakdown (materials, installation, wiring, accessories, discounts, total, deposit). Sent to derek@rollashield.com, CC ap@rollashield.com.
-  - **Save Quote button**: Manual save of all measurements and production data
+  - **Production email**: Includes pricing breakdown (materials, installation, wiring, accessories, discounts, total, deposit) and payment info (method, amount, type, date) when payment recorded. Sent to derek@rollashield.com, CC ap@rollashield.com.
+  - **Save Measurements button**: Manual save of all measurements and production data (secondary/gray button)
   - **Auto-save on email send**: Calls `saveMeasurements()` before sending production email
-  - **Payment close-out**: "Mark as Paid" with payment method selection (credit card, eCheck, ACH, Zelle, check, cash, financing). Confirmation dialog. Calls `POST /api/quote/:id/mark-paid`. Shows green "Payment Received" badge when already paid. Respects existing payment status on page load.
+  - **Payment close-out with deposit/full toggle**: Radio toggle for deposit (50%) or full amount. Payment method dropdown (credit card, eCheck, ACH, Zelle, check, cash, financing). Combined "Mark as Paid & Send Production Order" button that: (1) records payment via `POST /api/quote/:id/mark-paid`, (2) sends production email with payment details. Two-step execution with partial failure handling. Shows green "Payment Received" badge with method/amount/date details when already paid. `updatePaymentAmountDisplay()` and `updateCombinedButtonState()` manage UI state.
 
 ### Draft/unconfigured quote guards
 All downstream pages and worker endpoints block draft quotes with unconfigured openings:
@@ -202,6 +206,7 @@ Individual opening data auto-saves to D1 on field blur, enabling cross-device wo
   - Photo upload auto-save: after `handlePhotoSelect()`, syncs pending photos to screen and triggers auto-save. `autoSaveOpening()` uploads pending photos to R2 before PATCH.
   - `addOpening()` triggers auto-save after pushing screen to `screensInOrder`
   - Visual "Auto-saved" indicator shown briefly near Save Draft button
+  - `autoSaveQuote()` — full quote auto-save triggered after `calculateOrderQuote()`. Calls `saveQuote()` silently, shows brief indicator. No manual Save Quote button needed.
 - **Finalize page (finalize.html)**:
   - `autoSaveCurrentMeasurements()` — gathers current measurement form values (partial, no validation) and calls `saveMeasurements()` to persist to D1
   - `debouncedAutoSaveMeasurements()` — 2s debounce wrapper
@@ -213,9 +218,9 @@ Individual opening data auto-saves to D1 on field blur, enabling cross-device wo
 ### Email Tracking
 All sent emails are recorded in the `sent_emails_json` column on the `quotes` table.
 - `storeEmailRecord(env, quoteId, { type, to, cc, subject, resendId })` — appends record to JSON array
-- Email types: `quote`, `signature-request`, `payment-confirmation`, `production`
-- Records stored by: `handleSendEmail` (when `quoteId` provided), `handleSendForSignature`, `sendPaymentConfirmationEmail`
-- Frontend viewer: `viewSentEmails(quoteId)` → `GET /api/quote/:id/emails` → modal
+- Email types: `quote`, `signature-request`, `signature-customer-confirmation`, `payment-confirmation`, `production`
+- Records stored by: `handleSendEmail` (when `quoteId` provided), `handleSendForSignature`, `handleSubmitRemoteSignature` (customer confirmation), `sendPaymentConfirmationEmail`
+- Frontend viewer: `viewSentEmails(quoteId)` → `GET /api/quote/:id/emails` → modal (also inline in quote summary via `refreshEmailHistory()`)
 
 ### Airtable Close-Out
 On payment close-out (`handleMarkPaid`):
