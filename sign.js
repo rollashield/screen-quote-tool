@@ -99,22 +99,19 @@ function renderQuote(data) {
     }
 
     const templateData = mapOrderDataForSigning(quoteData, data.quoteNumber);
-    const htmlString = generateQuotePDF(templateData);
+    const docDefinition = generateQuotePDF(templateData);
 
-    // Parse the HTML and extract the .page content
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlString, 'text/html');
-    const page = doc.querySelector('.page');
-
-    if (page) {
-        // Remove the static signature/payment block (the dashed-border section)
-        const signatureBlock = page.querySelector('[style*="dashed"]');
-        if (signatureBlock) {
-            signatureBlock.remove();
-        }
-
-        document.getElementById('quoteContent').appendChild(page);
-    }
+    // Embed the PDF in an iframe so the customer sees the actual PDF
+    pdfMake.createPdf(docDefinition).getBlob(function(blob) {
+        const blobUrl = URL.createObjectURL(blob);
+        const iframe = document.createElement('iframe');
+        iframe.src = blobUrl;
+        iframe.style.width = '100%';
+        iframe.style.height = '80vh';
+        iframe.style.border = '1px solid #e0e0e0';
+        iframe.style.borderRadius = '6px';
+        document.getElementById('quoteContent').appendChild(iframe);
+    });
 
     // Show the container
     document.getElementById('loadingScreen').style.display = 'none';

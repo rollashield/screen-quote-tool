@@ -2277,9 +2277,9 @@ async function generatePDF() {
         return;
     }
 
-    // Fallback if html2pdf not loaded
-    if (typeof html2pdf === 'undefined' || typeof generateQuotePDF === 'undefined') {
-        console.warn('html2pdf or pdf-template not loaded, falling back to window.print()');
+    // Fallback if pdfmake not loaded
+    if (typeof pdfMake === 'undefined' || typeof generateQuotePDF === 'undefined') {
+        console.warn('pdfMake or pdf-template not loaded, falling back to window.print()');
         const internalInfo = document.querySelector('.internal-info');
         const buttonGroup = document.querySelector('.button-group');
         internalInfo.style.display = 'none';
@@ -2330,42 +2330,17 @@ async function generatePDF() {
  */
 async function generatePdfBlob() {
     const templateData = mapOrderDataToTemplate(window.currentOrderData);
-    const htmlString = generateQuotePDF(templateData);
+    const docDefinition = generateQuotePDF(templateData);
 
-    // Create container for html2canvas rendering.
-    // IMPORTANT: html2canvas cannot capture elements that are:
-    //   - positioned at left:-9999px (outside viewport → blank canvas)
-    //   - opacity:0 (fully transparent → blank canvas)
-    // Solution: position in viewport with near-zero opacity (0.01).
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.left = '0';
-    container.style.top = '0';
-    container.style.zIndex = '-1';
-    container.style.opacity = '0.01';
-    container.style.pointerEvents = 'none';
-    container.innerHTML = htmlString;
-    document.body.appendChild(container);
-
-    // Override template dimensions for PDF generation.
-    const pageEl = container.querySelector('.page');
-    if (pageEl) {
-        pageEl.style.minHeight = 'auto';
-        pageEl.style.width = '7.7in';
-    }
-
-    await document.fonts.ready;
-
-    const pdfBlob = await html2pdf().set({
-        margin: [0.4, 0.4, 0.5, 0.4],
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'] }
-    }).from(pageEl || container).outputPdf('blob');
-
-    document.body.removeChild(container);
-    return pdfBlob;
+    return new Promise((resolve, reject) => {
+        try {
+            pdfMake.createPdf(docDefinition).getBlob(blob => {
+                resolve(blob);
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
 }
 
 function blobToBase64(blob) {
@@ -2414,7 +2389,7 @@ async function sendQuoteForSignature() {
         // 2. Generate PDF blob and convert to base64
         if (btn) btn.textContent = 'Generating PDF...';
 
-        if (typeof html2pdf === 'undefined' || typeof generateQuotePDF === 'undefined') {
+        if (typeof pdfMake === 'undefined' || typeof generateQuotePDF === 'undefined') {
             alert('PDF generation not available. Please reload the page and try again.');
             if (btn) { btn.disabled = false; btn.textContent = 'Send Quote & Request Signature'; }
             return;
