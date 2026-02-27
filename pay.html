@@ -238,6 +238,7 @@
         .btn-pay-stripe { background: #635bff; }
         .btn-pay-stripe:hover { background: #4f46e5; }
         .btn-pay-stripe:disabled { background: #a5b4fc; cursor: wait; }
+        .btn-pay-clover:disabled { background: #81c784; cursor: wait; }
 
         /* ─── QR Modal ─── */
         .qr-modal-overlay {
@@ -406,12 +407,13 @@
                 <p>Pay securely through our payment portal.</p>
                 <span class="fee-tag has-fee">3% surcharge on credit cards</span>
                 <span class="fee-tag no-fee" style="margin-left: 4px;">No fee for debit</span>
-                <a id="cloverPayLink" href="#" target="_blank" class="btn-pay btn-pay-clover">
+                <button id="cloverPayBtn" class="btn-pay btn-pay-clover" onclick="handleCloverPay()">
                     Pay with Card
-                </a>
+                </button>
                 <button id="cloverQrBtn" class="btn-pay btn-pay-primary" style="display: none; margin-top: 8px;" onclick="showQrModal()">
                     Show QR Code (Customer Scans to Pay)
                 </button>
+                <p id="cloverError" style="display: none; color: #dc3545; font-size: 13px; margin-top: 8px;"></p>
             </div>
 
             <!-- eCheck (Stripe ACH) -->

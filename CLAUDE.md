@@ -44,6 +44,7 @@ Web application for generating custom rolling screen quotes with email integrati
 ### Payments
 - GET /api/payment-info - Static payment method details (ACH, check, Zelle, Clover)
 - POST /api/quote/:id/create-echeck-session - Create Stripe Checkout session for eCheck/ACH (accepts `{ paymentType: 'deposit' | 'full' }` in request body)
+- POST /api/quote/:id/create-clover-session - Create Clover Hosted Checkout session for card payment (accepts `{ paymentType: 'deposit' | 'full' }`; pre-fills customer name, email, phone, amount; returns `{ checkoutUrl, sessionId, expiresAt }`)
 - POST /api/quote/:id/mark-paid - Mark quote as paid (accepts `{ paymentMethod, paymentAmount }`; updates D1, sends customer confirmation email, syncs Airtable "Closed Won")
 
 ### Photos (R2)
@@ -81,6 +82,8 @@ Web application for generating custom rolling screen quotes with email integrati
   - `RESEND_API_KEY` — Resend transactional email
   - `STRIPE_SECRET_KEY` — Stripe eCheck/ACH payments
   - `AIRTABLE_API_KEY` — Airtable CRM integration
+  - `CLOVER_API_KEY` — Clover Hosted Checkout (card payments)
+  - `CLOVER_MERCHANT_ID` — Clover merchant identifier
 - Bindings (in `wrangler.toml`):
   - `DB` — D1 database (`rollashield_quotes`)
   - `PHOTO_BUCKET` — R2 bucket for site photos
@@ -237,7 +240,11 @@ On signature submit (`handleSignInPerson`, `handleSubmitRemoteSignature`):
 - **Offline functionality**: IndexedDB auto-save, recovery on reload, queued cloud sync. Plan: `.claude/plans/synthetic-baking-pine.md` (includes pros/cons analysis)
 
 ## Payments
-- **Clover**: Credit card via static permanent payment link (configured in `/api/payment-info`)
+- **Clover**: Credit/debit card via dynamic Hosted Checkout sessions (pre-filled customer name, email, amount)
+  - Endpoint: `POST /api/quote/:id/create-clover-session`
+  - Accepts `{ paymentType: 'deposit' | 'full' }` to set session amount
+  - Sessions expire 15 minutes after creation; created on button click, cached in JS
+  - Worker secrets: `CLOVER_API_KEY`, `CLOVER_MERCHANT_ID` (set via `wrangler secret put`)
 - **Stripe**: eCheck/ACH via Checkout Sessions (`us_bank_account` payment method)
   - Worker secret: `STRIPE_SECRET_KEY` (set via `wrangler secret put STRIPE_SECRET_KEY`)
   - Creates Stripe Customer with name/email for pre-population

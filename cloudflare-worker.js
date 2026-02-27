@@ -89,6 +89,12 @@ export default {
       return await handleCreateEcheckSession(quoteId, request, env);
     }
 
+    // Route: Create Clover Hosted Checkout session
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/create-clover-session$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleCreateCloverSession(quoteId, request, env);
+    }
+
     // Route: Get sent emails for a quote
     if (url.pathname.match(/^\/api\/quote\/[^/]+\/emails$/) && request.method === 'GET') {
       const quoteId = url.pathname.split('/')[3];
@@ -2346,6 +2352,135 @@ async function handleCreateEcheckSession(quoteId, request, env) {
     });
   } catch (error) {
     console.error('Error creating eCheck session:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Create Clover Hosted Checkout Session ────────────────────────────────────
+async function handleCreateCloverSession(quoteId, request, env) {
+  try {
+    if (!env.CLOVER_API_KEY || !env.CLOVER_MERCHANT_ID) {
+      return jsonResponse({ error: 'Clover is not configured' }, 500);
+    }
+
+    // Read payment type from request body (deposit or full)
+    const body = await request.json().catch(() => ({}));
+    const reqPaymentType = body.paymentType || 'deposit';
+
+    const row = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!row) {
+      return jsonResponse({ error: 'Quote not found' }, 404);
+    }
+
+    const quoteData = JSON.parse(row.quote_data);
+    const totalPrice = quoteData.orderTotalPrice || 0;
+    const paymentAmountCents = reqPaymentType === 'full'
+      ? Math.round(totalPrice * 100)         // full amount in cents
+      : Math.round((totalPrice / 2) * 100);  // 50% deposit in cents
+
+    if (paymentAmountCents <= 0) {
+      return jsonResponse({ error: 'Invalid payment amount' }, 400);
+    }
+
+    const customerName = quoteData.customerName || '';
+    const customerEmail = quoteData.customerEmail || '';
+    const customerPhone = quoteData.customerPhone || '';
+    const quoteNumber = row.quote_number || 'Quote';
+    const baseUrl = 'https://rollashield.github.io/screen-quote-tool';
+
+    // Split customer name into first/last for Clover
+    const nameParts = customerName.trim().split(/\s+/);
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
+    const paymentLabel = reqPaymentType === 'full' ? 'Full Payment' : '50% Deposit';
+
+    // Build Clover Hosted Checkout request
+    const checkoutBody = {
+      customer: {
+        firstName: firstName,
+        lastName: lastName
+      },
+      tips: {
+        enabled: false
+      },
+      shoppingCart: {
+        lineItems: [
+          {
+            name: `Roll-A-Shield ${paymentLabel} — ${quoteNumber}`,
+            price: paymentAmountCents,
+            unitQty: 1,
+            note: `Quote ${quoteNumber} for ${customerName}`
+          }
+        ]
+      },
+      redirectUrls: {
+        success: `${baseUrl}/pay.html?quoteId=${quoteId}&payment=success`,
+        failure: `${baseUrl}/pay.html?quoteId=${quoteId}&payment=failed`
+      }
+    };
+
+    // Add optional customer fields (Clover may reject empty strings)
+    if (customerEmail) checkoutBody.customer.email = customerEmail;
+    if (customerPhone) checkoutBody.customer.phoneNumber = customerPhone;
+
+    const response = await fetch(
+      'https://www.clover.com/invoicingcheckoutservice/v1/checkouts',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Clover-Merchant-Id': env.CLOVER_MERCHANT_ID,
+          'Authorization': `Bearer ${env.CLOVER_API_KEY}`
+        },
+        body: JSON.stringify(checkoutBody)
+      }
+    );
+
+    // Clover may return plain text errors (e.g. "UNAUTHORIZED") instead of JSON
+    const responseText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      console.error('Clover non-JSON error:', response.status, responseText);
+      return jsonResponse({
+        error: `Clover API error: ${responseText || response.statusText}`
+      }, 500);
+    }
+
+    if (!response.ok) {
+      console.error('Clover error:', JSON.stringify(result));
+      return jsonResponse({
+        error: result.message || 'Failed to create Clover checkout session'
+      }, 500);
+    }
+
+    // Store the checkout session ID and link in D1
+    const timestamp = new Date().toISOString();
+    await env.DB.prepare(`
+      UPDATE quotes SET
+        clover_checkout_id = ?,
+        clover_payment_link = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).bind(
+      result.checkoutSessionId,
+      result.href,
+      timestamp,
+      quoteId
+    ).run();
+
+    return jsonResponse({
+      success: true,
+      checkoutUrl: result.href,
+      sessionId: result.checkoutSessionId,
+      expiresAt: result.expirationTime
+    });
+
+  } catch (error) {
+    console.error('Error creating Clover session:', error);
     return jsonResponse({ success: false, error: error.message }, 500);
   }
 }

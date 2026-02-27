@@ -7,7 +7,9 @@
 //
 // Data sources:
 //   GET /api/quote/:id/customer-view  — quote details (amount, customer, quote number)
-//   GET /api/payment-info             — static payment instructions (ACH, check, Zelle, Clover)
+//   GET /api/payment-info             — static payment instructions (ACH, check, Zelle)
+//   POST /api/quote/:id/create-clover-session — dynamic Clover Hosted Checkout session
+//   POST /api/quote/:id/create-echeck-session — dynamic Stripe eCheck session
 
 let quoteId = null;
 let quoteData = null;
@@ -89,11 +91,6 @@ function populatePage(quoteResult, paymentInfo) {
     document.getElementById('quoteNumber').textContent = quoteNumber;
     document.getElementById('customerName').textContent = customerName;
 
-    // Card payment — Clover permanent link
-    const cloverLink = paymentInfo.clover.permanentPaymentLink;
-    const cloverPayLink = document.getElementById('cloverPayLink');
-    cloverPayLink.href = cloverLink;
-
     // Show QR buttons and navigation for in-person mode (sales rep iPad flow)
     if (paymentMode === 'in-person') {
         document.getElementById('cloverQrBtn').style.display = 'block';
@@ -153,8 +150,9 @@ function setPaymentType(type) {
     document.getElementById('payIntro').textContent = type === 'deposit'
         ? 'Choose your preferred payment method below. Your 50% deposit secures your order.'
         : 'Choose your preferred payment method below to pay the full amount.';
-    // Reset cached eCheck session URL since amount changed
+    // Reset cached session URLs since amount changed
     echeckSessionUrl = null;
+    cloverSessionUrl = null;
     // Update reference amounts on static payment methods
     updateReferenceAmounts();
 }
@@ -171,6 +169,50 @@ function updateReferenceAmounts() {
     if (zelleRef) zelleRef.textContent = `${quoteNumber} — ${amountStr}`;
     // Update Check memo
     document.getElementById('checkMemo').textContent = `${quoteNumber} — ${amountStr}`;
+}
+
+// ─── Card Payment (Clover Hosted Checkout) ──────────────────────────────────
+let cloverSessionUrl = null; // cached after first creation
+
+async function handleCloverPay() {
+    const btn = document.getElementById('cloverPayBtn');
+    const errorEl = document.getElementById('cloverError');
+    errorEl.style.display = 'none';
+
+    // If we already have a session URL, just open it
+    if (cloverSessionUrl) {
+        window.open(cloverSessionUrl, '_blank');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Creating payment link...';
+
+    try {
+        const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}/create-clover-session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentType })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to create card payment session');
+        }
+
+        cloverSessionUrl = result.checkoutUrl;
+        window.open(cloverSessionUrl, '_blank');
+        btn.textContent = 'Pay with Card';
+        btn.disabled = false;
+
+    } catch (error) {
+        console.error('Clover error:', error);
+        errorEl.textContent = error.message || 'Unable to create payment link. Please try another method.';
+        errorEl.style.display = 'block';
+        btn.textContent = 'Pay with Card';
+        btn.disabled = false;
+    }
 }
 
 // ─── eCheck (Stripe ACH) ────────────────────────────────────────────────────
@@ -261,10 +303,48 @@ async function showEcheckQrModal() {
 }
 
 // ─── QR Code Modal (Clover) ─────────────────────────────────────────────────
-function showQrModal() {
-    const cloverLink = document.getElementById('cloverPayLink').href;
+async function showQrModal() {
+    const btn = document.getElementById('cloverQrBtn');
+    const errorEl = document.getElementById('cloverError');
+    if (errorEl) errorEl.style.display = 'none';
+
+    // Create session if we don't have one yet
+    if (!cloverSessionUrl) {
+        btn.disabled = true;
+        btn.textContent = 'Creating payment link...';
+
+        try {
+            const response = await fetch(`${WORKER_URL}/api/quote/${quoteId}/create-clover-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentType })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to create card payment session');
+            }
+
+            cloverSessionUrl = result.checkoutUrl;
+            btn.textContent = 'Show QR Code (Customer Scans to Pay)';
+            btn.disabled = false;
+
+        } catch (error) {
+            console.error('Clover QR error:', error);
+            if (errorEl) {
+                errorEl.textContent = error.message || 'Unable to create payment link.';
+                errorEl.style.display = 'block';
+            }
+            btn.textContent = 'Show QR Code (Customer Scans to Pay)';
+            btn.disabled = false;
+            return;
+        }
+    }
+
+    // Show QR modal with the Clover checkout URL
     const qrImg = document.getElementById('qrCodeImage');
-    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(cloverLink)}`;
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(cloverSessionUrl)}`;
     document.getElementById('qrModalOverlay').classList.add('active');
 }
 
