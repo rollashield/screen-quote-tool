@@ -11,14 +11,22 @@ Web application for generating custom rolling screen quotes with email integrati
   - `finalize.html` - Final measurements and production order form
   - `styles.css` - Shared styles
   - `nav-steps.css` / `nav-steps.js` - Step navigation bar (shared across sign/pay/finalize)
-  - `app.js` - Core application logic (DOM, forms, API calls, UI rendering)
-  - `pricing-engine.js` - Pure pricing functions (extracted from app.js for testability)
+  - `app.js` - Form controller: event listeners, Phase 1/2 workflow, form utilities (~1,210 lines)
+  - `pricing-data.js` - Pricing tables and product constants
+  - `pricing-engine.js` - Pure pricing functions (19 functions, extracted from app.js Step 1)
+  - `photo-manager.js` - Photo compression, upload, preview, deletion (7 functions)
+  - `airtable-search.js` - Airtable opportunity search, sales rep management (7 functions)
+  - `screen-cards.js` - Screen card rendering, inline editing, Phase 2 selectors, project accessories (21 functions)
+  - `quote-persistence.js` - Save/load/delete quotes, auto-save, email history (13 functions)
+  - `pdf-signing.js` - PDF generation, data mapping, signature/finalization workflows (8 functions)
+  - `order-calculator.js` - Legacy + multi-screen order calculation and display (4 functions)
+  - `pdf-template.js` - PDF quote template (html2pdf.js, converted from Figma)
+  - `email-templates.js` - Email HTML template generation
   - `sign.js` - Signature page logic
   - `pay.js` - Payment page logic
-  - `pricing-data.js` - Pricing tables and product constants
-  - `email-templates.js` - Email HTML template generation
-  - `pdf-template.js` - PDF quote template (pdfmake document definition)
   - `tests/test-pricing-engine.js` - Unit tests for pricing-engine.js (84 tests, run with `node tests/test-pricing-engine.js`)
+  - **Script load order** (index.html): `pricing-data.js` → `pricing-engine.js` → `photo-manager.js` → `airtable-search.js` → `screen-cards.js` → `quote-persistence.js` → `pdf-signing.js` → `order-calculator.js` → `pdf-template.js` → `app.js` → `email-templates.js`
+  - **Module pattern**: All modules use browser globals (functions available via `<script>` ordering). Each has `if (typeof module !== 'undefined') { module.exports = {...} }` for Node.js testability. No npm, no import/export syntax.
 - **Backend**: Cloudflare Worker (`cloudflare-worker.js`)
   - Deployed as `rollashield-quote-worker`
   - Secrets managed via `wrangler secret put` (never in code)
@@ -124,9 +132,15 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
     - Draft save: save after Phase 1 only (`orderTotalPrice: 0`), load later to finish configuration
     - `calculateOrderQuote()` blocks if any screens have `phase: 'opening'` (excludes excluded screens from this check)
   - **Screen object states**: `phase: 'opening'` (Phase 1 only, no pricing) or `phase: 'configured'` (full pricing)
-  - **Key functions**: `addOpening()`, `applyConfiguration()`, `saveDraft()`, `renderInlineEditor()`, `saveInlineEdit()`, `autoSaveQuote()`, `refreshEmailHistory()`
-  - **Pure functions in pricing-engine.js**: `computeScreenPricing()`, `calculateScreenWithAlternateMotor()`, `calculateScreenWithAlternateTrack()`, `formatCurrency()`, `parseFraction()`, `inchesToFeetAndInches()`, dropdown helpers (`getTrackTypeOptions`, `getFabricOptions`, etc.), `escapeAttr()`, `buildSelectOptionsHtml()`, client-facing name helpers
-  - **Shared helper functions** (in `pricing-engine.js`): `getTrackTypeOptions()`, `getTrackTypeName()`, `getOperatorOptionsForTrack()`, `getOperatorTypeName()`, `getFabricOptions()`, `getFabricName()`, `getFrameColorOptions()`, `getFrameColorName()`, `escapeAttr()`, `buildSelectOptionsHtml()` — used across quick config, inline editor, comparison, and PDF template
+  - **Key functions by module**:
+    - `app.js`: `addOpening()`, `applyConfiguration()`, `calculateScreenData()`, `configureOpening()`, `resetForm()`, `escapeHtml()`, form UI handlers
+    - `pricing-engine.js`: `computeScreenPricing()`, `calculateScreenWithAlternateMotor/Track()`, `formatCurrency()`, `parseFraction()`, dropdown helpers (`getTrackTypeOptions`, `getFabricOptions`, etc.), `escapeAttr()`, `buildSelectOptionsHtml()`
+    - `screen-cards.js`: `renderScreensList()`, `editScreen()`, `renderInlineEditor()`, `saveInlineEdit()`, `toggleExclude()`, `renderOpeningSelector()`, `getApplicableProjectAccessories()`
+    - `quote-persistence.js`: `saveDraft()`, `saveQuote()`, `loadQuote()`, `loadSavedQuotes()`, `autoSaveOpening()`, `autoSaveQuote()`, `ensureQuoteSaved()`, `refreshEmailHistory()`
+    - `pdf-signing.js`: `mapOrderDataToTemplate()`, `generatePDF()`, `sendQuoteForSignature()`, `presentForSignature()`, `finalizeProjectDetails()`
+    - `order-calculator.js`: `calculateQuote()`, `displayQuoteSummary()`, `calculateOrderQuote()`, `displayOrderQuoteSummary()`
+    - `photo-manager.js`: `compressPhoto()`, `handlePhotoSelect()`, `uploadPendingPhotos()`, `deleteMarkedPhotos()`
+    - `airtable-search.js`: `searchOpportunities()`, `selectOpportunity()`, `loadSalesReps()`
   - **Quote ID persistence**: `currentQuoteId` global tracks the active quote's DB ID across recalculate/re-save cycles. Set on `loadQuote()`, reused by `calculateOrderQuote()`, `saveDraft()`, `saveQuote()`. Cleared by `resetForm()`. Prevents duplicate DB rows when editing existing quotes.
   - **Quote number stability**: Worker preserves the existing `quote_number` on re-save (only generates new numbers for brand-new quotes). Also preserves `created_at` timestamp on re-save.
   - **Quick config (per-opening preferences)**: Collapsible "Quick Config" panel in Phase 1. Sets per-opening preferences for track, operator, fabric, frame color. Preferences applied during `applyConfiguration()`. Displayed on opening cards.
@@ -212,16 +226,16 @@ First-class D1 tables for contacts, properties, openings, and quote line items. 
 ### Auto-Save & Cross-Device
 Individual opening data auto-saves to D1 on field blur, enabling cross-device workflows (start on phone, continue on tablet).
 
-- **Quote builder (app.js)**:
+- **Quote builder** (functions in `quote-persistence.js`, event handlers in `app.js`):
   - `autoSaveOpening(screenIndex)` — PATCHes existing openings (via `_openingId`) or POSTs new ones. Only fires when `currentQuoteId` exists and dimensions are non-zero.
   - `debouncedAutoSaveOpening(screenIndex)` — 1.5s debounce wrapper
-  - `syncPhase1FormToScreen()` — reads Phase 1 form values into the in-memory screen object before auto-save
+  - `syncPhase1FormToScreen()` (app.js) — reads Phase 1 form values into the in-memory screen object before auto-save
   - Blur handlers on: screenName, widthInches, widthFraction, heightInches, heightFraction, wiringDistance
   - Change handler on: includeInstallation checkbox
-  - Photo upload auto-save: after `handlePhotoSelect()`, syncs pending photos to screen and triggers auto-save. `autoSaveOpening()` uploads pending photos to R2 before PATCH.
-  - `addOpening()` triggers auto-save after pushing screen to `screensInOrder`
+  - Photo upload auto-save: after `handlePhotoSelect()` (photo-manager.js), syncs pending photos to screen and triggers auto-save. `autoSaveOpening()` uploads pending photos to R2 before PATCH.
+  - `addOpening()` (app.js) triggers auto-save after pushing screen to `screensInOrder`
   - Visual "Auto-saved" indicator shown briefly near Save Draft button
-  - `autoSaveQuote()` — full quote auto-save triggered after `calculateOrderQuote()`. Calls `saveQuote()` silently, shows brief indicator. No manual Save Quote button needed.
+  - `autoSaveQuote()` — full quote auto-save triggered after `calculateOrderQuote()` (order-calculator.js). Calls `saveQuote()` silently, shows brief indicator. No manual Save Quote button needed.
 - **Finalize page (finalize.html)**:
   - `autoSaveCurrentMeasurements()` — gathers current measurement form values (partial, no validation) and calls `saveMeasurements()` to persist to D1
   - `debouncedAutoSaveMeasurements()` — 2s debounce wrapper
