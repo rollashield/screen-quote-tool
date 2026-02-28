@@ -31,7 +31,14 @@ const AT_FIELDS = {
     status: 'fldurfMg1vz50dPy3',
     quotes: 'fldOlBGnbtFYiCbZM',
     dateTime: 'fldS7ocJhrULpGKCy',
-    salesRep: 'fldKcKKuoNWVRGOlU'
+    salesRep: 'fldKcKKuoNWVRGOlU',
+    signedContract: 'fldNAcAsQyA3LTnbL',
+    projectImages: 'fldHhtmOGlGfVZ2a1',
+    salesAmount: 'fldLBwhwnapWtTyNc',
+    materialsAmount: 'flddZMak6uihg7FYm',
+    productTags: 'fldNzZNbshxQzfTcF',
+    saleDate: 'fldibzb2eGov8OiYa',
+    finalQuoteNumber: 'fldwAlgNbw87wcbxx'
   },
   quotes: {
     opportunity: 'fldkkJKXsjTXzgh1F',
@@ -129,6 +136,12 @@ export default {
     if (url.pathname.match(/^\/api\/quote\/[^/]+\/sign-in-person$/) && request.method === 'POST') {
       const quoteId = url.pathname.split('/')[3];
       return await handleSignInPerson(quoteId, request, env);
+    }
+
+    // Route: Upload signed contract PDF to R2
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/upload-signed-pdf$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleUploadSignedPdf(quoteId, request, env);
     }
 
     // Route: Remote signing - GET (validate token, return quote data)
@@ -959,8 +972,10 @@ async function handleSaveQuote(request, env) {
         property_id,
         sent_emails_json,
         airtable_opportunity_name,
-        entities_migrated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        entities_migrated,
+        selected_payment_method,
+        signed_contract_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       quoteId,
       quoteData.customerName,
@@ -1003,7 +1018,9 @@ async function handleSaveQuote(request, env) {
       existingSignatureData.property_id || null,
       existingSignatureData.sent_emails_json || '[]',
       quoteData.airtableOpportunityName || null,
-      existingSignatureData.entities_migrated || 0
+      existingSignatureData.entities_migrated || 0,
+      existingSignatureData.selected_payment_method || null,
+      existingSignatureData.signed_contract_url || null
     ).run();
 
     // Attempt Airtable sync (non-fatal if it fails)
@@ -1104,6 +1121,7 @@ async function handleGetQuote(quoteId, env) {
     quoteData.payment_method = result.payment_method || null;
     quoteData.payment_date = result.payment_date || null;
     quoteData.selected_payment_method = result.selected_payment_method || null;
+    quoteData.signed_contract_url = result.signed_contract_url || null;
 
     // Lazy migration: extract entities from JSON blob if not yet migrated
     let entities = null;
@@ -1782,7 +1800,7 @@ async function handleSubmitRemoteSignature(token, request, env) {
     }
 
     const body = await request.json();
-    const { signatureData, signerName } = body;
+    const { signatureData, signerName, signedPdfUrl } = body;
 
     if (!signatureData || !signerName) {
       return jsonResponse({ error: 'Signature and name are required' }, 400);
@@ -1791,7 +1809,7 @@ async function handleSubmitRemoteSignature(token, request, env) {
     const signerIp = request.headers.get('CF-Connecting-IP') || 'unknown';
     const signedAt = new Date().toISOString();
 
-    // Update D1 with signature
+    // Update D1 with signature (and signed contract URL if provided)
     await env.DB.prepare(`
       UPDATE quotes SET
         signature_data = ?,
@@ -1800,9 +1818,10 @@ async function handleSubmitRemoteSignature(token, request, env) {
         signed_at = ?,
         signing_method = 'remote',
         quote_status = 'signed',
+        signed_contract_url = COALESCE(?, signed_contract_url),
         updated_at = ?
       WHERE id = ?
-    `).bind(signatureData, signerName, signerIp, signedAt, signedAt, row.id).run();
+    `).bind(signatureData, signerName, signerIp, signedAt, signedPdfUrl || null, signedAt, row.id).run();
 
     // Send confirmation email to sales rep (non-fatal)
     try {
@@ -1945,6 +1964,20 @@ async function handleSubmitRemoteSignature(token, request, env) {
       }
     }
 
+    // Attach signed contract PDF to Airtable Opportunity (non-fatal)
+    if (row.airtable_opportunity_id && signedPdfUrl) {
+      try {
+        await airtableFetch(env, `/${AT_TABLES.opportunities}/${row.airtable_opportunity_id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fields: { [AT_FIELDS.opportunities.signedContract]: [{ url: signedPdfUrl }] }
+          })
+        });
+      } catch (atErr) {
+        console.error('Failed to sync signed contract to Airtable:', atErr);
+      }
+    }
+
     return jsonResponse({
       success: true,
       quoteId: row.id,
@@ -1957,6 +1990,46 @@ async function handleSubmitRemoteSignature(token, request, env) {
 }
 
 // ─── In-Person Signature Submission ──────────────────────────────────────────
+// ─── Upload Signed Contract PDF to R2 ────────────────────────────────────────
+async function handleUploadSignedPdf(quoteId, request, env) {
+  try {
+    if (!env.PHOTO_BUCKET) {
+      return jsonResponse({ error: 'File storage not configured' }, 500);
+    }
+
+    // Validate quote exists
+    const row = await env.DB.prepare('SELECT id FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!row) {
+      return jsonResponse({ error: 'Quote not found' }, 404);
+    }
+
+    // Read PDF blob from request body
+    const pdfBuffer = await request.arrayBuffer();
+    if (!pdfBuffer || pdfBuffer.byteLength === 0) {
+      return jsonResponse({ error: 'No PDF data provided' }, 400);
+    }
+
+    // Upload to R2
+    const r2Key = `quotes/${quoteId}/signed-contract.pdf`;
+    await env.PHOTO_BUCKET.put(r2Key, pdfBuffer, {
+      httpMetadata: { contentType: 'application/pdf' }
+    });
+
+    // Construct public URL
+    const workerBaseUrl = 'https://rollashield-quote-worker.derek-44b.workers.dev';
+    const signedPdfUrl = `${workerBaseUrl}/r2/${r2Key}`;
+
+    // Store URL in D1
+    await env.DB.prepare('UPDATE quotes SET signed_contract_url = ?, updated_at = ? WHERE id = ?')
+      .bind(signedPdfUrl, new Date().toISOString(), quoteId).run();
+
+    return jsonResponse({ success: true, url: signedPdfUrl });
+  } catch (error) {
+    console.error('Error uploading signed PDF:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
 async function handleSignInPerson(quoteId, request, env) {
   try {
     const row = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
@@ -1970,7 +2043,7 @@ async function handleSignInPerson(quoteId, request, env) {
     }
 
     const body = await request.json();
-    const { signatureData, signerName } = body;
+    const { signatureData, signerName, signedPdfUrl } = body;
 
     if (!signatureData || !signerName) {
       return jsonResponse({ error: 'Signature and name are required' }, 400);
@@ -1987,9 +2060,10 @@ async function handleSignInPerson(quoteId, request, env) {
         signed_at = ?,
         signing_method = 'in-person',
         quote_status = 'signed',
+        signed_contract_url = COALESCE(?, signed_contract_url),
         updated_at = ?
       WHERE id = ?
-    `).bind(signatureData, signerName, signerIp, signedAt, signedAt, quoteId).run();
+    `).bind(signatureData, signerName, signerIp, signedAt, signedPdfUrl || null, signedAt, quoteId).run();
 
     // Update Airtable quote status to "Accepted" (non-fatal)
     if (row.airtable_quote_id) {
@@ -2002,6 +2076,20 @@ async function handleSignInPerson(quoteId, request, env) {
         });
       } catch (atError) {
         console.error('Failed to update Airtable quote status:', atError);
+      }
+    }
+
+    // Attach signed contract PDF to Airtable Opportunity (non-fatal)
+    if (row.airtable_opportunity_id && signedPdfUrl) {
+      try {
+        await airtableFetch(env, `/${AT_TABLES.opportunities}/${row.airtable_opportunity_id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            fields: { [AT_FIELDS.opportunities.signedContract]: [{ url: signedPdfUrl }] }
+          })
+        });
+      } catch (atErr) {
+        console.error('Failed to sync signed contract to Airtable:', atErr);
       }
     }
 
@@ -2244,17 +2332,41 @@ async function syncAirtableCloseOut(env, quoteRow, quoteData, paymentAmount, pay
   const oppId = quoteRow.airtable_opportunity_id;
   if (!oppId) return false;
 
-  // Calculate materials amount (total - installation - wiring)
-  const totalPrice = paymentAmount || quoteData.orderTotalPrice || 0;
-  const installPrice = quoteData.orderTotalInstallationPrice || 0;
-  const wiringTotal = (quoteData.screens || []).reduce((sum, s) => sum + (s.wiringPrice || 0), 0);
-  const materialsAmount = totalPrice - installPrice - wiringTotal - (quoteData.miscInstallAmount || 0);
+  const totalPrice = quoteData.orderTotalPrice || 0;
+  const materialsPrice = quoteData.orderTotalMaterialsPrice || 0;
+  const saleDate = (paymentDate || new Date().toISOString()).split('T')[0];
 
-  // PATCH Airtable Opportunity → "Closed Won"
+  // Build Opportunity fields
   const oppFields = {
-    [AT_FIELDS.opportunities.status]: 'Closed Won'
+    [AT_FIELDS.opportunities.status]: 'Closed Won',
+    [AT_FIELDS.opportunities.salesAmount]: totalPrice,
+    [AT_FIELDS.opportunities.materialsAmount]: materialsPrice,
+    [AT_FIELDS.opportunities.productTags]: ['Screen'],
+    [AT_FIELDS.opportunities.saleDate]: saleDate,
+    [AT_FIELDS.opportunities.finalQuoteNumber]: quoteRow.quote_number || ''
   };
 
+  // Attach signed contract PDF if available
+  if (quoteRow.signed_contract_url) {
+    oppFields[AT_FIELDS.opportunities.signedContract] = [{ url: quoteRow.signed_contract_url }];
+  }
+
+  // Collect project images from screen photos
+  const workerBaseUrl = 'https://rollashield-quote-worker.derek-44b.workers.dev';
+  const screens = (quoteData.screens || []).filter(s => !s.excluded);
+  const projectImages = [];
+  for (const screen of screens) {
+    for (const photo of (screen.photos || [])) {
+      if (photo.key) {
+        projectImages.push({ url: `${workerBaseUrl}/r2/${photo.key}` });
+      }
+    }
+  }
+  if (projectImages.length > 0) {
+    oppFields[AT_FIELDS.opportunities.projectImages] = projectImages;
+  }
+
+  // PATCH Airtable Opportunity
   await airtableFetch(env, `/${AT_TABLES.opportunities}/${oppId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields: oppFields })

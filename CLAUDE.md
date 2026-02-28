@@ -51,7 +51,10 @@ Web application for generating custom rolling screen quotes with email integrati
 ### Photos (R2)
 - POST /api/photos/upload - Upload site photo to R2 (JPEG, PNG, HEIC; max 5MB)
 - POST /api/photos/delete - Delete site photo from R2
-- GET /r2/quotes/* - Serve photo from R2
+- GET /r2/quotes/* - Serve photo/PDF from R2
+
+### Signed Contract
+- POST /api/quote/:id/upload-signed-pdf - Upload signed contract PDF to R2 (binary PDF body, returns `{ url }`)
 
 ### Entities (Contacts, Properties, Openings, Line Items)
 - POST /api/contacts - Create/update contact
@@ -148,6 +151,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - Renders quote PDF template inline for review
   - Uses `signature_pad` v4.2.0 for signature capture
   - Shows deposit amount (50%) and payment terms
+  - **Signed contract PDF**: On signature submit, generates full PDF with signature overlay via pdfMake, uploads to R2, attaches to Airtable Opportunity. Non-fatal — signature submits even if PDF fails.
   - **Remote signing auto-redirect**: After remote signature submission, 3-second countdown then auto-redirect to payment page with `fromSignature=1` param
 - `pay.html` — Payment page with deposit/full toggle
   - Toggle between 50% deposit and full payment amount
@@ -229,19 +233,34 @@ All sent emails are recorded in the `sent_emails_json` column on the `quotes` ta
 - Records stored by: `handleSendEmail` (when `quoteId` provided), `handleSendForSignature`, `handleSubmitRemoteSignature` (customer confirmation), `sendPaymentConfirmationEmail`
 - Frontend viewer: `viewSentEmails(quoteId)` → `GET /api/quote/:id/emails` → modal (also inline in quote summary via `refreshEmailHistory()`)
 
+### Signed Contract PDF
+On signature submit (both in-person and remote):
+- Client generates full PDF (quote + signature overlay) via pdfMake in `sign.js`
+- PDF uploaded to R2 at `quotes/{quoteId}/signed-contract.pdf` via `POST /api/quote/:id/upload-signed-pdf`
+- URL stored in D1 `quotes.signed_contract_url`
+- PDF attached to Airtable Opportunity "Signed Contract" field (`fldNAcAsQyA3LTnbL`)
+- Non-fatal: if PDF gen/upload fails, signature still submits without PDF
+- Key functions: `generateSignedPdf()`, `uploadSignedPdf()` in sign.js; `handleUploadSignedPdf()` in worker
+
 ### Airtable Close-Out
-On payment close-out (`handleMarkPaid`):
-- Opportunity status → "Closed Won" (via `syncAirtableCloseOut`)
+On payment close-out (`handleMarkPaid` → `syncAirtableCloseOut`):
+- Opportunity status → "Closed Won"
+- Sales Amount → `orderTotalPrice`
+- Materials Amount → `orderTotalMaterialsPrice`
+- Product Tags → `["Screen"]`
+- Expected/Sale Date → payment date
+- Final Quote Number → `quote_number`
+- Signed Contract → R2 PDF URL (if signed)
+- Project Images → all non-excluded screen photos from R2
 - Quote status → "Accepted" with updated total amount
-- **Not yet implemented** (needs Airtable field IDs): Sales Amount, Materials Amount, Product Tags, Expected/Sale Date, Final Quote Number, Signed Contract PDF, Project Images
 
 On signature submit (`handleSignInPerson`, `handleSubmitRemoteSignature`):
 - Quote status → "Accepted"
+- Signed Contract PDF → attached to Opportunity (if generated)
 
 ### Future plans (not yet implemented)
-- **Signed contract PDF for Airtable**: Generate full signed PDF (quote + signature overlay), upload to R2, attach URL to Airtable. Requires server-side PDF generation or client-side generation at signing time.
-- **Extended Airtable close-out fields**: Sales Amount, Materials Amount, Product Tags, Expected/Sale Date, Final Quote Number, Project Images — need Airtable field IDs from the Opportunities table schema.
 - **Offline functionality**: IndexedDB auto-save, recovery on reload, queued cloud sync. Plan: `.claude/plans/synthetic-baking-pine.md` (includes pros/cons analysis)
+- **Airtable payment method sync**: Map payment method to Airtable's "Payment Type" field and check deposit/payment checkboxes on close-out
 
 ## Payments
 - **Clover**: Credit/debit card via dynamic Hosted Checkout sessions (pre-filled customer name, email, amount)
@@ -259,11 +278,12 @@ On signature submit (`handleSignInPerson`, `handleSubmitRemoteSignature`):
 
 ## D1 Database
 Schema in `d1-schema.sql`. Five tables: `quotes`, `contacts`, `properties`, `openings`, `quote_line_items`.
-- **Signing**: `quote_status`, `signing_token`, `signature_data`, `signed_at`, `signer_name`, `signer_ip`, `signing_method`
+- **Signing**: `quote_status`, `signing_token`, `signature_data`, `signed_at`, `signer_name`, `signer_ip`, `signing_method`, `signed_contract_url` (R2 URL of signed PDF)
 - **Payment**: `payment_status` (default 'unpaid'), `payment_method`, `payment_amount`, `payment_date`, `clover_payment_link`, `stripe_payment_intent_id`, `clover_checkout_id`, `selected_payment_method` (customer's choice from pay page, persisted on card click)
 - **Guarantee**: `four_week_guarantee`, `total_guarantee_discount`
 - **Entity references on quotes**: `contact_id`, `property_id`, `entities_migrated`, `sent_emails_json`
 - **Photos**: Stored in R2 (key format: `quotes/{quoteId}/screens/{screenIndex}/{timestamp}-{randomId}.{ext}`)
+- **Signed Contract PDF**: Stored in R2 (key: `quotes/{quoteId}/signed-contract.pdf`), URL in `signed_contract_url`
 
 ## Important Notes
 - This is a vanilla JS project. Do NOT suggest adding npm, webpack, React, or any framework.

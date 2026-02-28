@@ -8,6 +8,8 @@ let signaturePad = null;
 let signingMode = null; // 'in-person' or 'remote'
 let quoteId = null;
 let signingToken = null;
+let cachedQuoteData = null;   // Cached for signed PDF generation
+let cachedQuoteNumber = null; // Cached for signed PDF generation
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -82,6 +84,8 @@ async function fetchInPersonQuote(id) {
 // ─── Render Quote ────────────────────────────────────────────────────────────
 function renderQuote(data) {
     const quoteData = data.quote;
+    cachedQuoteData = quoteData;
+    cachedQuoteNumber = data.quoteNumber;
 
     // Guard: block rendering for draft/unconfigured quotes (skip excluded screens)
     const unconfigured = (quoteData.screens || []).filter(s => s.phase === 'opening' && !s.excluded);
@@ -361,6 +365,89 @@ function validateForm() {
     btn.disabled = !(accepted && name && hasSig);
 }
 
+// ─── Signed PDF Generation ──────────────────────────────────────────────────
+function generateSignedPdf(quoteData, quoteNumber, signatureDataUrl, signerName) {
+    return new Promise((resolve, reject) => {
+        try {
+            const templateData = mapOrderDataForSigning(quoteData, quoteNumber);
+            const docDefinition = generateQuotePDF(templateData);
+
+            // Append signature block to the PDF content (before footer bar)
+            const signedDate = new Date().toLocaleDateString('en-US', {
+                year: 'numeric', month: 'long', day: 'numeric'
+            });
+
+            // Replace the blank signature area with the actual signature
+            docDefinition.content.push({
+                margin: [0, 12, 0, 0],
+                table: {
+                    widths: ['*'],
+                    body: [[{
+                        stack: [
+                            { text: 'SIGNED CONTRACT', font: 'Montserrat', fontSize: 11, bold: true, color: '#004a95', margin: [0, 0, 0, 8] },
+                            {
+                                columns: [
+                                    {
+                                        width: '*',
+                                        stack: [
+                                            { text: 'Customer Signature:', fontSize: 9, bold: true, color: '#2a2d2c', margin: [0, 0, 0, 4] },
+                                            { image: signatureDataUrl, width: 180, height: 50, margin: [0, 0, 0, 4] },
+                                            { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 180, y2: 0, lineWidth: 1, lineColor: '#2a2d2c' }], margin: [0, 0, 0, 2] },
+                                            { text: signerName, fontSize: 9, color: '#2a2d2c', margin: [0, 0, 0, 2] },
+                                            { text: signedDate, fontSize: 8, color: '#4d4d4d' }
+                                        ]
+                                    },
+                                    {
+                                        width: '*',
+                                        stack: [
+                                            { text: 'Acceptance:', fontSize: 9, bold: true, color: '#2a2d2c', margin: [0, 0, 0, 4] },
+                                            { text: 'By signing above, customer acknowledges receipt of this quote and accepts the terms, conditions, and pricing described herein.', fontSize: 8, color: '#4d4d4d', lineHeight: 1.3 },
+                                            { text: '50% deposit due at signing. Balance due upon completion of installation.', fontSize: 8, bold: true, color: '#2a2d2c', margin: [0, 6, 0, 0] }
+                                        ]
+                                    }
+                                ],
+                                columnGap: 20
+                            }
+                        ],
+                        fillColor: '#f0fff4',
+                        border: [true, true, true, true],
+                        borderColor: ['#c3e6cb', '#c3e6cb', '#c3e6cb', '#c3e6cb'],
+                        margin: [10, 8, 10, 8]
+                    }]]
+                },
+                layout: {
+                    hLineColor: function() { return '#c3e6cb'; },
+                    vLineColor: function() { return '#c3e6cb'; },
+                    paddingLeft: function() { return 10; },
+                    paddingRight: function() { return 10; },
+                    paddingTop: function() { return 8; },
+                    paddingBottom: function() { return 8; }
+                }
+            });
+
+            pdfMake.createPdf(docDefinition).getBlob(function(blob) {
+                resolve(blob);
+            });
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+async function uploadSignedPdf(pdfBlob) {
+    const uploadUrl = `${WORKER_URL}/api/quote/${quoteId}/upload-signed-pdf`;
+    const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/pdf' },
+        body: pdfBlob
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Upload failed');
+    }
+    return result.url;
+}
+
 // ─── Submit Signature ────────────────────────────────────────────────────────
 async function submitSignature() {
     const btn = document.getElementById('submitBtn');
@@ -370,7 +457,23 @@ async function submitSignature() {
     const signerName = document.getElementById('signerName').value.trim();
     const signatureData = signaturePad.toDataURL('image/png');
 
+    // Generate and upload signed contract PDF (non-fatal)
+    let signedPdfUrl = null;
+    if (cachedQuoteData && quoteId) {
+        try {
+            btn.textContent = 'Generating signed contract...';
+            const pdfBlob = await generateSignedPdf(cachedQuoteData, cachedQuoteNumber, signatureData, signerName);
+            btn.textContent = 'Uploading signed contract...';
+            signedPdfUrl = await uploadSignedPdf(pdfBlob);
+        } catch (pdfError) {
+            console.error('Signed PDF generation/upload failed (non-fatal):', pdfError);
+            // Continue with signature submission — PDF is nice-to-have
+        }
+    }
+
     try {
+        btn.textContent = 'Submitting signature...';
+
         let url;
         if (signingMode === 'remote' && signingToken) {
             url = `${WORKER_URL}/api/sign/${signingToken}`;
@@ -381,7 +484,7 @@ async function submitSignature() {
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ signatureData, signerName })
+            body: JSON.stringify({ signatureData, signerName, signedPdfUrl })
         });
 
         const result = await response.json();

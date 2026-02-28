@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS quotes (
   stripe_payment_intent_id TEXT,
   clover_checkout_id TEXT,
   selected_payment_method TEXT,
+  signed_contract_url TEXT,
   -- Entity references (added in migration 001)
   contact_id TEXT REFERENCES contacts(id),
   property_id TEXT REFERENCES properties(id),
