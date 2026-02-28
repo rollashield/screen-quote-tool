@@ -70,9 +70,9 @@
 // ─── Sales Rep Management ─────────────────────────────────────────────────────
 let salesRepsList = []; // Cached list of all sales reps from Airtable
 let originalSalesRepId = ''; // Track original rep for change detection
-let currentQuoteId = null; // Persists across recalculate/re-save to prevent duplicate DB rows
-let currentContactId = null; // Entity ID for the contact record
-let currentPropertyId = null; // Entity ID for the property record
+var currentQuoteId = null; // Persists across recalculate/re-save to prevent duplicate DB rows
+var currentContactId = null; // Entity ID for the contact record
+var currentPropertyId = null; // Entity ID for the property record
 
 // ─── Shared Helpers ─────────────────────────────────────────────────────────
 // Pure functions moved to pricing-engine.js:
@@ -550,7 +550,7 @@ function escapeHtml(text) {
 }
 
 // ─── Save Guard ─────────────────────────────────────────────────────────────
-let isSaving = false;
+var isSaving = false;
 
 function handleGuaranteeToggle() {
     const isGuarantee = document.getElementById('fourWeekGuarantee').checked;
