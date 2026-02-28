@@ -131,7 +131,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - Screen-level accessories (per screen, in Phase 2)
   - Project-level accessories (per order, with quantities)
   - Site photo upload (stored in R2, captured in Phase 1)
-  - **4-Week Install Guarantee**: Standalone section between Phase 1 buttons and Phase 2. Hidden when no screens exist. Restricts to Gaposa motors, solar priced at RTS rate.
+  - **4-Week Install Guarantee**: Standalone section between Phase 1 buttons and Phase 2. Hidden when no screens exist. Restricts to Gaposa motors. Dual benefit: solar priced at RTS rate ($360/screen), RTS gets free Bond Bridge ($360, one per project).
   - **Configure Screens override**: Phase 2 opening selector shows ALL screens (configured + unconfigured). Unconfigured checked by default (amber), configured unchecked (blue, with config summary). Allows re-configuring already-configured screens while preserving entity IDs and excluded state.
   - **Auto-save on calculate**: `calculateOrderQuote()` automatically calls `autoSaveQuote()` after computing pricing. Shows brief "Auto-saved" indicator. No separate Save Quote button.
   - **Inline email history**: `refreshEmailHistory()` fetches and displays sent email records inline in quote summary when `currentQuoteId` exists. Color-coded type labels (quote/signature/payment/production). Send button shows green checkmark when quote already sent/signed.
@@ -271,4 +271,5 @@ Schema in `d1-schema.sql`. Five tables: `quotes`, `contacts`, `properties`, `ope
 - The D1 database ID is in `wrangler.toml`. This is a Cloudflare resource identifier, not a secret.
 - Motor pricing: `gaposa-rts` $225, `gaposa-solar` $425, `somfy-rts` $375. Customer markup: 1.8x.
 - Fabric pricing: Sunair screen base cost is multiplied by fabric type (Nano 95 baseline 1.0x, 90% 0.9636x, 97% Twill 1.1261x, Tuffscreen 0.8112x). Multiplier applied before Sunair discount. Fenetex unaffected. See `FABRIC_PRICE_MULTIPLIERS` in `pricing-data.js`.
-- 4-Week Install Guarantee: solar motors priced at RTS rate → saves ($425-$225) × 1.8 = $360/screen. Somfy excluded.
+- 4-Week Install Guarantee: Each screen gets ~$360 value. Solar motors priced at RTS rate → ($425-$225) × 1.8 = $360/screen. RTS motors get a free Bond Bridge ($360, one per project). Gear screens get no discount. Somfy excluded (Gaposa only).
+- Bond Bridge: Smart home control accessory, $360 customer price (markup: false). Available as project-level accessory for Gaposa and Somfy motors. NOT shown in per-screen accessories (filtered in `updateAccessories()`).

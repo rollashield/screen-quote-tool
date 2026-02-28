@@ -121,7 +121,8 @@ const accessories = {
         {id: 'gaposa-1ch-wall', name: 'Single Channel On-Wall Remote', cost: 96, markup: false},
         {id: 'gaposa-5ch-wall', name: '5-Channel On-Wall Remote', cost: 115, markup: false},
         {id: 'gaposa-16ch-handheld', name: '16-Channel Handheld Remote', cost: 287, markup: false},
-        {id: 'gaposa-keypad', name: 'Digital Keypad', cost: 229, markup: false}
+        {id: 'gaposa-keypad', name: 'Digital Keypad', cost: 229, markup: false},
+        {id: 'bond-bridge', name: 'Bond Bridge (Smart Home Control)', cost: 360, markup: false}
     ],
     'somfy': [
         {id: 'somfy-1ch-indoor', name: 'Single Channel Handheld Remote (Indoor)', cost: 61, markup: true},
@@ -130,7 +131,8 @@ const accessories = {
         {id: 'somfy-5ch-outdoor', name: '5-Channel Handheld Remote (Outdoor)', cost: 117, markup: true},
         {id: 'somfy-16ch', name: '16-Channel Handheld Remote (Indoor)', cost: 275, markup: true},
         {id: 'somfy-1ch-wall', name: 'Single Channel In-Wall Remote', cost: 79, markup: true},
-        {id: 'somfy-5ch-wall', name: '5-Channel In-Wall Remote', cost: 99, markup: true}
+        {id: 'somfy-5ch-wall', name: '5-Channel In-Wall Remote', cost: 99, markup: true},
+        {id: 'bond-bridge', name: 'Bond Bridge (Smart Home Control)', cost: 360, markup: false}
     ]
 };
 

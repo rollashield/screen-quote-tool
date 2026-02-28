@@ -935,6 +935,9 @@ function updateAccessories() {
         availableAccessories = availableAccessories.filter(acc => acc.id !== 'gaposa-solar-ext');
     }
 
+    // Filter out Bond Bridge from per-screen accessories (project-level only)
+    availableAccessories = availableAccessories.filter(acc => acc.id !== 'bond-bridge');
+
     let html = '';
 
     availableAccessories.forEach(acc => {
@@ -3550,6 +3553,7 @@ function computeScreenPricing(p) {
         customerPrice, isFenetex, trackDeduction,
         guaranteeDiscount: (guaranteeActive && operatorType === 'gaposa-solar')
             ? (motorCosts['gaposa-solar'] - motorCosts['gaposa-rts']) * CUSTOMER_MARKUP : 0,
+        guaranteeBondBridge: guaranteeActive && isRts,
         photos: p.photos || [],
         pendingPhotos: p.pendingPhotos || [],
         // Preserve raw input values for re-editing
@@ -4548,6 +4552,15 @@ function calculateOrderQuote() {
         totalGuaranteeDiscount += (screen.guaranteeDiscount || 0);
     });
 
+    // Bond Bridge: if guarantee active and any non-excluded RTS screen, add one Bond Bridge ($360)
+    let guaranteeBondBridge = false;
+    if (fourWeekGuarantee) {
+        guaranteeBondBridge = screensInOrder.some(s => !s.excluded && s.guaranteeBondBridge);
+        if (guaranteeBondBridge) {
+            totalGuaranteeDiscount += 360; // One Bond Bridge per project
+        }
+    }
+
     // Add project-level accessories to materials (so discount applies)
     let projectAccessoriesTotalCost = 0;
     let projectAccessoriesTotalPrice = 0;
@@ -4748,6 +4761,7 @@ function calculateOrderQuote() {
         salesRepPhone,
         fourWeekGuarantee,
         totalGuaranteeDiscount,
+        guaranteeBondBridge,
         // Entity IDs for sync
         _contactId: currentContactId || null,
         _propertyId: currentPropertyId || null
@@ -4950,7 +4964,7 @@ function displayOrderQuoteSummary(orderData) {
         if (orderData.totalGuaranteeDiscount > 0) {
             customerHTML += `
                 <div style="display: flex; justify-content: space-between; align-items: center; color: #2e7d32; margin-bottom: 8px;">
-                    <strong>4-Week Guarantee Solar Savings (included above):</strong>
+                    <strong>4-Week Guarantee Savings (included above):</strong>
                     <div style="display: flex; gap: 20px;">
                         <strong style="min-width: 120px; text-align: right; color: #2e7d32;">-${formatCurrency(orderData.totalGuaranteeDiscount)}</strong>
                         <strong style="min-width: 120px; text-align: right; color: #2e7d32;">-${formatCurrency(orderData.totalGuaranteeDiscount)}</strong>
@@ -5029,7 +5043,7 @@ function displayOrderQuoteSummary(orderData) {
         if (orderData.totalGuaranteeDiscount > 0) {
             customerHTML += `
                 <div class="summary-row" style="color: #2e7d32;">
-                    <strong>4-Week Guarantee Solar Savings (included above):</strong>
+                    <strong>4-Week Guarantee Savings (included above):</strong>
                     <strong style="color: #2e7d32;">-${formatCurrency(orderData.totalGuaranteeDiscount)}</strong>
                 </div>
             `;
