@@ -150,6 +150,9 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - **Remote signing auto-redirect**: After remote signature submission, 3-second countdown then auto-redirect to payment page with `fromSignature=1` param
 - `pay.html` — Payment page with deposit/full toggle
   - Toggle between 50% deposit and full payment amount
+  - **Select-then-reveal UX**: Method cards show heading/description/fee tags only. Customer clicks a card to expand it and reveal action buttons/details (accordion — only one open at a time). `selectMethod(key)` in pay.js manages state. Prevents premature Clover/Stripe session creation.
+  - **Method order**: Card Payment → eCheck → "Other Options" divider → Zelle → Financing → Bank Transfer → Check
+  - **Financing card**: Service Finance Company (SFC) integration — presentational only, no API. Shows three plans (18mo 0%, 120mo 9.99%, 180mo 9.99%) with monthly estimates calculated from full quote total (not affected by deposit/full toggle). "Apply for Financing" links to SFC application. Always visible (eligibility vetting is sales rep's responsibility).
   - Multi-method: Clover CC, Stripe eCheck, ACH, Zelle (with QR code), check
   - Stripe eCheck sessions dynamically priced based on deposit/full selection
   - **Signature success banner**: Green "Thank you" banner shown when arriving from remote signing (`fromSignature=1` URL param)

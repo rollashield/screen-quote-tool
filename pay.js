@@ -16,6 +16,7 @@ let quoteData = null;
 let paymentMode = null; // 'in-person' or null (remote)
 let paymentType = 'deposit'; // 'deposit' or 'full'
 let storedTotalPrice = 0; // stored from populatePage for toggle
+let selectedMethod = null; // tracks which payment method card is expanded
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
@@ -137,6 +138,26 @@ function populatePage(quoteResult, paymentInfo) {
         if (payBody) payBody.insertBefore(banner, payBody.firstChild);
     }
 
+    // Financing plans — estimates from total price (always full amount, not deposit)
+    const FINANCING_PLANS = [
+        { name: 'Interest-Free', term: '18 months', apr: '0%*', factor: 0.03 },
+        { name: 'Low Payment', term: '120 months', apr: 'As low as 9.99%', factor: 0.015 },
+        { name: 'Extended', term: '180 months', apr: 'As low as 9.99%', factor: 0.0115 }
+    ];
+    const plansContainer = document.getElementById('financingPlans');
+    if (plansContainer) {
+        plansContainer.innerHTML = FINANCING_PLANS.map(plan => {
+            const monthly = totalPrice * plan.factor;
+            return `<div class="financing-plan">
+                <div>
+                    <strong>${plan.name}</strong><br>
+                    <span style="color:#6b7280;font-size:12px;">${plan.term} &middot; ${plan.apr}</span>
+                </div>
+                <div class="plan-payment">~${formatCurrency(monthly)}/mo</div>
+            </div>`;
+        }).join('');
+    }
+
     // Show the page
     document.getElementById('loadingScreen').style.display = 'none';
     document.getElementById('payContainer').style.display = 'block';
@@ -169,6 +190,30 @@ function updateReferenceAmounts() {
     if (zelleRef) zelleRef.textContent = `${quoteNumber} — ${amountStr}`;
     // Update Check memo
     document.getElementById('checkMemo').textContent = `${quoteNumber} — ${amountStr}`;
+}
+
+// ─── Select-then-reveal accordion ────────────────────────────────────────────
+function selectMethod(methodKey) {
+    // Collapse previously selected card
+    if (selectedMethod && selectedMethod !== methodKey) {
+        const prev = document.getElementById(selectedMethod + 'Actions');
+        if (prev) prev.style.display = 'none';
+        const prevCard = prev?.closest('.method-card');
+        if (prevCard) prevCard.classList.remove('selected');
+    }
+    // Toggle current card
+    const actions = document.getElementById(methodKey + 'Actions');
+    const card = actions?.closest('.method-card');
+    if (selectedMethod === methodKey) {
+        // Collapse if clicking same card again
+        if (actions) actions.style.display = 'none';
+        if (card) card.classList.remove('selected');
+        selectedMethod = null;
+    } else {
+        if (actions) actions.style.display = 'block';
+        if (card) card.classList.add('selected');
+        selectedMethod = methodKey;
+    }
 }
 
 // ─── Card Payment (Clover Hosted Checkout) ──────────────────────────────────

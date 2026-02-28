@@ -240,6 +240,52 @@
         .btn-pay-stripe:disabled { background: #a5b4fc; cursor: wait; }
         .btn-pay-clover:disabled { background: #81c784; cursor: wait; }
 
+        .btn-pay-financing { background: #7c3aed; }
+        .btn-pay-financing:hover { background: #6d28d9; }
+
+        /* ─── Select-then-reveal accordion ─── */
+        .method-card { cursor: pointer; }
+        .method-card.selected {
+            border-color: #0071bc;
+            box-shadow: 0 2px 8px rgba(0,113,188,0.15);
+        }
+        .method-actions {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .method-header { position: relative; padding-right: 24px; }
+        .method-header::after {
+            content: '\25B8';
+            position: absolute;
+            right: 0;
+            top: 0;
+            font-size: 14px;
+            color: #9ca3af;
+            transition: transform 0.2s;
+        }
+        .method-card.selected .method-header::after {
+            transform: rotate(90deg);
+            color: #0071bc;
+        }
+
+        /* ─── Financing plans ─── */
+        .financing-plan {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+        .plan-payment {
+            font-weight: 700;
+            font-family: 'Montserrat', sans-serif;
+            color: #004a95;
+            white-space: nowrap;
+        }
+
         /* ─── QR Modal ─── */
         .qr-modal-overlay {
             display: none;
@@ -399,111 +445,155 @@
         <div class="pay-body">
             <p class="intro" id="payIntro">Choose your preferred payment method below. Your 50% deposit secures your order.</p>
 
-            <!-- Card Payments -->
+            <!-- Card Payment -->
             <div class="method-group-label">Card Payment</div>
 
-            <div class="method-card" id="cardMethodCard">
-                <h3><span class="method-icon">&#x1F4B3;</span> Credit or Debit Card</h3>
-                <p>Pay securely through our payment portal.</p>
-                <span class="fee-tag has-fee">3% surcharge on credit cards</span>
-                <span class="fee-tag no-fee" style="margin-left: 4px;">No fee for debit</span>
-                <button id="cloverPayBtn" class="btn-pay btn-pay-clover" onclick="handleCloverPay()">
-                    Pay with Card
-                </button>
-                <button id="cloverQrBtn" class="btn-pay btn-pay-primary" style="display: none; margin-top: 8px;" onclick="showQrModal()">
-                    Show QR Code (Customer Scans to Pay)
-                </button>
-                <p id="cloverError" style="display: none; color: #dc3545; font-size: 13px; margin-top: 8px;"></p>
+            <div class="method-card" id="cardMethodCard" onclick="selectMethod('card')">
+                <div class="method-header">
+                    <h3><span class="method-icon">&#x1F4B3;</span> Credit or Debit Card</h3>
+                    <p>Pay securely through our payment portal.</p>
+                    <span class="fee-tag has-fee">3% surcharge on credit cards</span>
+                    <span class="fee-tag no-fee" style="margin-left: 4px;">No fee for debit</span>
+                </div>
+                <div class="method-actions" id="cardActions" style="display: none;">
+                    <button id="cloverPayBtn" class="btn-pay btn-pay-clover" onclick="handleCloverPay(); event.stopPropagation();">
+                        Pay with Card
+                    </button>
+                    <button id="cloverQrBtn" class="btn-pay btn-pay-primary" style="display: none; margin-top: 8px;" onclick="showQrModal(); event.stopPropagation();">
+                        Show QR Code (Customer Scans to Pay)
+                    </button>
+                    <p id="cloverError" style="display: none; color: #dc3545; font-size: 13px; margin-top: 8px;"></p>
+                </div>
             </div>
 
             <!-- eCheck (Stripe ACH) -->
             <div class="method-group-label">eCheck</div>
 
-            <div class="method-card" id="echeckMethodCard">
-                <h3><span class="method-icon">&#x1F4CB;</span> eCheck</h3>
-                <p>Pay directly from your bank account through our secure payment portal.</p>
-                <span class="fee-tag no-fee">No fee</span>
-                <button id="echeckPayBtn" class="btn-pay btn-pay-stripe" onclick="handleEcheckPay()">
-                    Pay with eCheck
-                </button>
-                <button id="echeckQrBtn" class="btn-pay btn-pay-primary" style="display: none; margin-top: 8px;" onclick="showEcheckQrModal()">
-                    Show QR Code (Customer Scans to Pay)
-                </button>
-                <p id="echeckError" style="display: none; color: #dc3545; font-size: 13px; margin-top: 8px;"></p>
-            </div>
-
-            <!-- Bank Transfer -->
-            <div class="method-group-label">Bank Transfer</div>
-
-            <div class="method-card" id="achMethodCard">
-                <h3><span class="method-icon">&#x1F3E6;</span> ACH / Direct Deposit</h3>
-                <span class="fee-tag no-fee">No fee</span>
-                <div style="margin-top: 10px;">
-                    <div class="detail-row">
-                        <span class="detail-label">Bank</span>
-                        <span class="detail-value" id="achBank">---</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Account Holder</span>
-                        <span class="detail-value" id="achHolder">---</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Routing</span>
-                        <span class="detail-value" id="achRouting">---</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Account</span>
-                        <span class="detail-value" id="achAccount">---</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Reference</span>
-                        <span class="detail-value" id="achReference">---</span>
-                    </div>
+            <div class="method-card" id="echeckMethodCard" onclick="selectMethod('echeck')">
+                <div class="method-header">
+                    <h3><span class="method-icon">&#x1F4CB;</span> eCheck</h3>
+                    <p>Pay directly from your bank account through our secure payment portal.</p>
+                    <span class="fee-tag no-fee">No fee</span>
                 </div>
-                <p class="limit-text">Contact your bank for maximum transfer amounts.</p>
+                <div class="method-actions" id="echeckActions" style="display: none;">
+                    <button id="echeckPayBtn" class="btn-pay btn-pay-stripe" onclick="handleEcheckPay(); event.stopPropagation();">
+                        Pay with eCheck
+                    </button>
+                    <button id="echeckQrBtn" class="btn-pay btn-pay-primary" style="display: none; margin-top: 8px;" onclick="showEcheckQrModal(); event.stopPropagation();">
+                        Show QR Code (Customer Scans to Pay)
+                    </button>
+                    <p id="echeckError" style="display: none; color: #dc3545; font-size: 13px; margin-top: 8px;"></p>
+                </div>
             </div>
 
             <div class="methods-divider"><span>Other Options</span></div>
 
             <!-- Zelle -->
-            <div class="method-card">
-                <h3><span class="method-icon">&#x26A1;</span> Zelle</h3>
-                <span class="fee-tag no-fee">No fee</span>
-                <div style="margin-top: 10px;">
-                    <div class="detail-row">
-                        <span class="detail-label">Send to</span>
-                        <span class="detail-value" id="zelleUsername">---</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Reference</span>
-                        <span class="detail-value" id="zelleReference">---</span>
-                    </div>
+            <div class="method-card" onclick="selectMethod('zelle')">
+                <div class="method-header">
+                    <h3><span class="method-icon">&#x26A1;</span> Zelle</h3>
+                    <p>Send payment instantly from your bank's app.</p>
+                    <span class="fee-tag no-fee">No fee</span>
                 </div>
-                <button class="btn-pay btn-pay-primary" style="margin-top: 10px;" onclick="showZelleQrModal()">
-                    Show QR Code (Customer Scans to Pay)
-                </button>
-                <p class="limit-text" id="zelleLimitNote">Typically $2.5-3.5k max, depending on your bank</p>
+                <div class="method-actions" id="zelleActions" style="display: none;">
+                    <div style="margin-top: 4px;">
+                        <div class="detail-row">
+                            <span class="detail-label">Send to</span>
+                            <span class="detail-value" id="zelleUsername">---</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Reference</span>
+                            <span class="detail-value" id="zelleReference">---</span>
+                        </div>
+                    </div>
+                    <button class="btn-pay btn-pay-primary" style="margin-top: 10px;" onclick="showZelleQrModal(); event.stopPropagation();">
+                        Show QR Code (Customer Scans to Pay)
+                    </button>
+                    <p class="limit-text" id="zelleLimitNote">Typically $2.5-3.5k max, depending on your bank</p>
+                </div>
+            </div>
+
+            <!-- Financing -->
+            <div class="method-group-label">Financing</div>
+
+            <div class="method-card" onclick="selectMethod('financing')">
+                <div class="method-header">
+                    <h3><span class="method-icon">&#x1F4C5;</span> Monthly Payments</h3>
+                    <p>Finance your project with affordable monthly payments — no money down.</p>
+                    <span class="fee-tag no-fee">No money down</span>
+                </div>
+                <div class="method-actions" id="financingActions" style="display: none;">
+                    <div id="financingPlans"></div>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 8px;">
+                        *Subject to credit approval. Financing covers the full project cost.
+                        Available for residential, owner-occupied properties with Roll-A-Shield installation.
+                    </p>
+                    <a href="https://apply.svcfin.com/home/dealerAuthentication?id=815132546&key=1742219857"
+                       target="_blank" class="btn-pay btn-pay-financing"
+                       onclick="event.stopPropagation();">
+                        Apply for Financing
+                    </a>
+                </div>
+            </div>
+
+            <!-- Bank Transfer -->
+            <div class="method-group-label">Bank Transfer</div>
+
+            <div class="method-card" id="achMethodCard" onclick="selectMethod('ach')">
+                <div class="method-header">
+                    <h3><span class="method-icon">&#x1F3E6;</span> ACH / Direct Deposit</h3>
+                    <span class="fee-tag no-fee">No fee</span>
+                </div>
+                <div class="method-actions" id="achActions" style="display: none;">
+                    <div style="margin-top: 4px;">
+                        <div class="detail-row">
+                            <span class="detail-label">Bank</span>
+                            <span class="detail-value" id="achBank">---</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Account Holder</span>
+                            <span class="detail-value" id="achHolder">---</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Routing</span>
+                            <span class="detail-value" id="achRouting">---</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Account</span>
+                            <span class="detail-value" id="achAccount">---</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Reference</span>
+                            <span class="detail-value" id="achReference">---</span>
+                        </div>
+                    </div>
+                    <p class="limit-text">Contact your bank for maximum transfer amounts.</p>
+                </div>
             </div>
 
             <!-- Check -->
-            <div class="method-card">
-                <h3><span class="method-icon">&#x2709;</span> Check</h3>
-                <span class="fee-tag no-fee">No fee</span>
-                <div style="margin-top: 10px;">
-                    <div class="detail-row">
-                        <span class="detail-label">Payable to</span>
-                        <span class="detail-value" id="checkPayableTo">---</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Mail to</span>
-                        <span class="detail-value" id="checkAddress" style="font-family: inherit; font-size: 13px;">---</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Memo</span>
-                        <span class="detail-value" id="checkMemo">---</span>
-                    </div>
+            <div class="method-card" onclick="selectMethod('check')">
+                <div class="method-header">
+                    <h3><span class="method-icon">&#x2709;</span> Check</h3>
+                    <span class="fee-tag no-fee">No fee</span>
                 </div>
-                <div class="warning-text" id="checkWarning">Paying by check may cause delays in releasing your order.</div>
+                <div class="method-actions" id="checkActions" style="display: none;">
+                    <div style="margin-top: 4px;">
+                        <div class="detail-row">
+                            <span class="detail-label">Payable to</span>
+                            <span class="detail-value" id="checkPayableTo">---</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Mail to</span>
+                            <span class="detail-value" id="checkAddress" style="font-family: inherit; font-size: 13px;">---</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Memo</span>
+                            <span class="detail-value" id="checkMemo">---</span>
+                        </div>
+                    </div>
+                    <div class="warning-text" id="checkWarning">Paying by check may cause delays in releasing your order.</div>
+                </div>
             </div>
         </div>
 
