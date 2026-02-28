@@ -1839,7 +1839,7 @@
                     body: JSON.stringify({
                         from: 'Roll-A-Shield Production <noreply@updates.rollashield.com>',
                         to: ['derek@rollashield.com'],
-                        cc: ['ap@rollashield.com'],
+                        cc: ['ap@rollashield.com', ...(orderData.salesRepEmail ? [orderData.salesRepEmail] : [])],
                         subject: subject,
                         html: htmlBody,
                         text: textBody,
