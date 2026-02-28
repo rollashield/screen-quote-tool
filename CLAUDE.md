@@ -11,12 +11,14 @@ Web application for generating custom rolling screen quotes with email integrati
   - `finalize.html` - Final measurements and production order form
   - `styles.css` - Shared styles
   - `nav-steps.css` / `nav-steps.js` - Step navigation bar (shared across sign/pay/finalize)
-  - `app.js` - Core application logic
+  - `app.js` - Core application logic (DOM, forms, API calls, UI rendering)
+  - `pricing-engine.js` - Pure pricing functions (extracted from app.js for testability)
   - `sign.js` - Signature page logic
   - `pay.js` - Payment page logic
   - `pricing-data.js` - Pricing tables and product constants
   - `email-templates.js` - Email HTML template generation
-  - `pdf-template.js` - PDF quote template (html2pdf.js, converted from Figma)
+  - `pdf-template.js` - PDF quote template (pdfmake document definition)
+  - `tests/test-pricing-engine.js` - Unit tests for pricing-engine.js (84 tests, run with `node tests/test-pricing-engine.js`)
 - **Backend**: Cloudflare Worker (`cloudflare-worker.js`)
   - Deployed as `rollashield-quote-worker`
   - Secrets managed via `wrangler secret put` (never in code)
@@ -78,6 +80,7 @@ Web application for generating custom rolling screen quotes with email integrati
 - No build step. Open HTML files directly or use a local server.
 - Worker dev: `wrangler dev` (starts local worker on port 8787)
 - When testing locally, update WORKER_URL in HTML files to http://localhost:8787
+- **Tests**: `node tests/test-pricing-engine.js` — 84 tests covering all pure pricing functions (no npm required)
 
 ## Deployment
 - Frontend: Push to `main` -> GitHub Pages deploys automatically
@@ -121,8 +124,9 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
     - Draft save: save after Phase 1 only (`orderTotalPrice: 0`), load later to finish configuration
     - `calculateOrderQuote()` blocks if any screens have `phase: 'opening'` (excludes excluded screens from this check)
   - **Screen object states**: `phase: 'opening'` (Phase 1 only, no pricing) or `phase: 'configured'` (full pricing)
-  - **Key functions**: `addOpening()`, `applyConfiguration()`, `computeScreenPricing()` (pure, no DOM), `saveDraft()`, `renderInlineEditor()`, `saveInlineEdit()`, `calculateScreenWithAlternateTrack()`, `autoSaveQuote()`, `refreshEmailHistory()`
-  - **Shared helper functions**: `getTrackTypeOptions()`, `getTrackTypeName()`, `getOperatorOptionsForTrack()`, `getOperatorTypeName()`, `getFabricOptions()`, `getFabricName()`, `getFrameColorOptions()`, `getFrameColorName()`, `escapeAttr()`, `buildSelectOptionsHtml()` — used across quick config, inline editor, and comparison
+  - **Key functions**: `addOpening()`, `applyConfiguration()`, `saveDraft()`, `renderInlineEditor()`, `saveInlineEdit()`, `autoSaveQuote()`, `refreshEmailHistory()`
+  - **Pure functions in pricing-engine.js**: `computeScreenPricing()`, `calculateScreenWithAlternateMotor()`, `calculateScreenWithAlternateTrack()`, `formatCurrency()`, `parseFraction()`, `inchesToFeetAndInches()`, dropdown helpers (`getTrackTypeOptions`, `getFabricOptions`, etc.), `escapeAttr()`, `buildSelectOptionsHtml()`, client-facing name helpers
+  - **Shared helper functions** (in `pricing-engine.js`): `getTrackTypeOptions()`, `getTrackTypeName()`, `getOperatorOptionsForTrack()`, `getOperatorTypeName()`, `getFabricOptions()`, `getFabricName()`, `getFrameColorOptions()`, `getFrameColorName()`, `escapeAttr()`, `buildSelectOptionsHtml()` — used across quick config, inline editor, comparison, and PDF template
   - **Quote ID persistence**: `currentQuoteId` global tracks the active quote's DB ID across recalculate/re-save cycles. Set on `loadQuote()`, reused by `calculateOrderQuote()`, `saveDraft()`, `saveQuote()`. Cleared by `resetForm()`. Prevents duplicate DB rows when editing existing quotes.
   - **Quote number stability**: Worker preserves the existing `quote_number` on re-save (only generates new numbers for brand-new quotes). Also preserves `created_at` timestamp on re-save.
   - **Quick config (per-opening preferences)**: Collapsible "Quick Config" panel in Phase 1. Sets per-opening preferences for track, operator, fabric, frame color. Preferences applied during `applyConfiguration()`. Displayed on opening cards.
@@ -258,8 +262,13 @@ On signature submit (`handleSignInPerson`, `handleSubmitRemoteSignature`):
 - Quote status → "Accepted"
 - Signed Contract PDF → attached to Opportunity (if generated)
 
+### Refactoring status
+- **Step 1 complete**: `pricing-engine.js` extracted 19 pure functions (~430 lines) from `app.js` with 84 unit tests. Plan: `.claude/plans/linear-percolating-lerdorf.md`
+- **Step 2 (next)**: Continue splitting `app.js` (~4,770 lines) into `api-client.js`, `ui-rendering.js`, `quote-builder.js` to get under 1,000 lines per file
+- **pdfmake migration**: Complete. `pdf-template.js` generates pdfmake document definitions (replaced html2pdf.js rasterization)
+
 ### Future plans (not yet implemented)
-- **Offline functionality**: IndexedDB auto-save, recovery on reload, queued cloud sync. Plan: `.claude/plans/synthetic-baking-pine.md` (includes pros/cons analysis)
+- **Offline functionality**: IndexedDB auto-save, recovery on reload, queued cloud sync (low priority — entity auto-save + cross-device already working)
 - **Airtable payment method sync**: Map payment method to Airtable's "Payment Type" field and check deposit/payment checkboxes on close-out
 
 ## Payments
@@ -287,7 +296,7 @@ Schema in `d1-schema.sql`. Five tables: `quotes`, `contacts`, `properties`, `ope
 
 ## Important Notes
 - This is a vanilla JS project. Do NOT suggest adding npm, webpack, React, or any framework.
-- All pricing logic is in `pricing-data.js`. If pricing changes, update ONLY that file.
+- Pricing tables and constants are in `pricing-data.js`. Pure pricing functions (calculation logic) are in `pricing-engine.js`. If pricing changes, update `pricing-data.js` tables; if pricing *logic* changes, update `pricing-engine.js` and run `node tests/test-pricing-engine.js`.
 - The D1 database ID is in `wrangler.toml`. This is a Cloudflare resource identifier, not a secret.
 - Motor pricing: `gaposa-rts` $225, `gaposa-solar` $425, `somfy-rts` $375. Customer markup: 1.8x.
 - Fabric pricing: Sunair screen base cost is multiplied by fabric type (Nano 95 baseline 1.0x, 90% 0.9636x, 97% Twill 1.1261x, Tuffscreen 0.8112x). Multiplier applied before Sunair discount. Fenetex unaffected. See `FABRIC_PRICE_MULTIPLIERS` in `pricing-data.js`.

@@ -195,3 +195,16 @@ function getMaxHeightForWidth(priceData, widthKey) {
     }
     return maxH;
 }
+
+// ─── Conditional exports for Node.js testing ────────────────────────────────
+if (typeof module !== 'undefined') {
+    module.exports = {
+        SUNAIR_DISCOUNT, CUSTOMER_MARKUP, FENETEX_MARKUP, CABLE_SURCHARGE,
+        FABRIC_PRICE_MULTIPLIERS, getFabricPriceMultiplier,
+        sunairZipperGear, sunairCableGear, fenetexKeder,
+        motorCosts, accessories, trackDeductions, installationPricing,
+        WIRING_COST_PER_INCH, WIRING_PRICE_PER_INCH,
+        MAX_PHOTOS_PER_SCREEN,
+        getPricingTable, getMaxHeightForWidth
+    };
+}
