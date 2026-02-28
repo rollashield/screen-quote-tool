@@ -1456,8 +1456,18 @@
                 const total = orderData.orderTotalPrice || 0;
                 const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 statusDiv.innerHTML = `<div style="font-size: 0.9rem; color: #666;">Quote Total: <strong>${fmt(total)}</strong></div>`;
+
+                // Pre-select payment method if customer already chose on pay page
+                if (orderData.selected_payment_method) {
+                    const dropdown = document.getElementById('paymentMethod');
+                    if (dropdown) {
+                        dropdown.value = orderData.selected_payment_method;
+                    }
+                }
+
                 // Initialize the deposit/full amount display
                 updatePaymentAmountDisplay();
+                updateCombinedButtonState();
             }
         }
 

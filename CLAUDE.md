@@ -45,6 +45,7 @@ Web application for generating custom rolling screen quotes with email integrati
 - GET /api/payment-info - Static payment method details (ACH, check, Zelle, Clover)
 - POST /api/quote/:id/create-echeck-session - Create Stripe Checkout session for eCheck/ACH (accepts `{ paymentType: 'deposit' | 'full' }` in request body)
 - POST /api/quote/:id/create-clover-session - Create Clover Hosted Checkout session for card payment (accepts `{ paymentType: 'deposit' | 'full' }`; pre-fills customer name, email, phone, amount; returns `{ checkoutUrl, sessionId, expiresAt }`)
+- POST /api/quote/:id/select-payment-method - Save customer's selected payment method from pay page (accepts `{ method }` where method is finalize-page value like `credit-card`, `echeck`, `ach-direct`, `zelle`, `check`, `financing`, or `null` to clear)
 - POST /api/quote/:id/mark-paid - Mark quote as paid (accepts `{ paymentMethod, paymentAmount }`; updates D1, sends customer confirmation email, syncs Airtable "Closed Won")
 
 ### Photos (R2)
@@ -150,7 +151,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - **Remote signing auto-redirect**: After remote signature submission, 3-second countdown then auto-redirect to payment page with `fromSignature=1` param
 - `pay.html` — Payment page with deposit/full toggle
   - Toggle between 50% deposit and full payment amount
-  - **Select-then-reveal UX**: Method cards show heading/description/fee tags only. Customer clicks a card to expand it and reveal action buttons/details (accordion — only one open at a time). `selectMethod(key)` in pay.js manages state. Prevents premature Clover/Stripe session creation.
+  - **Select-then-reveal UX**: Method cards show heading/description/fee tags only. Customer clicks a card to expand it and reveal action buttons/details (accordion — only one open at a time). `selectMethod(key)` in pay.js manages state. Prevents premature Clover/Stripe session creation. **Selection persisted to D1** (`selected_payment_method` column) on each card click via `POST /api/quote/:id/select-payment-method`, so the finalize page can pre-populate the payment dropdown.
   - **Method order**: Card Payment → eCheck → "Other Options" divider → Zelle → Financing → Bank Transfer → Check
   - **Financing card**: Service Finance Company (SFC) integration — presentational only, no API. Shows three plans (18mo 0%, 120mo 9.99%, 180mo 9.99%) with monthly estimates calculated from full quote total (not affected by deposit/full toggle). "Apply for Financing" links to SFC application. Always visible (eligibility vetting is sales rep's responsibility).
   - Multi-method: Clover CC, Stripe eCheck, ACH, Zelle (with QR code), check
@@ -171,7 +172,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - **Production email**: Includes pricing breakdown (materials, installation, wiring, accessories, discounts, total, deposit) and payment info (method, amount, type, date) when payment recorded. Sent to derek@rollashield.com, CC ap@rollashield.com.
   - **Save Measurements button**: Manual save of all measurements and production data (secondary/gray button)
   - **Auto-save on email send**: Calls `saveMeasurements()` before sending production email
-  - **Payment close-out with deposit/full toggle**: Radio toggle for deposit (50%) or full amount. Payment method dropdown (credit card, eCheck, ACH, Zelle, check, cash, financing). Combined "Mark as Paid & Send Production Order" button that: (1) records payment via `POST /api/quote/:id/mark-paid`, (2) sends production email with payment details. Two-step execution with partial failure handling. Shows green "Payment Received" badge with method/amount/date details when already paid. `updatePaymentAmountDisplay()` and `updateCombinedButtonState()` manage UI state.
+  - **Payment close-out with deposit/full toggle**: Radio toggle for deposit (50%) or full amount. Payment method dropdown (credit card, eCheck, ACH, Zelle, check, cash, financing) — **auto-populated** from customer's pay.html selection via `selected_payment_method` D1 column. Combined "Mark as Paid & Send Production Order" button that: (1) records payment via `POST /api/quote/:id/mark-paid`, (2) sends production email with payment details. Two-step execution with partial failure handling. Shows green "Payment Received" badge with method/amount/date details when already paid. `updatePaymentAmountDisplay()` and `updateCombinedButtonState()` manage UI state.
 
 ### Draft/unconfigured quote guards
 All downstream pages and worker endpoints block draft quotes with unconfigured openings:
@@ -259,7 +260,7 @@ On signature submit (`handleSignInPerson`, `handleSubmitRemoteSignature`):
 ## D1 Database
 Schema in `d1-schema.sql`. Five tables: `quotes`, `contacts`, `properties`, `openings`, `quote_line_items`.
 - **Signing**: `quote_status`, `signing_token`, `signature_data`, `signed_at`, `signer_name`, `signer_ip`, `signing_method`
-- **Payment**: `payment_status` (default 'unpaid'), `payment_method`, `payment_amount`, `payment_date`, `clover_payment_link`, `stripe_payment_intent_id`, `clover_checkout_id`
+- **Payment**: `payment_status` (default 'unpaid'), `payment_method`, `payment_amount`, `payment_date`, `clover_payment_link`, `stripe_payment_intent_id`, `clover_checkout_id`, `selected_payment_method` (customer's choice from pay page, persisted on card click)
 - **Guarantee**: `four_week_guarantee`, `total_guarantee_discount`
 - **Entity references on quotes**: `contact_id`, `property_id`, `entities_migrated`, `sent_emails_json`
 - **Photos**: Stored in R2 (key format: `quotes/{quoteId}/screens/{screenIndex}/{timestamp}-{randomId}.{ext}`)

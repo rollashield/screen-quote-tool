@@ -101,6 +101,12 @@ export default {
       return await handleGetEmails(quoteId, env);
     }
 
+    // Route: Save customer's selected payment method (from pay page)
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/select-payment-method$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleSelectPaymentMethod(quoteId, request, env);
+    }
+
     // Route: Mark quote as paid
     if (url.pathname.match(/^\/api\/quote\/[^/]+\/mark-paid$/) && request.method === 'POST') {
       const quoteId = url.pathname.split('/')[3];
@@ -1097,6 +1103,7 @@ async function handleGetQuote(quoteId, env) {
     quoteData.payment_status = result.payment_status || 'unpaid';
     quoteData.payment_method = result.payment_method || null;
     quoteData.payment_date = result.payment_date || null;
+    quoteData.selected_payment_method = result.selected_payment_method || null;
 
     // Lazy migration: extract entities from JSON blob if not yet migrated
     let entities = null;
@@ -2036,6 +2043,21 @@ async function handleGetPaymentInfo(env) {
       }
     }
   });
+}
+
+// ─── Save Customer's Selected Payment Method ────────────────────────────────
+async function handleSelectPaymentMethod(quoteId, request, env) {
+  try {
+    const { method } = await request.json();
+    // Use explicit null check — method can be a string or null/undefined to clear
+    const value = (method && typeof method === 'string') ? method : null;
+    await env.DB.prepare('UPDATE quotes SET selected_payment_method = ? WHERE id = ?')
+      .bind(value, quoteId).run();
+    return jsonResponse({ success: true });
+  } catch (error) {
+    console.error('Error saving selected payment method:', error);
+    return jsonResponse({ success: false, error: 'Failed to save payment method selection' }, 500);
+  }
 }
 
 // ─── Mark Quote as Paid ─────────────────────────────────────────────────────

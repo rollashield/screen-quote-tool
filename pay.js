@@ -10,6 +10,17 @@
 //   GET /api/payment-info             — static payment instructions (ACH, check, Zelle)
 //   POST /api/quote/:id/create-clover-session — dynamic Clover Hosted Checkout session
 //   POST /api/quote/:id/create-echeck-session — dynamic Stripe eCheck session
+//   POST /api/quote/:id/select-payment-method — persist customer's payment method choice
+
+// Map pay.html accordion keys → finalize.html dropdown values
+const PAY_TO_FINALIZE_METHOD = {
+    'card': 'credit-card',
+    'echeck': 'echeck',
+    'zelle': 'zelle',
+    'financing': 'financing',
+    'ach': 'ach-direct',
+    'check': 'check'
+};
 
 let quoteId = null;
 let quoteData = null;
@@ -213,6 +224,16 @@ function selectMethod(methodKey) {
         if (actions) actions.style.display = 'block';
         if (card) card.classList.add('selected');
         selectedMethod = methodKey;
+    }
+
+    // Persist selection to D1 so finalize page can pre-select the payment dropdown
+    if (quoteId) {
+        const mapped = selectedMethod ? (PAY_TO_FINALIZE_METHOD[selectedMethod] || null) : null;
+        fetch(`${WORKER_URL}/api/quote/${quoteId}/select-payment-method`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ method: mapped })
+        }).catch(() => {}); // Non-critical, fire-and-forget
     }
 }
 
