@@ -20,12 +20,11 @@ Web application for generating custom rolling screen quotes with email integrati
   - `quote-persistence.js` - Save/load/delete quotes, auto-save, email history (13 functions)
   - `pdf-signing.js` - PDF generation, data mapping, signature/finalization workflows (8 functions)
   - `order-calculator.js` - Legacy + multi-screen order calculation and display (4 functions)
-  - `pdf-template.js` - PDF quote template (html2pdf.js, converted from Figma)
-  - `email-templates.js` - Email HTML template generation
+  - `pdf-template.js` - PDF quote template (pdfmake document definition)
   - `sign.js` - Signature page logic
   - `pay.js` - Payment page logic
   - `tests/test-pricing-engine.js` - Unit tests for pricing-engine.js (84 tests, run with `node tests/test-pricing-engine.js`)
-  - **Script load order** (index.html): `pricing-data.js` → `pricing-engine.js` → `photo-manager.js` → `airtable-search.js` → `screen-cards.js` → `quote-persistence.js` → `pdf-signing.js` → `order-calculator.js` → `pdf-template.js` → `app.js` → `email-templates.js`
+  - **Script load order** (index.html): `pricing-data.js` → `pricing-engine.js` → `photo-manager.js` → `airtable-search.js` → `screen-cards.js` → `quote-persistence.js` → `pdf-signing.js` → `order-calculator.js` → `pdf-template.js` → `app.js`
   - **Module pattern**: All modules use browser globals (functions available via `<script>` ordering). Each has `if (typeof module !== 'undefined') { module.exports = {...} }` for Node.js testability. No npm, no import/export syntax.
 - **Backend**: Cloudflare Worker (`cloudflare-worker.js`)
   - Deployed as `rollashield-quote-worker`
@@ -114,12 +113,11 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
 ### Email sending locations
 | File | Function/Context | Display Name | Purpose |
 |------|-----------------|--------------|---------|
-| `cloudflare-worker.js` | `handleSendEmail()` | Roll-A-Shield | Quote PDF email to customer |
-| `cloudflare-worker.js` | `handleSendForSignature()` | Roll-A-Shield | Signing link email to customer |
+| `cloudflare-worker.js` | `handleSendForSignature()` | Roll-A-Shield | Quote PDF + signing link email to customer |
 | `cloudflare-worker.js` | `handleSubmitRemoteSignature()` | Roll-A-Shield | Signature confirmation to sales rep + customer confirmation with payment link |
-| `email-templates.js` | `buildEmailPayload()` | Roll-A-Shield Quotes | Quote email (called by app.js) |
 | `finalize.html` | inline `generateProductionEmail()` | Roll-A-Shield Production | Production order email (CC: ap@rollashield.com) |
 | `cloudflare-worker.js` | `sendPaymentConfirmationEmail()` | Roll-A-Shield | Customer order confirmation on payment close-out |
+| `cloudflare-worker.js` | `handleSendEmail()` | Roll-A-Shield | Generic email endpoint (used by production email) |
 
 ## Pages & Flows
 - `index.html` — Quote builder (sales rep tool)
@@ -137,7 +135,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
     - `pricing-engine.js`: `computeScreenPricing()`, `calculateScreenWithAlternateMotor/Track()`, `formatCurrency()`, `parseFraction()`, dropdown helpers (`getTrackTypeOptions`, `getFabricOptions`, etc.), `escapeAttr()`, `buildSelectOptionsHtml()`
     - `screen-cards.js`: `renderScreensList()`, `editScreen()`, `renderInlineEditor()`, `saveInlineEdit()`, `toggleExclude()`, `renderOpeningSelector()`, `getApplicableProjectAccessories()`
     - `quote-persistence.js`: `saveDraft()`, `saveQuote()`, `loadQuote()`, `loadSavedQuotes()`, `autoSaveOpening()`, `autoSaveQuote()`, `ensureQuoteSaved()`, `refreshEmailHistory()`
-    - `pdf-signing.js`: `mapOrderDataToTemplate()`, `generatePDF()`, `sendQuoteForSignature()`, `presentForSignature()`, `finalizeProjectDetails()`
+    - `pdf-signing.js`: `mapOrderDataToTemplate()`, `generatePDF()`, `generatePdfBlob()`, `sendQuoteForSignature()`, `presentForSignature()`, `finalizeProjectDetails()`
     - `order-calculator.js`: `calculateQuote()`, `displayQuoteSummary()`, `calculateOrderQuote()`, `displayOrderQuoteSummary()`
     - `photo-manager.js`: `compressPhoto()`, `handlePhotoSelect()`, `uploadPendingPhotos()`, `deleteMarkedPhotos()`
     - `airtable-search.js`: `searchOpportunities()`, `selectOpportunity()`, `loadSalesReps()`
@@ -160,7 +158,7 @@ Transactional email sent via [Resend](https://resend.com) API through the Cloudf
   - Max width help text shown below dimension inputs
   - New-screen UX: auto-scroll to last card + 1.5s highlight animation on add. Dynamic Phase 1 header ("Adding Opening #N").
   - PDF generation via html2pdf.js + pdf-template.js
-  - Combined "Send Quote + Send for Signature" action
+  - "Send Quote & Request Signature" button (sends PDF + signing link via email)
   - Duplicate/edit/remove screens
   - **Fabric options**: 12 total organized in optgroups — Standard (6), 90% (2), 97% (3), Specialty (1: Tuffscreen/Bugscreen)
   - **Quote list status badges**: Color-coded badges on saved quote cards — DRAFT (orange), SENT (blue), SIGNED (green), PAID (purple). Based on `quote_status` and `payment_status` D1 columns.
@@ -278,8 +276,8 @@ On signature submit (`handleSignInPerson`, `handleSubmitRemoteSignature`):
 
 ### Refactoring status
 - **Step 1 complete**: `pricing-engine.js` extracted 19 pure functions (~430 lines) from `app.js` with 84 unit tests. Plan: `.claude/plans/linear-percolating-lerdorf.md`
-- **Step 2 (next)**: Continue splitting `app.js` (~4,770 lines) into `api-client.js`, `ui-rendering.js`, `quote-builder.js` to get under 1,000 lines per file
-- **pdfmake migration**: Complete. `pdf-template.js` generates pdfmake document definitions (replaced html2pdf.js rasterization)
+- **Step 2 complete**: `app.js` split from ~4,770 → ~1,210 lines. 6 new modules extracted: `photo-manager.js`, `airtable-search.js`, `screen-cards.js`, `quote-persistence.js`, `pdf-signing.js`, `order-calculator.js`. Plan: `.claude/plans/spicy-sauteeing-mountain.md`
+- **pdfmake migration**: Complete. `pdf-template.js` generates pdfmake document definitions (replaced html2pdf.js rasterization). sign.html uses pdfmake iframe embed for PDF preview.
 
 ### Future plans (not yet implemented)
 - **Offline functionality**: IndexedDB auto-save, recovery on reload, queued cloud sync (low priority — entity auto-save + cross-device already working)

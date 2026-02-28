@@ -337,58 +337,6 @@ async function presentForSignature() {
     }
 }
 
-async function sendForSignature() {
-    if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
-        alert('Please calculate a quote first before sending for signature.');
-        return;
-    }
-
-    const customerEmail = window.currentOrderData.customerEmail || document.getElementById('customerEmail')?.value;
-    if (!customerEmail) {
-        alert('Please enter a customer email address before sending for signature.');
-        return;
-    }
-
-    if (!confirm(`Send signing link to ${customerEmail}?`)) {
-        return;
-    }
-
-    const btn = document.querySelector('button[onclick="sendForSignature()"]');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Saving & Sending...';
-    }
-
-    try {
-        const saved = await ensureQuoteSaved();
-        if (!saved) {
-            if (btn) { btn.disabled = false; btn.textContent = 'Send for Signature'; }
-            return;
-        }
-
-        const response = await fetch(`${WORKER_URL}/api/quote/${window.currentOrderData.id}/send-for-signature`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            alert(`Signing link sent to ${customerEmail}!`);
-        } else {
-            alert('Failed to send signing link: ' + (result.error || 'Unknown error'));
-        }
-    } catch (error) {
-        console.error('Error sending for signature:', error);
-        alert('Failed to send signing link. Please check your internet connection.');
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Send for Signature';
-        }
-    }
-}
-
 async function finalizeProjectDetails() {
     if (isSaving) return;
 
@@ -503,7 +451,6 @@ async function finalizeProjectDetails() {
 if (typeof module !== 'undefined') {
     module.exports = {
         mapOrderDataToTemplate, generatePDF, generatePdfBlob, blobToBase64,
-        sendQuoteForSignature, presentForSignature, sendForSignature,
-        finalizeProjectDetails
+        sendQuoteForSignature, presentForSignature, finalizeProjectDetails
     };
 }

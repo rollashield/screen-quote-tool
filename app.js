@@ -9,7 +9,7 @@
  * Global state:
  *   - screensInOrder: Array of screen objects in the current order
  *   - editingScreenIndex: Index of screen being edited, or null
- *   - window.currentOrderData: Set by displayOrderQuoteSummary(), read by emailQuote()
+ *   - window.currentOrderData: Set by displayOrderQuoteSummary()
  *
  * ORDER DATA SHAPE (window.currentOrderData):
  * {
@@ -513,8 +513,7 @@ function updateAccessories() {
 // ── PDF, Signing & Finalization ──
 // Functions moved to pdf-signing.js:
 //   mapOrderDataToTemplate, generatePDF, generatePdfBlob, blobToBase64,
-//   sendQuoteForSignature, presentForSignature, sendForSignature,
-//   finalizeProjectDetails
+//   sendQuoteForSignature, presentForSignature, finalizeProjectDetails
 
 
 function resetForm() {
