@@ -70,7 +70,7 @@ function mapOrderDataToTemplate(orderData) {
         quote: {
             number: orderData.quoteNumber || 'DRAFT',
             date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-            validThrough: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+            validThrough: new Date(Date.now() + ((orderData.fourWeekGuarantee ? 1 : 30) * 24 * 60 * 60 * 1000)).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
         },
         signingUrl: orderData.id
             ? `https://rollashield.github.io/screen-quote-tool/sign.html?quoteId=${orderData.id}&mode=in-person`

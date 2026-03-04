@@ -229,6 +229,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Photo input handler
     document.getElementById('photoInput').addEventListener('change', handlePhotoSelect);
 
+    // Auto-save when photo button is clicked (before camera opens on mobile)
+    document.getElementById('photoInput').addEventListener('click', function() {
+        if (editingScreenIndex !== null) {
+            syncPhase1FormToScreen();
+            if (currentQuoteId) {
+                autoSaveOpening(editingScreenIndex);
+            } else if (screensInOrder.length > 0) {
+                saveDraft();
+            }
+        }
+    });
+
     // Update pricing dimensions and check dimension limits when measurements change
     ['widthInches', 'widthFraction', 'heightInches', 'heightFraction'].forEach(id => {
         document.getElementById(id).addEventListener('input', function() {

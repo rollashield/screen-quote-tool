@@ -248,7 +248,7 @@ async function saveDraft() {
                     });
                 }
             }
-            alert(`Draft saved!\nQuote #: ${result.quoteNumber || 'N/A'}\n\nYou can load this draft later to finish configuration.`);
+            showAutoSaveIndicator();
             loadSavedQuotes();
         } else {
             alert('Failed to save draft: ' + (result.error || 'Unknown error'));
@@ -417,14 +417,14 @@ async function saveQuote() {
                     });
                 }
             }
-            let msg = `Quote saved successfully!\nQuote #: ${result.quoteNumber || 'N/A'}`;
             if (result.airtableSync === false) {
-                msg += '\n\nNote: Airtable sync failed. Quote saved locally only.';
+                let msg = 'Note: Airtable sync failed. Quote saved locally only.';
                 if (result.airtableSyncError) {
                     msg += '\nReason: ' + result.airtableSyncError;
                 }
+                alert(msg);
             }
-            alert(msg);
+            showAutoSaveIndicator();
             loadSavedQuotes();
         } else {
             alert('Failed to save quote: ' + (result.error || 'Unknown error'));

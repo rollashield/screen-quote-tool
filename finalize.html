@@ -555,7 +555,6 @@
                 tracksRecess: document.getElementById('tracksRecess')?.checked || false,
                 lowHeadspace: document.getElementById('lowHeadspace')?.checked || false,
                 restrictedHoriz: document.getElementById('restrictedHoriz')?.checked || false,
-                complicatedInstall: document.getElementById('complicatedInstall')?.checked || false,
                 complete: false // Partial save — not validated
             };
 
@@ -742,10 +741,30 @@
             return 0;
         }
 
+        // Round a decimal inch value to the nearest 1/8"
+        // Manufacturer only produces to 1/8" precision
+        function roundToEighth(inches) {
+            return Math.round(inches * 8) / 8;
+        }
+
+        // Format inches as whole + fraction string, e.g. 72.375 → '72 3/8"'
+        // Simplifies fractions: 2/8→1/4, 4/8→1/2, 6/8→3/4
+        function formatMeasurement(inches) {
+            if (!inches && inches !== 0) return '0"';
+            const rounded = roundToEighth(inches);
+            const whole = Math.floor(rounded);
+            const remainder = rounded - whole;
+            if (remainder === 0) return whole + '"';
+            const eighths = Math.round(remainder * 8);
+            // Simplify fraction
+            const fractionMap = { 1: '1/8', 2: '1/4', 3: '3/8', 4: '1/2', 5: '5/8', 6: '3/4', 7: '7/8' };
+            return whole + ' ' + (fractionMap[eighths] || eighths + '/8') + '"';
+        }
+
         function getMeasurement(id) {
             const whole = parseFloat(document.getElementById(id).value) || 0;
             const frac = parseFraction(document.getElementById(id + 'Frac')?.value);
-            return whole + frac;
+            return roundToEighth(whole + frac);
         }
 
         // Extract whole-inch part for display (strips fraction portion if saved as combined value)
@@ -964,8 +983,8 @@
                     <h3>RTS Motor Details</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Distance from Power (inches) *</label>
-                            <input type="number" id="distanceFromPower" placeholder="Inches" value="${saved.distanceFromPower || screen.wiringDistance || ''}" step="1">
+                            <label>Distance from Power (feet) *</label>
+                            <input type="number" id="distanceFromPower" placeholder="Feet" value="${saved.distanceFromPower || screen.wiringDistance || ''}" step="1">
                         </div>
                     </div>
                 </div>
@@ -1004,10 +1023,6 @@
                     <div class="checkbox-group">
                         <input type="checkbox" id="restrictedHoriz" ${saved.restrictedHoriz ? 'checked' : ''}>
                         <label for="restrictedHoriz">Restricted Horizontal Space</label>
-                    </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="complicatedInstall" ${saved.complicatedInstall ? 'checked' : ''}>
-                        <label for="complicatedInstall">Complicated Installation</label>
                     </div>
                 </div>
 
@@ -1098,7 +1113,7 @@
                 if (el) el.addEventListener('change', debouncedAutoSaveMeasurements);
             });
             const autoSaveChecks = [
-                'tracksRecess', 'lowHeadspace', 'restrictedHoriz', 'complicatedInstall',
+                'tracksRecess', 'lowHeadspace', 'restrictedHoriz',
                 'magneticLocks', 'extensionCord'
             ];
             autoSaveChecks.forEach(id => {
@@ -1271,7 +1286,6 @@
             measurements.tracksRecess = document.getElementById('tracksRecess').checked;
             measurements.lowHeadspace = document.getElementById('lowHeadspace').checked;
             measurements.restrictedHoriz = document.getElementById('restrictedHoriz').checked;
-            measurements.complicatedInstall = document.getElementById('complicatedInstall').checked;
 
             // Validate required fields
             if (!measurements.widthTop || !measurements.widthMiddle || !measurements.widthBottom ||
@@ -1605,27 +1619,27 @@
                         <p><strong>Fabric Color:</strong> ${screen.fabricColorName}</p>
                         <p><strong>Frame Color:</strong> ${screen.frameColorName}</p>
 
-                        <h3 style="color: #333; margin-top: 20px;">FINAL MEASUREMENTS (Opening Only)</h3>
-                        <p><strong>Width (Top):</strong> ${meas.widthTop}"</p>
-                        <p><strong>Width (Middle):</strong> ${meas.widthMiddle}"</p>
-                        <p><strong>Width (Bottom):</strong> ${meas.widthBottom}"</p>
-                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> OPENING WIDTH: ${meas.selectedWidth}"</p>
+                        <h3 style="color: #333; margin-top: 20px;">FINAL MEASUREMENTS (Opening Only — rounded to nearest 1/8")</h3>
+                        <p><strong>Width (Top):</strong> ${formatMeasurement(meas.widthTop)}</p>
+                        <p><strong>Width (Middle):</strong> ${formatMeasurement(meas.widthMiddle)}</p>
+                        <p><strong>Width (Bottom):</strong> ${formatMeasurement(meas.widthBottom)}</p>
+                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> OPENING WIDTH: ${formatMeasurement(meas.selectedWidth)}</p>
 
-                        <p style="margin-top: 15px;"><strong>Height (Left):</strong> ${meas.heightLeft}"</p>
-                        <p><strong>Height (Middle):</strong> ${meas.heightMiddle}"</p>
-                        <p><strong>Height (Right):</strong> ${meas.heightRight}"</p>
-                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> OPENING HEIGHT: ${meas.selectedHeight}"</p>
+                        <p style="margin-top: 15px;"><strong>Height (Left):</strong> ${formatMeasurement(meas.heightLeft)}</p>
+                        <p><strong>Height (Middle):</strong> ${formatMeasurement(meas.heightMiddle)}</p>
+                        <p><strong>Height (Right):</strong> ${formatMeasurement(meas.heightRight)}</p>
+                        <p style="background: #28a745; color: white; padding: 10px; font-weight: bold;">>>> OPENING HEIGHT: ${formatMeasurement(meas.selectedHeight)}</p>
                 ${screen.trackType === 'sunair-zipper' ? `
                         <h3 style="color: #0056A3; margin-top: 20px;">SUNAIR ORDERING MEASUREMENTS</h3>
                         <p style="font-size: 12px; color: #666; margin-bottom: 8px;">Opening measurements + headbox/tracks for Sunair ordering</p>
                         <p style="background: #0056A3; color: white; padding: 10px; font-weight: bold;">
-                            >>> ORDERING WIDTH: ${screen.noTracks ? meas.selectedWidth : (parseFloat(meas.selectedWidth) + 5).toFixed(2)}"
+                            >>> ORDERING WIDTH: ${formatMeasurement(screen.noTracks ? meas.selectedWidth : roundToEighth(parseFloat(meas.selectedWidth) + 5))}
                             ${screen.noTracks ? '(no tracks)' : '(+5" for tracks)'}
                         </p>
                         <p style="background: #0056A3; color: white; padding: 10px; font-weight: bold; margin-top: 4px;">
                             >>> ORDERING HEIGHT: ${meas.mountType === 'ceiling'
-                                ? (parseFloat(meas.selectedHeight) + 5.25).toFixed(2) + '" (+5.25" ceiling mount incl. box)'
-                                : (parseFloat(meas.selectedHeight) + 7.25).toFixed(2) + '" (+7.25" wall mount incl. box + hem bar)'}
+                                ? formatMeasurement(roundToEighth(parseFloat(meas.selectedHeight) + 5.25)) + ' (+5.25" ceiling mount incl. box)'
+                                : formatMeasurement(roundToEighth(parseFloat(meas.selectedHeight) + 7.25)) + ' (+7.25" wall mount incl. box + hem bar)'}
                         </p>
                 ` : ''}
                 ${screen.trackType === 'fenetex-keder' ? `
@@ -1653,25 +1667,25 @@
                 textBody += `Fabric Color: ${screen.fabricColorName}\n`;
                 textBody += `Frame Color: ${screen.frameColorName}\n\n`;
 
-                textBody += `FINAL MEASUREMENTS (Opening Only):\n`;
-                textBody += `Width (Top): ${meas.widthTop}"\n`;
-                textBody += `Width (Middle): ${meas.widthMiddle}"\n`;
-                textBody += `Width (Bottom): ${meas.widthBottom}"\n`;
-                textBody += `>>> OPENING WIDTH: ${meas.selectedWidth}"\n\n`;
+                textBody += `FINAL MEASUREMENTS (Opening Only — rounded to nearest 1/8"):\n`;
+                textBody += `Width (Top): ${formatMeasurement(meas.widthTop)}\n`;
+                textBody += `Width (Middle): ${formatMeasurement(meas.widthMiddle)}\n`;
+                textBody += `Width (Bottom): ${formatMeasurement(meas.widthBottom)}\n`;
+                textBody += `>>> OPENING WIDTH: ${formatMeasurement(meas.selectedWidth)}\n\n`;
 
-                textBody += `Height (Left): ${meas.heightLeft}"\n`;
-                textBody += `Height (Middle): ${meas.heightMiddle}"\n`;
-                textBody += `Height (Right): ${meas.heightRight}"\n`;
-                textBody += `>>> OPENING HEIGHT: ${meas.selectedHeight}"\n\n`;
+                textBody += `Height (Left): ${formatMeasurement(meas.heightLeft)}\n`;
+                textBody += `Height (Middle): ${formatMeasurement(meas.heightMiddle)}\n`;
+                textBody += `Height (Right): ${formatMeasurement(meas.heightRight)}\n`;
+                textBody += `>>> OPENING HEIGHT: ${formatMeasurement(meas.selectedHeight)}\n\n`;
 
                 if (screen.trackType === 'sunair-zipper') {
-                    const orderWidth = screen.noTracks ? parseFloat(meas.selectedWidth) : parseFloat(meas.selectedWidth) + 5;
-                    const orderHeight = meas.mountType === 'ceiling'
+                    const orderWidth = roundToEighth(screen.noTracks ? parseFloat(meas.selectedWidth) : parseFloat(meas.selectedWidth) + 5);
+                    const orderHeight = roundToEighth(meas.mountType === 'ceiling'
                         ? parseFloat(meas.selectedHeight) + 5.25
-                        : parseFloat(meas.selectedHeight) + 7.25;
+                        : parseFloat(meas.selectedHeight) + 7.25);
                     textBody += `SUNAIR ORDERING MEASUREMENTS:\n`;
-                    textBody += `>>> ORDERING WIDTH: ${orderWidth.toFixed(2)}" ${screen.noTracks ? '(no tracks)' : '(+5" for tracks)'}\n`;
-                    textBody += `>>> ORDERING HEIGHT: ${orderHeight.toFixed(2)}" ${meas.mountType === 'ceiling' ? '(+5.25" ceiling mount incl. box)' : '(+7.25" wall mount incl. box + hem bar)'}\n\n`;
+                    textBody += `>>> ORDERING WIDTH: ${formatMeasurement(orderWidth)} ${screen.noTracks ? '(no tracks)' : '(+5" for tracks)'}\n`;
+                    textBody += `>>> ORDERING HEIGHT: ${formatMeasurement(orderHeight)} ${meas.mountType === 'ceiling' ? '(+5.25" ceiling mount incl. box)' : '(+7.25" wall mount incl. box + hem bar)'}\n\n`;
                 }
 
                 if (screen.trackType === 'fenetex-keder') {
@@ -1740,7 +1754,6 @@
                 if (meas.tracksRecess) flags.push('Tracks Recess-Mounted');
                 if (meas.lowHeadspace) flags.push('<7.5" Headspace');
                 if (meas.restrictedHoriz) flags.push('Restricted Horizontal Space');
-                if (meas.complicatedInstall) flags.push('Complicated Installation');
 
                 if (flags.length > 0) {
                     htmlBody += `

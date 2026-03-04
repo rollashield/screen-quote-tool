@@ -10,7 +10,7 @@
  *     inchesToFeetAndInches, getOperatorOptionsForTrack)
  *   - pricing-data.js (provides SUNAIR_DISCOUNT, CUSTOMER_MARKUP, motorCosts,
  *     installationPricing, accessories, getPricingTable, CABLE_SURCHARGE,
- *     WIRING_COST_PER_INCH, WIRING_PRICE_PER_INCH)
+ *     WIRING_COST_PER_FOOT, WIRING_PRICE_PER_FOOT, ONE_PER_ORDER_ACCESSORY_NAMES)
  *   - quote-persistence.js (provides autoSaveQuote, refreshEmailHistory)
  *   - screen-cards.js (provides getApplicableProjectAccessories, renderScreensList,
  *     updateAddToOrderButton)
@@ -202,6 +202,7 @@ function calculateQuote() {
     }
 
     // Calculate wiring (RTS motors with installation only)
+    // Base charge: $100 flat ($30 material + $70 labor) + $12/ft
     let wiringDistance = 0;
     let wiringCost = 0;
     let wiringPrice = 0;
@@ -209,8 +210,8 @@ function calculateQuote() {
     if (includeInstallation && isRts) {
         wiringDistance = parseInt(document.getElementById('wiringDistance').value) || 0;
         if (wiringDistance > 0) {
-            wiringCost = wiringDistance * WIRING_COST_PER_INCH;
-            wiringPrice = wiringDistance * WIRING_PRICE_PER_INCH;
+            wiringCost = WIRING_BASE_COST_MATERIAL + WIRING_BASE_COST_LABOR + wiringDistance * WIRING_COST_PER_FOOT;
+            wiringPrice = WIRING_BASE_PRICE + wiringDistance * WIRING_PRICE_PER_FOOT;
             customerPrice += wiringPrice;
         }
     }
@@ -339,7 +340,7 @@ function displayQuoteSummary(quote) {
     if (quote.wiringDistance > 0) {
         customerHTML += `
             <div class="summary-row">
-                <strong>Wiring (${quote.wiringDistance}"):</strong>
+                <strong>Wiring (setup + ${quote.wiringDistance} ft):</strong>
                 <span>$${quote.wiringPrice.toFixed(2)}</span>
             </div>
         `;
@@ -398,7 +399,7 @@ function displayQuoteSummary(quote) {
             <span>$${quote.installationCost.toFixed(2)}</span>
         </div>
         ${quote.wiringDistance > 0 ? `<div class="summary-row">
-            <strong>Wiring Cost (${quote.wiringDistance}"):</strong>
+            <strong>Wiring Cost (setup + ${quote.wiringDistance} ft):</strong>
             <span>$${quote.wiringCost.toFixed(2)}</span>
         </div>` : ''}
         <div class="summary-row">
@@ -461,6 +462,47 @@ function calculateOrderQuote() {
     let totalGuaranteeDiscount = 0;
     const fourWeekGuarantee = document.getElementById('fourWeekGuarantee').checked;
 
+    // Re-price each configured screen with the current guarantee state
+    // so toggling the guarantee always recalculates correctly
+    screensInOrder.forEach((screen, index) => {
+        if (screen.excluded || screen.phase === 'opening') return;
+        const repriced = computeScreenPricing({
+            screenName: screen.screenName,
+            trackType: screen.trackType,
+            trackTypeName: screen.trackTypeName,
+            operatorType: screen.operatorType,
+            operatorTypeName: screen.operatorTypeName,
+            fabricColor: screen.fabricColor,
+            fabricColorName: screen.fabricColorName,
+            frameColor: screen.frameColor,
+            frameColorName: screen.frameColorName,
+            width: screen.width,
+            height: screen.height,
+            totalWidthInches: screen.totalWidthInches,
+            totalHeightInches: screen.totalHeightInches,
+            actualWidthDisplay: screen.actualWidthDisplay,
+            actualHeightDisplay: screen.actualHeightDisplay,
+            noTracks: screen.noTracks,
+            includeInstallation: screen.includeInstallation,
+            wiringDistance: screen.wiringDistance,
+            accessories: screen.accessories,
+            guaranteeActive: fourWeekGuarantee,
+            photos: screen.photos || [],
+            pendingPhotos: screen.pendingPhotos || [],
+            widthInputValue: screen.widthInputValue,
+            widthFractionValue: screen.widthFractionValue,
+            heightInputValue: screen.heightInputValue,
+            heightFractionValue: screen.heightFractionValue
+        });
+        if (!repriced.error) {
+            // Preserve entity IDs and excluded state
+            repriced._openingId = screen._openingId;
+            repriced._lineItemId = screen._lineItemId;
+            repriced.excluded = screen.excluded;
+            screensInOrder[index] = repriced;
+        }
+    });
+
     screensInOrder.forEach((screen, index) => {
         if (screen.excluded) return; // Skip excluded screens
 
@@ -501,6 +543,32 @@ function calculateOrderQuote() {
         if (guaranteeBondBridge) {
             totalGuaranteeDiscount += 360; // One Bond Bridge per project
         }
+    }
+
+    // Deduplicate one-per-order accessories (e.g., 5-ch/16-ch remotes, Bond Bridge)
+    // Each screen's customerPrice already includes its accessories; subtract duplicates.
+    let sharedAccessoriesDeduction = 0;
+    let sharedAccessoriesCostDeduction = 0;
+    const seenOnePerOrder = {};
+    screensInOrder.forEach(screen => {
+        if (screen.excluded) return;
+        (screen.accessories || []).forEach(acc => {
+            if (ONE_PER_ORDER_ACCESSORY_NAMES.has(acc.name)) {
+                if (seenOnePerOrder[acc.name]) {
+                    // Duplicate — deduct customer price and raw cost
+                    const customerPriceForAcc = acc.needsMarkup ? acc.cost * CUSTOMER_MARKUP : acc.cost;
+                    sharedAccessoriesDeduction += customerPriceForAcc;
+                    sharedAccessoriesCostDeduction += acc.cost;
+                } else {
+                    seenOnePerOrder[acc.name] = true;
+                }
+            }
+        });
+    });
+    if (sharedAccessoriesDeduction > 0) {
+        orderTotalMaterialsPrice -= sharedAccessoriesDeduction;
+        orderTotalCost -= sharedAccessoriesCostDeduction;
+        totalAccessoriesCosts -= sharedAccessoriesCostDeduction;
     }
 
     // Add project-level accessories to materials (so discount applies)
@@ -705,6 +773,7 @@ function calculateOrderQuote() {
         fourWeekGuarantee,
         totalGuaranteeDiscount,
         guaranteeBondBridge,
+        sharedAccessoriesDeduction,
         // Entity IDs for sync
         _contactId: currentContactId || null,
         _propertyId: currentPropertyId || null
@@ -969,6 +1038,14 @@ function displayOrderQuoteSummary(orderData) {
                 <strong>${formatCurrency(orderData.orderTotalMaterialsPrice)}</strong>
             </div>
         `;
+
+        if (orderData.sharedAccessoriesDeduction > 0) {
+            customerHTML += `
+                <div class="summary-row" style="color: #6c757d; font-size: 0.9rem;">
+                    <em>Shared accessories (one per order) adjustment: -${formatCurrency(orderData.sharedAccessoriesDeduction)}</em>
+                </div>
+            `;
+        }
 
         if (orderData.discountAmount > 0) {
             customerHTML += `

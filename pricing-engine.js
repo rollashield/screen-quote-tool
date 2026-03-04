@@ -258,6 +258,7 @@ function computeScreenPricing(p) {
     }
 
     // Wiring (RTS motors with installation only)
+    // Base charge: $100 flat ($30 material + $70 labor) + $12/ft
     let wiringDistance = 0;
     let wiringCost = 0;
     let wiringPrice = 0;
@@ -265,8 +266,8 @@ function computeScreenPricing(p) {
     if (includeInstallation && isRts) {
         wiringDistance = parseInt(wiringDistInput) || 0;
         if (wiringDistance > 0) {
-            wiringCost = wiringDistance * WIRING_COST_PER_INCH;
-            wiringPrice = wiringDistance * WIRING_PRICE_PER_INCH;
+            wiringCost = WIRING_BASE_COST_MATERIAL + WIRING_BASE_COST_LABOR + wiringDistance * WIRING_COST_PER_FOOT;
+            wiringPrice = WIRING_BASE_PRICE + wiringDistance * WIRING_PRICE_PER_FOOT;
             customerPrice += wiringPrice;
         }
     }

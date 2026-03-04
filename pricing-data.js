@@ -161,10 +161,26 @@ const installationPricing = {
     'solar-large': 600
 };
 
+// Accessories that should only be charged once per order (even if applied to multiple screens)
+const ONE_PER_ORDER_ACCESSORY_NAMES = new Set([
+    '5-Channel Handheld Remote',
+    '5-Channel On-Wall Remote',
+    '16-Channel Handheld Remote',
+    '5-Channel Handheld Remote (Indoor)',
+    '5-Channel Handheld Remote (Outdoor)',
+    '5-Channel In-Wall Remote',
+    '16-Channel Handheld Remote (Indoor)',
+    'Bond Bridge (Smart Home Control)'
+]);
+
 // Wiring pricing (for RTS motors requiring electrical work)
-// Customer price: $12/ft = $1/inch
-const WIRING_COST_PER_INCH = 1;   // 100% goes to installer
-const WIRING_PRICE_PER_INCH = 1;  // $12/ft = $1/inch to customer
+// Base charge: flat $100 for any wiring job ($30 material + $70 labor)
+// Per-foot charge: $12/ft on top of base
+const WIRING_BASE_PRICE = 100;         // Flat charge to customer for any wiring
+const WIRING_BASE_COST_MATERIAL = 30;  // Material portion of base (RAS cost)
+const WIRING_BASE_COST_LABOR = 70;     // Labor portion of base (installer cost)
+const WIRING_COST_PER_FOOT = 12;       // Per-foot cost (100% to installer)
+const WIRING_PRICE_PER_FOOT = 12;      // Per-foot price to customer
 
 // Project-level accessories (a la carte, separate from per-screen)
 let projectAccessories = [];  // [{id, name, cost, markup, quantity, customerPrice}]
@@ -203,7 +219,9 @@ if (typeof module !== 'undefined') {
         FABRIC_PRICE_MULTIPLIERS, getFabricPriceMultiplier,
         sunairZipperGear, sunairCableGear, fenetexKeder,
         motorCosts, accessories, trackDeductions, installationPricing,
-        WIRING_COST_PER_INCH, WIRING_PRICE_PER_INCH,
+        WIRING_BASE_PRICE, WIRING_BASE_COST_MATERIAL, WIRING_BASE_COST_LABOR,
+        WIRING_COST_PER_FOOT, WIRING_PRICE_PER_FOOT,
+        ONE_PER_ORDER_ACCESSORY_NAMES,
         MAX_PHOTOS_PER_SCREEN,
         getPricingTable, getMaxHeightForWidth
     };

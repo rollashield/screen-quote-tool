@@ -301,7 +301,7 @@ test('Sunair zipper + gaposa-rts 8x8: motor $225 added', () => {
 });
 
 test('Sunair zipper + gaposa-solar 8x8: motor $425, no wiring', () => {
-    const result = pe.computeScreenPricing(makeScreen({ operatorType: 'gaposa-solar', wiringDistance: 24 }));
+    const result = pe.computeScreenPricing(makeScreen({ operatorType: 'gaposa-solar', wiringDistance: 10 }));
     assert(!result.error);
     assert.strictEqual(result.motorCost, 425);
     assert.strictEqual(result.wiringPrice, 0, 'Solar motors should not have wiring');
@@ -374,12 +374,13 @@ test('No installation: installationPrice = 0', () => {
     assert.strictEqual(result.installationCost, 0);
 });
 
-test('Wiring 24 inches with RTS: $24 wiring price', () => {
+test('Wiring 10 feet with RTS: $100 base + $120 per-foot = $220 wiring price', () => {
     const result = pe.computeScreenPricing(makeScreen({
-        operatorType: 'gaposa-rts', wiringDistance: 24, includeInstallation: true
+        operatorType: 'gaposa-rts', wiringDistance: 10, includeInstallation: true
     }));
-    assert.strictEqual(result.wiringPrice, 24);
-    assert.strictEqual(result.wiringDistance, 24);
+    assert.strictEqual(result.wiringPrice, 220);  // $100 base + 10 × $12/ft
+    assert.strictEqual(result.wiringCost, 220);    // $30 material + $70 labor + 10 × $12/ft
+    assert.strictEqual(result.wiringDistance, 10);
 });
 
 test('Wiring with solar motor: skipped (wiringPrice = 0)', () => {

@@ -225,7 +225,7 @@ function renderScreensList() {
                         <strong>Size:</strong> ${screen.actualWidthDisplay} W × ${screen.actualHeightDisplay} H
                         <br>
                         ${screen.includeInstallation ? '<strong>Installation:</strong> Included' : '<strong>Installation:</strong> Not included'}
-                        ${screen.wiringDistance > 0 ? ` | <strong>Wiring:</strong> ${screen.wiringDistance}"` : ''}
+                        ${screen.wiringDistance > 0 ? ` | <strong>Wiring:</strong> ${screen.wiringDistance} ft` : ''}
                         ${photoCount > 0 ? ` | <strong>Photos:</strong> ${photoCount}` : ''}
                         ${(screen.preferredTrackType || screen.preferredOperator || screen.preferredFabric || screen.preferredFrameColor) ? `<br><span style="color: #e67e22; font-size: 0.8rem;"><strong>Pref:</strong> ${[screen.preferredTrackType ? getTrackTypeName(screen.preferredTrackType) : '', screen.preferredOperator ? getOperatorTypeName(screen.preferredTrackType || '', screen.preferredOperator) : '', screen.preferredFabric ? getFabricName(screen.preferredFabric) : '', screen.preferredFrameColor ? getFrameColorName(screen.preferredFrameColor) : ''].filter(Boolean).join(' / ')}</span>` : ''}
                     </div>
@@ -269,7 +269,7 @@ function renderScreensList() {
                         ${screen.noTracks ? '<strong>Configuration:</strong> No Tracks<br>' : ''}
                         <strong>Accessories:</strong> ${accessoriesText}<br>
                         ${screen.includeInstallation ? '<strong>Installation:</strong> Included<br>' : ''}
-                        ${screen.wiringDistance > 0 ? `<strong>Wiring:</strong> ${screen.wiringDistance}"<br>` : ''}
+                        ${screen.wiringDistance > 0 ? `<strong>Wiring:</strong> ${screen.wiringDistance} ft<br>` : ''}
                         ${photoCount > 0 ? `<strong>Photos:</strong> ${photoCount}<br>` : ''}
                         <strong>Price:</strong> ${isExcluded ? '<s>' + formatCurrency(screen.customerPrice) + '</s>' : formatCurrency(screen.customerPrice)}
                     </div>
