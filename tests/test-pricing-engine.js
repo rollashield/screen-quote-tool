@@ -457,7 +457,7 @@ test('Accessories without markup: cost passed through', () => {
 test('Invalid dimensions: returns error object', () => {
     const result = pe.computeScreenPricing(makeScreen({ width: 99, height: 99 }));
     assert(result.error, 'Should return error for invalid dimensions');
-    assert(result.error.includes('No pricing available'));
+    assert(result.error.includes('outside the') || result.error.includes('No pricing'), `Expected dimension error, got: ${result.error}`);
 });
 
 test('Sunair discount: 20% applied to screen cost', () => {

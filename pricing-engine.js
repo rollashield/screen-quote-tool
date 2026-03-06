@@ -160,6 +160,44 @@ function getClientFacingTrackName(trackTypeName) {
 
 // ─── Core Pricing Engine ────────────────────────────────────────────────────
 
+function getDimensionError(priceData, trackType, width, height) {
+    const trackLabel = trackType === 'sunair-zipper' ? 'Zipper Track'
+        : trackType === 'sunair-cable' ? 'Cable Track'
+        : trackType === 'fenetex-keder' ? 'Keder Track'
+        : 'this track type';
+
+    if (!priceData) {
+        return `No pricing table for ${trackLabel}`;
+    }
+
+    const widths = Object.keys(priceData).map(Number).sort((a, b) => a - b);
+    const minW = widths[0];
+    const maxW = widths[widths.length - 1];
+
+    if (width < minW || width > maxW) {
+        return `${width}' width is outside the ${trackLabel} range (${minW}'–${maxW}' W). Please adjust the width.`;
+    }
+
+    // Width is valid — check height
+    const heightMap = priceData[String(width)];
+    if (!heightMap) {
+        return `No pricing for ${width}' W x ${height}' H with ${trackLabel}`;
+    }
+
+    const heights = Object.keys(heightMap).filter(h => heightMap[h] !== null && heightMap[h] !== undefined).map(Number).sort((a, b) => a - b);
+    const minH = heights[0];
+    const maxH = heights[heights.length - 1];
+
+    if (height < minH) {
+        return `${height}' height is below the minimum for ${trackLabel} (min ${minH}' H). Please increase the height.`;
+    }
+    if (height > maxH) {
+        return `${height}' height exceeds the maximum for ${width}' wide ${trackLabel} screens (max ${maxH}' H). Please reduce the height or width.`;
+    }
+
+    return `No pricing available for ${width}' W x ${height}' H with ${trackLabel}`;
+}
+
 function computeScreenPricing(p) {
     const { trackType, operatorType, width, height, noTracks, includeInstallation,
             wiringDistance: wiringDistInput, accessories, guaranteeActive } = p;
@@ -189,7 +227,7 @@ function computeScreenPricing(p) {
         screenCostOnly = screenCost;
         baseCost += screenCost;
     } else {
-        return { error: `No pricing available for ${width}' W x ${height}' H` };
+        return { error: getDimensionError(priceData, trackType, width, height) };
     }
 
     // Add motor cost
