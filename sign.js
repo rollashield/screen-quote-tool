@@ -103,43 +103,33 @@ function renderQuote(data) {
     }
 
     const templateData = mapOrderDataForSigning(quoteData, data.quoteNumber);
-    const docDefinition = generateQuotePDF(templateData);
 
-    // Embed the PDF in an iframe so the customer sees the actual PDF
-    try {
-        pdfMake.createPdf(docDefinition).getBlob(function(blob) {
-            const blobUrl = URL.createObjectURL(blob);
-            const iframe = document.createElement('iframe');
-            iframe.src = blobUrl;
-            iframe.style.width = '100%';
-            iframe.style.height = '80vh';
-            iframe.style.border = '1px solid #e0e0e0';
-            iframe.style.borderRadius = '6px';
+    // Render quote as styled HTML (replaces PDF iframe for tablet compatibility)
+    const quoteContent = document.getElementById('quoteContent');
+    quoteContent.innerHTML = renderQuoteHtml(templateData);
 
-            // Fallback: if iframe fails to load (common on tablets), show download link
-            iframe.onerror = function() {
-                showPdfDownloadFallback(blobUrl, templateData);
-            };
-
-            document.getElementById('quoteContent').appendChild(iframe);
-
-            // Add download button below PDF for tablets that can't display inline
-            const downloadBtn = document.createElement('a');
-            downloadBtn.href = blobUrl;
-            downloadBtn.download = 'Roll-A-Shield-Quote.pdf';
-            downloadBtn.style.cssText = 'display: block; text-align: center; margin-top: 12px; padding: 10px 20px; background: #004a95; color: white; border-radius: 6px; text-decoration: none; font-weight: 600;';
+    // Add "Download PDF" button below HTML preview (generates on-demand via pdfmake)
+    const downloadBtn = document.createElement('button');
+    downloadBtn.type = 'button';
+    downloadBtn.className = 'qh-download-btn';
+    downloadBtn.textContent = 'Download PDF';
+    downloadBtn.addEventListener('click', function() {
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = 'Generating PDF...';
+        try {
+            const docDefinition = generateQuotePDF(templateData);
+            pdfMake.createPdf(docDefinition).download('Roll-A-Shield-Quote.pdf', function() {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Download PDF';
+            });
+        } catch (err) {
+            console.error('PDF download failed:', err);
+            alert('Failed to generate PDF. Please try again.');
+            downloadBtn.disabled = false;
             downloadBtn.textContent = 'Download PDF';
-            document.getElementById('quoteContent').appendChild(downloadBtn);
-        });
-    } catch (err) {
-        console.error('PDF generation failed:', err);
-        document.getElementById('quoteContent').innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #856404; background: #fff3cd; border-radius: 6px;">
-                <p><strong>PDF could not be displayed.</strong></p>
-                <p>Please scroll down to review the quote details and sign below.</p>
-            </div>
-        `;
-    }
+        }
+    });
+    quoteContent.appendChild(downloadBtn);
 
     // Show the container
     document.getElementById('loadingScreen').style.display = 'none';

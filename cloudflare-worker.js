@@ -1523,6 +1523,10 @@ async function handleDeleteQuote(quoteId, env) {
       return jsonResponse({ error: 'Quote ID is required' }, 400);
     }
 
+    // Delete related entities first (foreign key constraints)
+    await env.DB.prepare('DELETE FROM quote_line_items WHERE quote_id = ?').bind(quoteId).run();
+    await env.DB.prepare('DELETE FROM openings WHERE quote_id = ?').bind(quoteId).run();
+
     const result = await env.DB.prepare(`
       DELETE FROM quotes WHERE id = ?
     `).bind(quoteId).run();

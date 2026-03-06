@@ -279,7 +279,12 @@ On signature submit (`handleSignInPerson`, `handleSubmitRemoteSignature`):
 - **Step 2 complete**: `app.js` split from ~4,770 → ~1,210 lines. 6 new modules extracted: `photo-manager.js`, `airtable-search.js`, `screen-cards.js`, `quote-persistence.js`, `pdf-signing.js`, `order-calculator.js`. Plan: `.claude/plans/spicy-sauteeing-mountain.md`
 - **pdfmake migration**: Complete. `pdf-template.js` generates pdfmake document definitions (replaced html2pdf.js rasterization). sign.html uses pdfmake iframe embed for PDF preview.
 
+### Shutter pricing prep (data ready, not yet integrated)
+- `shutter-pricing-prep.js` — all 6 shutter pricing lookup tables (MSRP, no markup), slat type specs, motor surcharges, installation pricing, accessories, operator limits, and helper functions. Extracted from `SHUTTER PRICING 2026.pdf` + owner Q&A.
+- Key differences from screen pricing: shutter prices are MSRP (customer-facing), screen prices are dealer cost × 1.8x markup. Shutter installation is a separate line item; screen installation is bundled.
+
 ### Future plans (not yet implemented)
+- **Shutter quoting**: Integrate `shutter-pricing-prep.js` into the quote tool UI. Requires product type selector (screen vs shutter), shutter-specific form fields (slat type, operator, color, vented/perforated), and updated PDF template.
 - **Offline functionality**: IndexedDB auto-save, recovery on reload, queued cloud sync (low priority — entity auto-save + cross-device already working)
 - **Airtable payment method sync**: Map payment method to Airtable's "Payment Type" field and check deposit/payment checkboxes on close-out
 
@@ -307,6 +312,7 @@ Schema in `d1-schema.sql`. Five tables: `quotes`, `contacts`, `properties`, `ope
 - **Signed Contract PDF**: Stored in R2 (key: `quotes/{quoteId}/signed-contract.pdf`), URL in `signed_contract_url`
 
 ## Important Notes
+- **Business context documentation**: When you learn new things about how Roll-A-Shield operates (pricing models, business rules, product details, workflows, team processes), update the shared business context doc at `../docs/ras_context/RAS_BUSINESS_CONTEXT.md`. This is the cross-project reference that all RAS projects consult. Keep it accurate and current.
 - This is a vanilla JS project. Do NOT suggest adding npm, webpack, React, or any framework.
 - Pricing tables and constants are in `pricing-data.js`. Pure pricing functions (calculation logic) are in `pricing-engine.js`. If pricing changes, update `pricing-data.js` tables; if pricing *logic* changes, update `pricing-engine.js` and run `node tests/test-pricing-engine.js`.
 - The D1 database ID is in `wrangler.toml`. This is a Cloudflare resource identifier, not a secret.

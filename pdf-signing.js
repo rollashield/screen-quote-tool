@@ -143,6 +143,9 @@ function mapOrderDataToTemplate(orderData) {
 }
 
 async function generatePDF() {
+    // Recalculate to ensure totals are current before generating PDF
+    if (!calculateOrderQuote()) return;
+
     const quoteSummary = document.getElementById('quoteSummary');
     if (quoteSummary.classList.contains('hidden')) {
         alert('Please calculate a quote first');
@@ -229,6 +232,9 @@ function blobToBase64(blob) {
  * Replaces separate "Email Quote" and "Send for Signature" buttons.
  */
 async function sendQuoteForSignature() {
+    // Recalculate to ensure totals are current before sending
+    if (!calculateOrderQuote()) return;
+
     if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
         alert('Please calculate a quote first before sending.');
         return;
@@ -315,6 +321,9 @@ async function sendQuoteForSignature() {
 // autoSaveQuote, ensureQuoteSaved moved to quote-persistence.js
 
 async function presentForSignature() {
+    // Recalculate to ensure totals are current before presenting
+    if (!calculateOrderQuote()) return;
+
     if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {
         alert('Please calculate a quote first before presenting for signature.');
         return;
@@ -339,6 +348,9 @@ async function presentForSignature() {
 
 async function finalizeProjectDetails() {
     if (isSaving) return;
+
+    // Recalculate to ensure totals are current before finalizing
+    if (!calculateOrderQuote()) return;
 
     // Check if order has been calculated
     if (!window.currentOrderData || !window.currentOrderData.screens || window.currentOrderData.screens.length === 0) {

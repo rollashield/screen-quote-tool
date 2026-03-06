@@ -781,6 +781,7 @@ function calculateOrderQuote() {
 
     // Auto-save after calculating quote
     autoSaveQuote();
+    return true;
 }
 
 function displayOrderQuoteSummary(orderData) {
