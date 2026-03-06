@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
     <title>Review & Sign Your Quote - Roll-A-Shield</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,8 +41,84 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
-        /* Quote content rendered by generateQuotePDF — styles come from the template itself */
-        #quoteContent .page { box-shadow: none; }
+        /* ── HTML Quote Preview (quote-html-template.js) ── */
+        .quote-html-preview { font-family: 'Open Sans', sans-serif; color: #2a2d2c; font-size: 13px; line-height: 1.4; }
+
+        .qh-header { display: flex; justify-content: space-between; align-items: center; background: #004a95; padding: 14px 20px; }
+        .qh-logo { height: 35px; width: auto; }
+        .qh-header-info { text-align: right; font-size: 11px; color: #fff; line-height: 1.6; }
+
+        .qh-customer-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; background: #f9fafb; padding: 16px 20px; }
+        .qh-section-label { font-size: 10px; letter-spacing: 0.5px; color: #4d4d4d; text-transform: uppercase; margin-bottom: 4px; }
+        .qh-customer-name { font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: 700; color: #004a95; margin-bottom: 2px; }
+        .qh-detail { font-size: 13px; margin-bottom: 1px; }
+        .qh-muted { color: #4d4d4d; }
+
+        .qh-quote-bar { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 20px; border-bottom: 1px solid #e5e7eb; }
+        .qh-quote-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        .qh-estimate-label { font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: 700; color: #004a95; }
+        .qh-quote-number { font-family: 'Montserrat', sans-serif; font-size: 14px; font-weight: 700; color: #0071bc; }
+        .qh-quote-dates { text-align: right; font-size: 13px; color: #4d4d4d; }
+        .qh-guarantee-badge { display: inline-block; background: #e8f5e9; color: #2e7d32; font-size: 11px; font-weight: 700; padding: 3px 10px; border: 1px solid #4caf50; border-radius: 3px; margin-top: 4px; }
+
+        .qh-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .qh-screen-table { width: 100%; border-collapse: collapse; margin: 0; font-size: 13px; }
+        .qh-screen-table thead th { background: #004a95; color: #fff; font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; padding: 8px 6px; text-align: left; white-space: nowrap; }
+        .qh-screen-table .qh-price-col { text-align: right; }
+        .qh-screen-table .qh-comp-col { color: #19cbfa; }
+        .qh-screen-table tbody td { padding: 8px 6px; color: #4d4d4d; border-bottom: 1px solid #e5e7eb; }
+        .qh-screen-table tbody tr:nth-child(even) { background: #f8fafc; }
+        .qh-screen-table .qh-screen-name { font-weight: 700; color: #2a2d2c; }
+        .qh-screen-table .qh-price-cell { text-align: right; color: #2a2d2c; white-space: nowrap; }
+        .qh-screen-table .qh-comp-price { color: #0071bc; }
+        .qh-screen-table .qh-accessory-row td { font-style: italic; background: #f5f0ff !important; }
+
+        .qh-pricing-summary { display: flex; justify-content: flex-end; padding: 8px 20px 4px; }
+        .qh-pricing-table { border-collapse: collapse; }
+        .qh-pricing-table td { padding: 4px 0 4px 16px; font-size: 13px; }
+        .qh-pricing-table .qh-label { text-align: right; color: #4d4d4d; white-space: nowrap; }
+        .qh-pricing-table .qh-value { text-align: right; color: #2a2d2c; white-space: nowrap; }
+        .qh-pricing-table .qh-comp-value { text-align: right; color: #0071bc; white-space: nowrap; }
+        .qh-pricing-table .qh-discount { color: #16a34a; }
+        .qh-pricing-table .qh-guarantee { color: #2e7d32; }
+        .qh-pricing-table .qh-subtotal-row td { border-top: 1px solid #e5e7eb; padding-top: 8px; }
+        .qh-pricing-table .qh-total-row td { background: #004a95; color: #fff; font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 700; padding: 8px 16px; }
+        .qh-pricing-table .qh-total-row .qh-comp-value { color: #19cbfa; }
+        .qh-comp-legend { text-align: right; font-size: 12px; padding-top: 6px !important; }
+        .qh-legend-primary { color: #2a2d2c; }
+        .qh-legend-comp { color: #0071bc; }
+
+        .qh-warranty { padding: 12px 20px; border-top: 1px solid #e5e7eb; }
+        .qh-warranty h4 { font-family: 'Montserrat', sans-serif; font-size: 12px; color: #004a95; margin: 0 0 4px; }
+        .qh-warranty .qh-coverage { font-size: 11px; margin-bottom: 4px; }
+        .qh-warranty .qh-exclusions { font-size: 10px; color: #4d4d4d; line-height: 1.3; }
+
+        .qh-terms { padding: 8px 20px; }
+        .qh-terms p { font-size: 9px; line-height: 1.35; color: #4d4d4d; margin-bottom: 4px; }
+
+        .qh-footer { background: #004a95; color: #fff; text-align: center; font-size: 11px; padding: 10px 20px; }
+
+        .qh-download-btn { display: block; width: auto; margin: 16px auto; padding: 10px 24px; background: #004a95; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; font-family: 'Montserrat', sans-serif; cursor: pointer; transition: background 0.2s; }
+        .qh-download-btn:hover:not(:disabled) { background: #003870; }
+        .qh-download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Mobile responsiveness for quote HTML */
+        @media (max-width: 850px) {
+            .qh-screen-table { font-size: 11px; min-width: 580px; }
+            .qh-screen-table thead th, .qh-screen-table tbody td { padding: 6px 4px; }
+            .qh-screen-table .qh-col-frame { display: none; }
+        }
+        @media (max-width: 480px) {
+            .qh-customer-panel { grid-template-columns: 1fr; gap: 12px; }
+            .qh-header { flex-direction: column; gap: 8px; text-align: center; }
+            .qh-header-info { text-align: center; }
+            .qh-quote-bar { flex-direction: column; gap: 8px; }
+            .qh-quote-dates { text-align: left; }
+            .qh-screen-table { min-width: 480px; font-size: 10px; }
+            .qh-screen-table .qh-col-fabric { display: none; }
+            .qh-pricing-table td { padding: 3px 0 3px 10px; font-size: 12px; }
+            .qh-pricing-table .qh-total-row td { font-size: 15px; padding: 6px 10px; }
+        }
 
         /* Signature Section */
         .signature-section {
@@ -264,64 +341,7 @@
             .confirmation-screen h2 { font-size: 22px; }
         }
 
-        /* Mobile: scale the invoice to fit viewport */
-        @media (max-width: 850px) {
-            #quoteContent {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-            #quoteContent .page {
-                width: 100% !important;
-                min-height: auto !important;
-                transform-origin: top left;
-            }
-            /* Scale down inline elements that use fixed px/in widths */
-            #quoteContent .page > div {
-                padding-left: 16px !important;
-                padding-right: 16px !important;
-            }
-            #quoteContent table {
-                font-size: 9px !important;
-            }
-            #quoteContent table th,
-            #quoteContent table td {
-                padding: 5px 4px !important;
-            }
-            /* Hide less-critical columns on narrow screens */
-            #quoteContent table th:nth-child(5),
-            #quoteContent table td:nth-child(5) {
-                display: none;
-            }
-        }
-
         @media (max-width: 480px) {
-            #quoteContent table {
-                font-size: 8px !important;
-            }
-            #quoteContent table th,
-            #quoteContent table td {
-                padding: 4px 3px !important;
-            }
-            /* Also hide fabric column on very small screens */
-            #quoteContent table th:nth-child(4),
-            #quoteContent table td:nth-child(4) {
-                display: none;
-            }
-            /* Stack customer info grid on narrow screens */
-            #quoteContent .page > div:nth-child(2) {
-                grid-template-columns: 1fr !important;
-                gap: 12px !important;
-            }
-            /* Header bar: stack logo and address */
-            #quoteContent .page > div:first-child {
-                flex-direction: column !important;
-                gap: 8px !important;
-                text-align: center !important;
-                padding: 12px 16px !important;
-            }
-            #quoteContent .page > div:first-child > div:last-child {
-                text-align: center !important;
-            }
             .signature-section h2 { font-size: 16px; }
             .acceptance-row { padding: 12px; }
             .acceptance-row label { font-size: 13px; }
@@ -433,6 +453,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/vfs_fonts.min.js"></script>
     <script src="pdf-fonts.js"></script>
     <script src="pdf-template.js"></script>
+    <script src="quote-html-template.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.2.0/dist/signature_pad.umd.min.js"></script>
     <script src="nav-steps.js"></script>
     <script src="sign.js"></script>
