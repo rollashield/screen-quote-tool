@@ -68,6 +68,7 @@ async function autoSaveOpening(screenIndex) {
         heightDisplay: screen.actualHeightDisplay,
         includeInstallation: screen.includeInstallation,
         wiringDistance: screen.wiringDistance || 0,
+        locationNotes: screen.openingNotes || '',
         photos: (screen.photos || []).filter(p => typeof p === 'object' && p.key),
         sortOrder: screenIndex,
         status: screen.phase === 'configured' ? 'configured' : 'documented'

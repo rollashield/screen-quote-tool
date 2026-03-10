@@ -153,7 +153,8 @@ function mapOrderDataForSigning(quoteData, quoteNumber) {
         width: screen.actualWidthDisplay || '',
         height: screen.actualHeightDisplay || '',
         price1: (screen.customerPrice || 0) - (screen.installationPrice || 0) - (screen.wiringPrice || 0),
-        price2: screen.comparisonMaterialPrice || null
+        price2: screen.comparisonMaterialPrice != null ? screen.comparisonMaterialPrice : null,
+        installPrice: screen.installationPrice || 0
     }));
 
     const materialsPrice = quoteData.orderTotalMaterialsPrice || 0;

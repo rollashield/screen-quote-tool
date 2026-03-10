@@ -1030,7 +1030,7 @@
                 <!-- Comments -->
                 <div class="form-section">
                     <h3>Screen-Specific Comments</h3>
-                    <textarea id="screenComments" rows="3" style="width: 100%;" placeholder="Any notes specific to this screen...">${saved.screenComments || ''}</textarea>
+                    <textarea id="screenComments" rows="3" style="width: 100%;" placeholder="Any notes specific to this screen...">${saved.screenComments || screen.openingNotes || ''}</textarea>
                 </div>
 
                 <!-- Site Photos (from quote, read-only) -->
@@ -1060,8 +1060,8 @@
                         `).join('')}
                     </div>
                     ${(screen.photos || []).filter(p => p.category === 'installation').length < 5 ? `
-                    <label style="margin-top: 8px; display: inline-block;">
-                        <input type="file" accept="image/*" capture="environment" multiple style="display: none;" onchange="handleInstallationPhotoSelect(event, ${index})">
+                    <label for="installPhotoInput-${index}" style="margin-top: 8px; display: inline-block;">
+                        <input type="file" id="installPhotoInput-${index}" accept="image/*" capture="environment" multiple style="display: none;" onchange="handleInstallationPhotoSelect(event, ${index})">
                         <span style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 14px; background: #0056A3; color: white; border-radius: 4px; font-size: 0.9rem;">
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                             Add Installation Photo

@@ -227,6 +227,7 @@ function renderScreensList() {
                         ${screen.includeInstallation ? '<strong>Installation:</strong> Included' : '<strong>Installation:</strong> Not included'}
                         ${screen.wiringDistance > 0 ? ` | <strong>Wiring:</strong> ${screen.wiringDistance} ft` : ''}
                         ${photoCount > 0 ? ` | <strong>Photos:</strong> ${photoCount}` : ''}
+                        ${screen.openingNotes ? `<br><span style="color: #555; font-size: 0.8rem; font-style: italic;">${escapeHtml(screen.openingNotes)}</span>` : ''}
                         ${(screen.preferredTrackType || screen.preferredOperator || screen.preferredFabric || screen.preferredFrameColor) ? `<br><span style="color: #e67e22; font-size: 0.8rem;"><strong>Pref:</strong> ${[screen.preferredTrackType ? getTrackTypeName(screen.preferredTrackType) : '', screen.preferredOperator ? getOperatorTypeName(screen.preferredTrackType || '', screen.preferredOperator) : '', screen.preferredFabric ? getFabricName(screen.preferredFabric) : '', screen.preferredFrameColor ? getFrameColorName(screen.preferredFrameColor) : ''].filter(Boolean).join(' / ')}</span>` : ''}
                     </div>
                 </div>
@@ -271,6 +272,7 @@ function renderScreensList() {
                         ${screen.includeInstallation ? '<strong>Installation:</strong> Included<br>' : ''}
                         ${screen.wiringDistance > 0 ? `<strong>Wiring:</strong> ${screen.wiringDistance} ft<br>` : ''}
                         ${photoCount > 0 ? `<strong>Photos:</strong> ${photoCount}<br>` : ''}
+                        ${screen.openingNotes ? `<span style="color: #555; font-size: 0.8rem; font-style: italic;">${escapeHtml(screen.openingNotes)}</span><br>` : ''}
                         <strong>Price:</strong> ${isExcluded ? '<s>' + formatCurrency(screen.customerPrice) + '</s>' : formatCurrency(screen.customerPrice)}
                     </div>
                     ${inlineEditorHtml}
@@ -307,6 +309,7 @@ function editScreen(index) {
     document.getElementById('screenName').value = screen.screenName || '';
     document.getElementById('includeInstallation').checked = screen.includeInstallation;
     document.getElementById('wiringDistance').value = screen.wiringDistance || '';
+    document.getElementById('openingNotes').value = screen.openingNotes || '';
     updateWiringVisibility();
 
     // Restore photos

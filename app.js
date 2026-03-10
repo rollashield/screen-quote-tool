@@ -327,9 +327,10 @@ document.addEventListener('DOMContentLoaded', function() {
         screen.actualHeightDisplay = inchesToFeetAndInches(screen.totalHeightInches);
         screen.includeInstallation = document.getElementById('includeInstallation').checked;
         screen.wiringDistance = parseInt(document.getElementById('wiringDistance').value) || 0;
+        screen.openingNotes = document.getElementById('openingNotes').value.trim() || '';
     }
 
-    const phase1AutoSaveFields = ['screenName', 'widthInches', 'widthFraction', 'heightInches', 'heightFraction', 'wiringDistance'];
+    const phase1AutoSaveFields = ['screenName', 'widthInches', 'widthFraction', 'heightInches', 'heightFraction', 'wiringDistance', 'openingNotes'];
     phase1AutoSaveFields.forEach(fieldId => {
         const el = document.getElementById(fieldId);
         if (el) {
@@ -553,6 +554,7 @@ function resetForm() {
     document.getElementById('heightFraction').value = '';
     document.getElementById('noTracks').checked = false;
     document.getElementById('includeInstallation').checked = true;
+    document.getElementById('openingNotes').value = '';
     document.getElementById('dimensionsSummary').style.display = 'none';
     document.getElementById('enableComparison').checked = false;
     document.getElementById('comparisonOptions').style.display = 'none';
@@ -665,6 +667,7 @@ function addOpening() {
         frameColorName: '',
         includeInstallation: document.getElementById('includeInstallation').checked,
         wiringDistance: parseInt(document.getElementById('wiringDistance').value) || 0,
+        openingNotes: document.getElementById('openingNotes').value.trim() || '',
         photos: existingScreenPhotos.slice(),
         pendingPhotos: pendingScreenPhotos.slice(),
         // Quick config preferences (override project defaults during batch apply)
@@ -698,6 +701,7 @@ function addOpening() {
                 // frameColor preserved from Phase 2 configuration (not changed in Phase 1)
                 existingScreen.includeInstallation = opening.includeInstallation;
                 existingScreen.wiringDistance = opening.wiringDistance;
+                existingScreen.openingNotes = opening.openingNotes;
                 existingScreen.photos = opening.photos;
                 existingScreen.pendingPhotos = opening.pendingPhotos;
             }
@@ -1069,6 +1073,9 @@ function resetFormForNextOpening() {
     // Clear wiring distance but respect installation checkbox
     document.getElementById('wiringDistance').value = '';
     updateWiringVisibility();
+
+    // Clear opening notes
+    document.getElementById('openingNotes').value = '';
 
     // Clear photo state
     pendingScreenPhotos = [];

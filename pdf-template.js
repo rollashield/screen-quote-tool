@@ -244,8 +244,18 @@ function generateQuotePDF(data) {
             hasComparison ? '$' + formatCurrency(data.comparisonPricing.materials2) : ''
         );
 
+        // Build itemized installation label
+        var installLabel = 'Professional Installation:';
+        if (data.pricing.installation > 0 && data.screens.length > 1) {
+            var perScreenPrices = data.screens
+                .filter(function(s) { return s.installPrice > 0; })
+                .map(function(s) { return '$' + formatCurrency(s.installPrice); });
+            if (perScreenPrices.length > 1) {
+                installLabel = 'Professional Installation (' + perScreenPrices.join(', ') + '):';
+            }
+        }
         addRow(
-            'Professional Installation:',
+            installLabel,
             '$' + formatCurrency(data.pricing.installation),
             hasComparison ? '$' + formatCurrency(data.pricing.installation) : ''
         );
@@ -295,8 +305,8 @@ function generateQuotePDF(data) {
         // Tax
         addRow(
             'Sales Tax:',
-            '$' + formatCurrency(data.pricing.tax),
-            hasComparison ? '$' + formatCurrency(data.pricing.tax) : ''
+            data.pricing.tax === 0 ? 'Included' : '$' + formatCurrency(data.pricing.tax),
+            hasComparison ? (data.pricing.tax === 0 ? 'Included' : '$' + formatCurrency(data.pricing.tax)) : ''
         );
 
         // TOTAL row with blue background

@@ -147,9 +147,18 @@ function renderQuoteHtml(data) {
         hasComparison ? fmt(data.comparisonPricing.materials2) : ''
     );
 
-    // Installation
+    // Installation (itemized breakdown for multi-screen quotes)
+    var installLabel = 'Professional Installation:';
+    if (data.pricing.installation > 0 && data.screens.length > 1) {
+        var perScreenPrices = data.screens
+            .filter(function(s) { return s.installPrice > 0; })
+            .map(function(s) { return '$' + formatCurrency(s.installPrice); });
+        if (perScreenPrices.length > 1) {
+            installLabel = 'Professional Installation (' + perScreenPrices.join(', ') + '):';
+        }
+    }
     addPricingRow(
-        'Professional Installation:',
+        installLabel,
         fmt(data.pricing.installation),
         hasComparison ? fmt(data.pricing.installation) : ''
     );
@@ -205,8 +214,8 @@ function renderQuoteHtml(data) {
     // Tax
     addPricingRow(
         'Sales Tax:',
-        fmt(data.pricing.tax),
-        hasComparison ? fmt(data.pricing.tax) : ''
+        data.pricing.tax === 0 ? 'Included' : fmt(data.pricing.tax),
+        hasComparison ? (data.pricing.tax === 0 ? 'Included' : fmt(data.pricing.tax)) : ''
     );
 
     // TOTAL (special blue row)
