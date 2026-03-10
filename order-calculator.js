@@ -774,6 +774,8 @@ function calculateOrderQuote() {
         totalGuaranteeDiscount,
         guaranteeBondBridge,
         sharedAccessoriesDeduction,
+        // Preserve finalize page data through recalculate
+        measurements: (window.currentOrderData && window.currentOrderData.measurements) || undefined,
         // Entity IDs for sync
         _contactId: currentContactId || null,
         _propertyId: currentPropertyId || null
