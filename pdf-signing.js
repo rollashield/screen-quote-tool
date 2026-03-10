@@ -102,8 +102,12 @@ function mapOrderDataToTemplate(orderData) {
         comparisonPricing: null
     };
 
-    // Build comparison pricing if enabled
-    if (orderData.enableComparison) {
+    // Build comparison pricing if enabled AND a valid comparison option is selected
+    const hasComparison = orderData.enableComparison && (
+        (orderData.comparisonType === 'track' && orderData.comparisonTrack) ||
+        ((!orderData.comparisonType || orderData.comparisonType === 'motor') && orderData.comparisonMotor)
+    );
+    if (hasComparison) {
         const compMaterials = orderData.comparisonTotalMaterialsPrice || 0;
         const compDiscounted = orderData.comparisonDiscountedMaterialsPrice || compMaterials;
         const compSubtotal = (discountPercent > 0 ? compDiscounted : compMaterials) + installationPrice + wiringPrice + miscInstallAmount;
