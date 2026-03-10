@@ -218,6 +218,8 @@ async function saveDraft() {
             salesRepId, salesRepName, salesRepEmail, salesRepPhone,
             fourWeekGuarantee: document.getElementById('fourWeekGuarantee').checked,
             totalGuaranteeDiscount: 0,
+            // Preserve measurements from finalize page (prevents wipe on draft re-save)
+            measurements: (window.currentOrderData && window.currentOrderData.measurements) || undefined,
             // Entity IDs for sync (passed back to worker)
             _contactId: currentContactId || null,
             _propertyId: currentPropertyId || null
@@ -365,6 +367,8 @@ async function saveQuote() {
             // 4-Week Install Guarantee
             fourWeekGuarantee: orderData.fourWeekGuarantee || false,
             totalGuaranteeDiscount: orderData.totalGuaranteeDiscount || 0,
+            // Preserve measurements from finalize page (prevents wipe on index.html auto-save)
+            measurements: orderData.measurements || undefined,
             // Entity IDs for sync (passed back to worker)
             _contactId: currentContactId || null,
             _propertyId: currentPropertyId || null
