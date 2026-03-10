@@ -172,3 +172,16 @@ CREATE TABLE IF NOT EXISTS quote_line_items (
 CREATE INDEX IF NOT EXISTS idx_line_items_quote ON quote_line_items(quote_id);
 CREATE INDEX IF NOT EXISTS idx_line_items_opening ON quote_line_items(opening_id);
 CREATE INDEX IF NOT EXISTS idx_line_items_product ON quote_line_items(product_type);
+
+-- ═══ QUOTE DATA HISTORY (append-only versioning) ═══
+CREATE TABLE IF NOT EXISTS quote_data_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  quote_id TEXT NOT NULL,
+  quote_data TEXT NOT NULL,
+  saved_at TEXT DEFAULT (datetime('now')),
+  saved_by TEXT,
+  FOREIGN KEY (quote_id) REFERENCES quotes(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_quote_history_quote ON quote_data_history(quote_id);
+CREATE INDEX IF NOT EXISTS idx_quote_history_saved_at ON quote_data_history(saved_at DESC);

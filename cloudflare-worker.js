@@ -863,55 +863,56 @@ async function handleSaveQuote(request, env) {
     const quoteId = quoteData.id || Date.now().toString();
     const timestamp = new Date().toISOString();
 
-    // Check if this quote already exists (preserve Airtable ID + signature/payment/quote number)
-    // Must happen BEFORE INSERT OR REPLACE which resets columns to null
-    let existingAirtableQuoteId = null;
-    let existingQuoteNumber = null;
-    let existingCreatedAt = null;
-    let existingSignatureData = {};
+    // Check if this quote already exists — needed for merge, column preservation, and history
+    let existingRow = null;
     try {
-      const existingRow = await env.DB.prepare(
-        `SELECT airtable_quote_id, quote_number, created_at,
+      existingRow = await env.DB.prepare(
+        `SELECT airtable_quote_id, quote_number, created_at, quote_data,
                 quote_status, signing_token, signing_token_expires_at,
                 signature_data, signed_at, signer_name, signer_ip,
                 signing_method, signature_sent_at,
                 payment_status, payment_method, payment_amount, payment_date,
                 clover_payment_link, stripe_payment_intent_id, clover_checkout_id,
-                contact_id, property_id, sent_emails_json, entities_migrated
+                contact_id, property_id, sent_emails_json, entities_migrated,
+                selected_payment_method, signed_contract_url
          FROM quotes WHERE id = ?`
       ).bind(quoteId).first();
-      if (existingRow) {
-        if (existingRow.airtable_quote_id) {
-          existingAirtableQuoteId = existingRow.airtable_quote_id;
-        }
-        existingQuoteNumber = existingRow.quote_number;
-        existingCreatedAt = existingRow.created_at;
-        existingSignatureData = {
-          quote_status: existingRow.quote_status || 'draft',
-          signing_token: existingRow.signing_token,
-          signing_token_expires_at: existingRow.signing_token_expires_at,
-          signature_data: existingRow.signature_data,
-          signed_at: existingRow.signed_at,
-          signer_name: existingRow.signer_name,
-          signer_ip: existingRow.signer_ip,
-          signing_method: existingRow.signing_method,
-          signature_sent_at: existingRow.signature_sent_at,
-          payment_status: existingRow.payment_status || 'unpaid',
-          payment_method: existingRow.payment_method,
-          payment_amount: existingRow.payment_amount,
-          payment_date: existingRow.payment_date,
-          clover_payment_link: existingRow.clover_payment_link,
-          stripe_payment_intent_id: existingRow.stripe_payment_intent_id,
-          clover_checkout_id: existingRow.clover_checkout_id,
-          contact_id: existingRow.contact_id,
-          property_id: existingRow.property_id,
-          sent_emails_json: existingRow.sent_emails_json,
-          entities_migrated: existingRow.entities_migrated,
-        };
-      }
     } catch (lookupErr) {
       console.error('Error checking existing quote data:', lookupErr);
     }
+
+    // Server-side shallow merge: preserve fields the client didn't send
+    // This prevents page A from wiping fields that page B saved (e.g., index.html wiping measurements)
+    if (existingRow && existingRow.quote_data) {
+      try {
+        const existingBlob = JSON.parse(existingRow.quote_data);
+        // Spread existing data first, then overlay incoming — incoming fields win
+        Object.keys(existingBlob).forEach(key => {
+          if (!(key in quoteData)) {
+            quoteData[key] = existingBlob[key];
+          }
+        });
+      } catch (parseErr) {
+        console.error('Error parsing existing quote_data for merge:', parseErr);
+      }
+    }
+
+    // Snapshot old blob to history before overwriting (for recovery)
+    if (existingRow && existingRow.quote_data) {
+      try {
+        await env.DB.prepare(
+          `INSERT INTO quote_data_history (quote_id, quote_data, saved_by)
+           VALUES (?, ?, ?)`
+        ).bind(quoteId, existingRow.quote_data, 'pre-save').run();
+      } catch (histErr) {
+        // Non-fatal — don't block saves if history table doesn't exist yet
+        console.error('Quote history snapshot failed (non-fatal):', histErr);
+      }
+    }
+
+    const existingAirtableQuoteId = existingRow?.airtable_quote_id || null;
+    const existingQuoteNumber = existingRow?.quote_number || null;
+    const existingCreatedAt = existingRow?.created_at || null;
 
     // Preserve existing quote number on re-save; only generate for new quotes
     let quoteNumber = existingQuoteNumber;
@@ -928,100 +929,91 @@ async function handleSaveQuote(request, env) {
     // Store quote number on the data object for the Airtable notes builder
     quoteData.quoteNumber = quoteNumber;
 
-    // Insert into D1 database (preserving signature/payment columns on re-save)
-    await env.DB.prepare(`
-      INSERT OR REPLACE INTO quotes (
-        id,
-        customer_name,
-        company_name,
-        customer_email,
-        customer_phone,
-        street_address,
-        apt_suite,
-        nearest_intersection,
-        city,
-        state,
-        zip_code,
-        total_price,
-        screen_count,
-        quote_data,
-        created_at,
-        updated_at,
-        airtable_opportunity_id,
-        airtable_contact_id,
-        airtable_quote_id,
-        quote_number,
-        internal_comments,
-        quote_status,
-        signing_token,
-        signing_token_expires_at,
-        signature_data,
-        signed_at,
-        signer_name,
-        signer_ip,
-        signing_method,
-        signature_sent_at,
-        payment_status,
-        payment_method,
-        payment_amount,
-        payment_date,
-        clover_payment_link,
-        stripe_payment_intent_id,
-        clover_checkout_id,
-        contact_id,
-        property_id,
-        sent_emails_json,
-        airtable_opportunity_name,
-        entities_migrated,
-        selected_payment_method,
-        signed_contract_url
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      quoteId,
-      quoteData.customerName,
-      quoteData.companyName || null,
-      quoteData.customerEmail || null,
-      quoteData.customerPhone || null,
-      quoteData.streetAddress || null,
-      quoteData.aptSuite || null,
-      quoteData.nearestIntersection || null,
-      quoteData.city || null,
-      quoteData.state || null,
-      quoteData.zipCode || null,
-      quoteData.orderTotalPrice || quoteData.totalPrice || 0,
-      quoteData.screens?.length || 0,
-      JSON.stringify(quoteData),
-      existingCreatedAt || timestamp,
-      timestamp,
-      quoteData.airtableOpportunityId || null,
-      quoteData.airtableContactId || null,
-      null,
-      quoteNumber,
-      quoteData.internalComments || null,
-      existingSignatureData.quote_status || 'draft',
-      existingSignatureData.signing_token || null,
-      existingSignatureData.signing_token_expires_at || null,
-      existingSignatureData.signature_data || null,
-      existingSignatureData.signed_at || null,
-      existingSignatureData.signer_name || null,
-      existingSignatureData.signer_ip || null,
-      existingSignatureData.signing_method || null,
-      existingSignatureData.signature_sent_at || null,
-      existingSignatureData.payment_status || 'unpaid',
-      existingSignatureData.payment_method || null,
-      existingSignatureData.payment_amount || null,
-      existingSignatureData.payment_date || null,
-      existingSignatureData.clover_payment_link || null,
-      existingSignatureData.stripe_payment_intent_id || null,
-      existingSignatureData.clover_checkout_id || null,
-      existingSignatureData.contact_id || null,
-      existingSignatureData.property_id || null,
-      existingSignatureData.sent_emails_json || '[]',
-      quoteData.airtableOpportunityName || null,
-      existingSignatureData.entities_migrated || 0,
-      existingSignatureData.selected_payment_method || null,
-      existingSignatureData.signed_contract_url || null
-    ).run();
+    // Save to D1 — UPDATE for existing quotes, INSERT for new ones
+    const quoteDataJson = JSON.stringify(quoteData);
+
+    if (existingRow) {
+      // UPDATE existing quote — only touch columns that the quote builder controls
+      // Signature, payment, and other page-owned columns are left untouched
+      await env.DB.prepare(`
+        UPDATE quotes SET
+          customer_name = ?,
+          company_name = ?,
+          customer_email = ?,
+          customer_phone = ?,
+          street_address = ?,
+          apt_suite = ?,
+          nearest_intersection = ?,
+          city = ?,
+          state = ?,
+          zip_code = ?,
+          total_price = ?,
+          screen_count = ?,
+          quote_data = ?,
+          updated_at = ?,
+          airtable_opportunity_id = ?,
+          airtable_contact_id = ?,
+          quote_number = ?,
+          internal_comments = ?,
+          airtable_opportunity_name = ?
+        WHERE id = ?
+      `).bind(
+        quoteData.customerName,
+        quoteData.companyName || null,
+        quoteData.customerEmail || null,
+        quoteData.customerPhone || null,
+        quoteData.streetAddress || null,
+        quoteData.aptSuite || null,
+        quoteData.nearestIntersection || null,
+        quoteData.city || null,
+        quoteData.state || null,
+        quoteData.zipCode || null,
+        quoteData.orderTotalPrice || quoteData.totalPrice || 0,
+        quoteData.screens?.length || 0,
+        quoteDataJson,
+        timestamp,
+        quoteData.airtableOpportunityId || null,
+        quoteData.airtableContactId || null,
+        quoteNumber,
+        quoteData.internalComments || null,
+        quoteData.airtableOpportunityName || null,
+        quoteId
+      ).run();
+    } else {
+      // INSERT new quote — set all columns with defaults
+      await env.DB.prepare(`
+        INSERT INTO quotes (
+          id, customer_name, company_name, customer_email, customer_phone,
+          street_address, apt_suite, nearest_intersection, city, state, zip_code,
+          total_price, screen_count, quote_data, created_at, updated_at,
+          airtable_opportunity_id, airtable_contact_id, quote_number,
+          internal_comments, airtable_opportunity_name,
+          quote_status, payment_status, sent_emails_json, entities_migrated
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 'unpaid', '[]', 0)
+      `).bind(
+        quoteId,
+        quoteData.customerName,
+        quoteData.companyName || null,
+        quoteData.customerEmail || null,
+        quoteData.customerPhone || null,
+        quoteData.streetAddress || null,
+        quoteData.aptSuite || null,
+        quoteData.nearestIntersection || null,
+        quoteData.city || null,
+        quoteData.state || null,
+        quoteData.zipCode || null,
+        quoteData.orderTotalPrice || quoteData.totalPrice || 0,
+        quoteData.screens?.length || 0,
+        quoteDataJson,
+        timestamp,
+        timestamp,
+        quoteData.airtableOpportunityId || null,
+        quoteData.airtableContactId || null,
+        quoteNumber,
+        quoteData.internalComments || null,
+        quoteData.airtableOpportunityName || null
+      ).run();
+    }
 
     // Attempt Airtable sync (non-fatal if it fails)
     let airtableSync = false;
