@@ -303,13 +303,25 @@ On signature submit (`handleSignInPerson`, `handleSubmitRemoteSignature`):
 - **Deposit**: Always 50% of total quote price
 
 ## D1 Database
-Schema in `d1-schema.sql`. Five tables: `quotes`, `contacts`, `properties`, `openings`, `quote_line_items`.
+Schema in `d1-schema.sql`. Six tables: `quotes`, `contacts`, `properties`, `openings`, `quote_line_items`, `quote_data_history`.
 - **Signing**: `quote_status`, `signing_token`, `signature_data`, `signed_at`, `signer_name`, `signer_ip`, `signing_method`, `signed_contract_url` (R2 URL of signed PDF)
 - **Payment**: `payment_status` (default 'unpaid'), `payment_method`, `payment_amount`, `payment_date`, `clover_payment_link`, `stripe_payment_intent_id`, `clover_checkout_id`, `selected_payment_method` (customer's choice from pay page, persisted on card click)
 - **Guarantee**: `four_week_guarantee`, `total_guarantee_discount`
 - **Entity references on quotes**: `contact_id`, `property_id`, `entities_migrated`, `sent_emails_json`
 - **Photos**: Stored in R2 (key format: `quotes/{quoteId}/screens/{screenIndex}/{timestamp}-{randomId}.{ext}`)
 - **Signed Contract PDF**: Stored in R2 (key: `quotes/{quoteId}/signed-contract.pdf`), URL in `signed_contract_url`
+- **Quote data history**: `quote_data_history` table — append-only snapshots of the `quote_data` JSON blob taken before every save. Enables recovery of accidentally overwritten data. Columns: `quote_id`, `quote_data`, `saved_at`, `saved_by`.
+
+### Save architecture (quote_data blob)
+Multiple pages write to the `quote_data` JSON blob via `POST /api/save-quote`. The worker uses **server-side shallow merge** to prevent pages from stomping each other's fields:
+1. Reads existing `quote_data` from D1
+2. Merges: existing fields are preserved unless the incoming payload explicitly includes them
+3. Snapshots the old blob to `quote_data_history` (for recovery)
+4. Writes the merged result
+
+The worker uses **INSERT for new quotes / UPDATE for existing** (not INSERT OR REPLACE), so signature, payment, and other page-owned D1 columns are never touched during a save from the quote builder.
+
+**Page ownership**: index.html owns pricing/screens/customer info. finalize.html owns measurements. sign.html and pay.html never write to the blob. Each page sends only its fields; the merge preserves the rest.
 
 ## Important Notes
 - **Business context documentation**: When you learn new things about how Roll-A-Shield operates (pricing models, business rules, product details, workflows, team processes), update the shared business context doc at `../docs/ras_context/RAS_BUSINESS_CONTEXT.md`. This is the cross-project reference that all RAS projects consult. Keep it accurate and current.
