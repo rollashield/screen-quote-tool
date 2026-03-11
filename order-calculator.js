@@ -845,7 +845,7 @@ function displayOrderQuoteSummary(orderData) {
         </div>` : ''}
         <div class="summary-row" style="border-bottom: 2px solid #0056A3; padding-bottom: 10px; margin-bottom: 10px;">
             <strong>Total Screens:</strong>
-            <span>${orderData.screens.length}</span>
+            <span>${orderData.screens.filter(s => !s.excluded).length}</span>
         </div>
         ${orderData.fourWeekGuarantee ? `
         <div style="margin-bottom: 12px; padding: 8px 12px; background: #e8f5e9; border-left: 4px solid #4caf50; border-radius: 4px;">
@@ -854,8 +854,9 @@ function displayOrderQuoteSummary(orderData) {
         ` : ''}
     `;
 
-    // Add each screen details
+    // Add each screen details (skip excluded screens)
     orderData.screens.forEach((screen, index) => {
+        if (screen.excluded) return;
         const displayName = screen.screenName || `Screen ${index + 1}`;
         const screenMaterialsPrice = screen.customerPrice - screen.installationPrice;
         const clientTrackName = getClientFacingTrackName(screen.trackTypeName);

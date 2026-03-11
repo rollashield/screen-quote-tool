@@ -634,6 +634,7 @@
             // Build screen config summary
             let screensHTML = '';
             orderData.screens.forEach((s, i) => {
+                if (s.excluded) return; // Skip excluded screens
                 const name = s.screenName || `Screen ${i + 1}`;
                 const accNames = (s.accessories || []).map(a => a.name).join(', ');
                 screensHTML += `
@@ -667,7 +668,7 @@
                     ${fullAddress ? `<div><strong>Address:</strong> ${fullAddress}</div>` : ''}
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
-                    <div><strong>Total Screens:</strong> ${orderData.screens.length}</div>
+                    <div><strong>Total Screens:</strong> ${orderData.screens.filter(s => !s.excluded).length}</div>
                     <div><strong>Quote Total:</strong> ${fmt(orderData.orderTotalPrice)}</div>
                     ${orderData.salesRepName ? `<div><strong>Sales Rep:</strong> ${orderData.salesRepName}</div>` : ''}
                 </div>
@@ -685,6 +686,7 @@
             screenList.innerHTML = '';
 
             orderData.screens.forEach((screen, index) => {
+                if (screen.excluded) return; // Skip excluded screens
                 const isComplete = finalMeasurements[index] && finalMeasurements[index].complete;
                 const sitePhotos = (screen.photos || []).filter(p => p.category === 'site').length;
                 const installPhotos = (screen.photos || []).filter(p => p.category === 'installation').length;
@@ -1607,6 +1609,7 @@
             }
 
             orderData.screens.forEach((screen, index) => {
+                if (screen.excluded) return; // Skip excluded screens
                 const meas = finalMeasurements[index];
 
                 // HTML version
