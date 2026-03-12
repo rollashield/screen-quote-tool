@@ -338,8 +338,12 @@
                 </div>
                 <div id="paymentConfirmed" style="display: none; padding: 16px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; text-align: center;">
                     <div style="font-size: 1.5rem; margin-bottom: 8px;">&#10003;</div>
-                    <strong style="color: #155724; font-size: 1.1rem;">Payment Recorded & Production Order Sent</strong>
+                    <strong style="color: #155724; font-size: 1.1rem;">Payment Recorded</strong>
                     <div id="paymentConfirmedDetails" style="color: #155724; margin-top: 6px;"></div>
+                    <div style="margin-top: 12px;">
+                        <button class="complete-button" id="sendProductionEmailButton" style="background: #0056A3; font-size: 0.95rem; padding: 10px 24px;">Send Production Order Email</button>
+                    </div>
+                    <div id="productionEmailSent" style="display: none; margin-top: 8px; color: #155724; font-size: 0.9rem;">✓ Production email sent</div>
                 </div>
             </div>
 
@@ -1445,9 +1449,11 @@
             // Show result
             if (paymentSuccess && productionSuccess) {
                 showPaymentConfirmed(PAYMENT_METHOD_LABELS[method] || method, orderData._paymentDate, typeLabel, fmt(paymentAmount));
+                document.getElementById('sendProductionEmailButton').style.display = 'none';
+                document.getElementById('productionEmailSent').style.display = 'block';
             } else if (paymentSuccess && !productionSuccess) {
                 showPaymentConfirmed(PAYMENT_METHOD_LABELS[method] || method, orderData._paymentDate, typeLabel, fmt(paymentAmount));
-                alert('Payment recorded successfully, but the production email failed to send. Please try sending it manually or contact Derek.');
+                alert('Payment recorded successfully, but the production email failed to send. Use the button below to retry.');
             }
         });
 
@@ -1460,6 +1466,23 @@
             if (typeLabel && amountStr) details += ` — ${typeLabel}: ${amountStr}`;
             document.getElementById('paymentConfirmedDetails').textContent = details;
         }
+
+        // Standalone production email button (visible after payment already confirmed)
+        document.getElementById('sendProductionEmailButton').addEventListener('click', async function() {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            try {
+                await generateProductionEmail();
+                btn.style.display = 'none';
+                document.getElementById('productionEmailSent').style.display = 'block';
+            } catch (error) {
+                console.error('Production email failed:', error);
+                alert('Failed to send production email. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Send Production Order Email';
+            }
+        });
 
         function initPaymentStatus() {
             const statusDiv = document.getElementById('paymentStatus');
