@@ -54,6 +54,11 @@ const AT_FIELDS = {
   }
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getIncludedScreens(quoteData) {
+  return (quoteData.screens || []).filter(s => !s.excluded);
+}
+
 // ─── Main Router ───────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
@@ -413,11 +418,12 @@ function buildQuoteNotes(quoteData) {
 
   // Auto-generated summary
   notes += '--- Quote Summary ---\n';
-  notes += `Screens: ${quoteData.screens?.length || 0}\n`;
+  const includedScreens = getIncludedScreens(quoteData);
+  notes += `Screens: ${includedScreens.length}\n`;
   notes += `Total: $${(quoteData.orderTotalPrice || 0).toFixed(2)}\n`;
 
-  if (quoteData.screens && quoteData.screens.length > 0) {
-    quoteData.screens.forEach((screen, i) => {
+  if (includedScreens.length > 0) {
+    includedScreens.forEach((screen, i) => {
       const name = screen.screenName || `Screen ${i + 1}`;
       notes += `\n${name}: ${screen.trackTypeName || screen.trackType}`;
       notes += `, ${screen.operatorTypeName || screen.operatorType}`;
@@ -969,7 +975,7 @@ async function handleSaveQuote(request, env) {
         quoteData.state || null,
         quoteData.zipCode || null,
         quoteData.orderTotalPrice || quoteData.totalPrice || 0,
-        quoteData.screens?.length || 0,
+        getIncludedScreens(quoteData).length,
         quoteDataJson,
         timestamp,
         quoteData.airtableOpportunityId || null,
@@ -1003,7 +1009,7 @@ async function handleSaveQuote(request, env) {
         quoteData.state || null,
         quoteData.zipCode || null,
         quoteData.orderTotalPrice || quoteData.totalPrice || 0,
-        quoteData.screens?.length || 0,
+        getIncludedScreens(quoteData).length,
         quoteDataJson,
         timestamp,
         timestamp,
@@ -1623,7 +1629,7 @@ async function handleSendForSignature(quoteId, request, env) {
     const pdfFilename = body.pdfFilename || `RollAShield-Quote-${quoteNumber}.pdf`;
     const totalPrice = quoteData.orderTotalPrice || row.total_price || 0;
     const depositAmount = totalPrice / 2;
-    const screenCount = quoteData.screens?.length || row.screen_count || 0;
+    const screenCount = getIncludedScreens(quoteData).length || row.screen_count || 0;
     const salesRepName = quoteData.salesRepName || 'Roll-A-Shield';
     const salesRepEmail = quoteData.salesRepEmail || '';
     const salesRepPhone = quoteData.salesRepPhone || '(480) 921-0200';
@@ -1825,7 +1831,7 @@ async function handleSubmitRemoteSignature(token, request, env) {
       const salesRepEmail = quoteData.salesRepEmail;
       const customerName = quoteData.customerName || row.customer_name;
       const totalPrice = quoteData.orderTotalPrice || row.total_price || 0;
-      const screenCount = quoteData.screens?.length || row.screen_count || 0;
+      const screenCount = getIncludedScreens(quoteData).length || row.screen_count || 0;
 
       if (salesRepEmail) {
         const signedAtFormatted = new Date(signedAt).toLocaleString('en-US', { timeZone: 'America/Phoenix' });
@@ -1885,7 +1891,7 @@ async function handleSubmitRemoteSignature(token, request, env) {
       const customerEmail = quoteData2.customerEmail || row.customer_email;
       const customerName2 = quoteData2.customerName || row.customer_name;
       const totalPrice2 = quoteData2.orderTotalPrice || row.total_price || 0;
-      const screenCount2 = quoteData2.screens?.length || row.screen_count || 0;
+      const screenCount2 = getIncludedScreens(quoteData2).length || row.screen_count || 0;
       const depositAmount = (Number(totalPrice2) / 2).toFixed(2);
       const baseUrl = 'https://rollashield.github.io/screen-quote-tool';
       const paymentUrl = `${baseUrl}/pay.html?quoteId=${row.id}&fromSignature=1`;
@@ -2216,7 +2222,7 @@ async function handleMarkPaid(quoteId, request, env) {
 async function sendPaymentConfirmationEmail(env, quoteId, quoteData, quoteNumber, paymentAmount, paymentDate) {
   const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const dateStr = new Date(paymentDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const screenCount = (quoteData.screens || []).length;
+  const screenCount = getIncludedScreens(quoteData).length;
   const customerFirst = (quoteData.customerName || '').split(/\s+/)[0] || 'Valued Customer';
 
   const htmlBody = `
