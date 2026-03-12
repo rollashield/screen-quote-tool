@@ -87,7 +87,13 @@ Web application for generating custom rolling screen quotes with email integrati
 - No build step. Open HTML files directly or use a local server.
 - Worker dev: `wrangler dev` (starts local worker on port 8787)
 - When testing locally, update WORKER_URL in HTML files to http://localhost:8787
-- **Tests**: `node tests/test-pricing-engine.js` — 84 tests covering all pure pricing functions (no npm required)
+- **Tests** (179 total, no npm required):
+  - `node tests/test-pricing-engine.js` — 84 tests: pure pricing functions, fabric multipliers, motor costs, wiring, guarantees
+  - `node tests/test-order-calculator.js` — 23 tests: excluded screen filtering, discount/surcharge calculations, multi-screen totals, guarantee logic
+  - `node tests/test-screen-states.js` — 26 tests: phase transitions, exclude toggle, entity ID preservation, duplicate, backward compat, accessories filtering
+  - `node tests/test-pdf-mapping.js` — 31 tests: screen filtering, address formatting, comparison labels, deposit calculation, project accessories
+  - `node tests/test-regressions.js` — 15 tests: regression tests for every known production bug (add new tests here when bugs are found)
+  - **Testing plan**: `docs/TESTING-PLAN.md` — comprehensive plan with priorities, E2E scenarios, and pre-deploy checklist
 
 ## Deployment
 - Frontend: Push to `main` -> GitHub Pages deploys automatically
