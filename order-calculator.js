@@ -858,29 +858,49 @@ function displayOrderQuoteSummary(orderData) {
     orderData.screens.forEach((screen, index) => {
         if (screen.excluded) return;
         const displayName = screen.screenName || `Screen ${index + 1}`;
-        const screenMaterialsPrice = screen.customerPrice - screen.installationPrice;
+        const screenMaterialsPrice = screen.customerPrice - (screen.installationPrice || 0) - (screen.wiringPrice || 0);
+        const screenInstallPrice = screen.installationPrice || 0;
+        const screenWiringPrice = screen.wiringPrice || 0;
         const clientTrackName = getClientFacingTrackName(screen.trackTypeName);
         const clientMotorName = getClientFacingOperatorName(screen.operatorType, screen.operatorTypeName);
 
         customerHTML += `
             <div style="margin-bottom: 15px; padding: 10px; background: #f0f8ff; border-radius: 4px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #0056A3; padding-bottom: 8px; margin-bottom: 8px;">
-                    <strong style="flex: 1;">${displayName}</strong>
-                    <div style="display: flex; gap: 20px; align-items: center;">
+                <div style="border-bottom: 1px solid #0056A3; padding-bottom: 8px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <strong style="flex: 1;">${displayName}</strong>
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: flex-start; font-size: 0.9rem;">
                         ${hasComparison ? `
-                            <div style="text-align: right;">
-                                <div style="font-size: 0.75rem; color: #666; margin-bottom: 2px;">${primaryLabel}</div>
-                                <strong>${formatCurrency(screenMaterialsPrice)}</strong>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 0.75rem; color: #666; margin-bottom: 2px;">${comparisonLabel}</div>
-                                ${screen.comparisonMaterialPrice !== null && screen.comparisonMaterialPrice !== undefined
-                                    ? `<strong style="color: #007bff;">${formatCurrency(screen.comparisonMaterialPrice)}</strong>`
-                                    : `<strong style="color: #999;">N/A</strong>`}
+                            <div style="text-align: right; flex: 1;">
+                                <div style="font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Material</div>
+                                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                                    <div>
+                                        <div style="font-size: 0.65rem; color: #666;">${primaryLabel}</div>
+                                        <strong>${formatCurrency(screenMaterialsPrice)}</strong>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.65rem; color: #666;">${comparisonLabel}</div>
+                                        ${screen.comparisonMaterialPrice !== null && screen.comparisonMaterialPrice !== undefined
+                                            ? `<strong style="color: #007bff;">${formatCurrency(screen.comparisonMaterialPrice)}</strong>`
+                                            : `<strong style="color: #999;">N/A</strong>`}
+                                    </div>
+                                </div>
                             </div>
                         ` : `
-                            <strong>${formatCurrency(screenMaterialsPrice)}</strong>
+                            <div style="text-align: right; flex: 1;">
+                                <div style="font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Material</div>
+                                <strong>${formatCurrency(screenMaterialsPrice)}</strong>
+                            </div>
                         `}
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Install</div>
+                            <strong>${screen.includeInstallation ? formatCurrency(screenInstallPrice) : '\u2014'}</strong>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px;">Wiring</div>
+                            <strong>${screenWiringPrice > 0 ? formatCurrency(screenWiringPrice) : '\u2014'}</strong>
+                        </div>
                     </div>
                 </div>
                 <div class="summary-row">
@@ -992,7 +1012,7 @@ function displayOrderQuoteSummary(orderData) {
         if (orderData.orderTotalInstallationPrice > 0) {
             customerHTML += `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <strong>Installation:</strong>
+                    <strong>Installation Subtotal:</strong>
                     <div style="display: flex; gap: 20px;">
                         <strong style="min-width: 120px; text-align: right;">${formatCurrency(orderData.orderTotalInstallationPrice)}</strong>
                         <strong style="min-width: 120px; text-align: right; color: #007bff;">${formatCurrency(orderData.orderTotalInstallationPrice)}</strong>
@@ -1004,7 +1024,7 @@ function displayOrderQuoteSummary(orderData) {
         if (orderData.orderTotalWiringPrice > 0) {
             customerHTML += `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <strong>Wiring:</strong>
+                    <strong>Wiring Subtotal:</strong>
                     <div style="display: flex; gap: 20px;">
                         <strong style="min-width: 120px; text-align: right;">${formatCurrency(orderData.orderTotalWiringPrice)}</strong>
                         <strong style="min-width: 120px; text-align: right; color: #007bff;">${formatCurrency(orderData.orderTotalWiringPrice)}</strong>
@@ -1076,7 +1096,7 @@ function displayOrderQuoteSummary(orderData) {
         if (orderData.orderTotalInstallationPrice > 0) {
             customerHTML += `
                 <div class="summary-row">
-                    <strong>Installation:</strong>
+                    <strong>Installation Subtotal:</strong>
                     <strong>${formatCurrency(orderData.orderTotalInstallationPrice)}</strong>
                 </div>
             `;
@@ -1085,7 +1105,7 @@ function displayOrderQuoteSummary(orderData) {
         if (orderData.orderTotalWiringPrice > 0) {
             customerHTML += `
                 <div class="summary-row">
-                    <strong>Wiring:</strong>
+                    <strong>Wiring Subtotal:</strong>
                     <strong>${formatCurrency(orderData.orderTotalWiringPrice)}</strong>
                 </div>
             `;

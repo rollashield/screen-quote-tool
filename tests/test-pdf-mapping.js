@@ -351,6 +351,41 @@ test('Screen fields mapped to PDF format', () => {
     assert.strictEqual(screen.frame, 'White');
 });
 
+test('Screen install price mapped to PDF format', () => {
+    const data = makeOrderData({
+        screens: [makeScreen({ installationPrice: 445, includeInstallation: true })]
+    });
+    const result = mapOrderDataToTemplate(data);
+    assert.strictEqual(result.screens[0].installPrice, 445);
+    assert.strictEqual(result.screens[0].includeInstallation, true);
+});
+
+test('Screen wiring price mapped to PDF format', () => {
+    const data = makeOrderData({
+        screens: [makeScreen({ wiringPrice: 215, includeInstallation: true })]
+    });
+    const result = mapOrderDataToTemplate(data);
+    assert.strictEqual(result.screens[0].wiringPrice, 215);
+});
+
+test('Screen with no installation shows includeInstallation=false', () => {
+    const data = makeOrderData({
+        screens: [makeScreen({ includeInstallation: false, installationPrice: 0, wiringPrice: 0 })]
+    });
+    const result = mapOrderDataToTemplate(data);
+    assert.strictEqual(result.screens[0].includeInstallation, false);
+    assert.strictEqual(result.screens[0].installPrice, 0);
+    assert.strictEqual(result.screens[0].wiringPrice, 0);
+});
+
+test('Screen without wiring defaults wiringPrice to 0', () => {
+    const data = makeOrderData({
+        screens: [makeScreen({ wiringPrice: undefined })]
+    });
+    const result = mapOrderDataToTemplate(data);
+    assert.strictEqual(result.screens[0].wiringPrice, 0);
+});
+
 test('Screen without name gets default "Screen N"', () => {
     const data = makeOrderData({
         screens: [makeScreen({ screenName: null })]

@@ -158,15 +158,21 @@ function generateQuotePDF(data) {
             { text: 'Frame', ...headerStyle },
             { text: 'Width', ...headerStyle },
             { text: 'Height', ...headerStyle },
-            { text: hasComparison ? data.comparisonPricing.option1Label : 'Price', ...headerStyle, alignment: 'right' }
+            { text: hasComparison ? data.comparisonPricing.option1Label : 'Material', ...headerStyle, alignment: 'right' }
         ];
         if (hasComparison) {
             headerRow.push({ text: data.comparisonPricing.option2Label, ...headerStyle, alignment: 'right', color: '#19cbfa' });
         }
+        headerRow.push({ text: 'Install', ...headerStyle, alignment: 'right' });
+        headerRow.push({ text: 'Wiring', ...headerStyle, alignment: 'right' });
 
-        var widths = ['auto', 'auto', 'auto', 'auto', 'auto', 'auto', 'auto', hasComparison ? 58 : 72];
-        if (hasComparison) widths.push(58);
+        var baseWidths = ['auto', 'auto', 'auto', 'auto', 'auto', 'auto', 'auto', hasComparison ? 52 : 54];
+        if (hasComparison) baseWidths.push(52);
+        baseWidths.push(42); // Install column
+        baseWidths.push(42); // Wiring column
+        var widths = baseWidths;
 
+        var totalCols = widths.length;
         var body = [headerRow];
 
         // Screen rows
@@ -188,19 +194,26 @@ function generateQuotePDF(data) {
                     ...cellStyle, alignment: 'right', color: '#0071bc'
                 });
             }
+            row.push({
+                text: screen.includeInstallation ? '$' + formatCurrency(screen.installPrice) : '\u2014',
+                ...cellStyle, alignment: 'right', color: '#4d4d4d'
+            });
+            row.push({
+                text: screen.wiringPrice > 0 ? '$' + formatCurrency(screen.wiringPrice) : '\u2014',
+                ...cellStyle, alignment: 'right', color: '#4d4d4d'
+            });
             body.push(row);
         });
 
-        // Project accessories rows
+        // Project accessories rows — span all columns except the last price column
+        var accSpanCols = totalCols - 1;
         (data.projectAccessories || []).forEach(function(acc) {
             var accRow = [
-                { text: acc.name + (acc.quantity > 1 ? ' (x' + acc.quantity + ')' : ''), colSpan: 7, fontSize: 9, italics: true, color: '#4d4d4d', margin: [4, 5, 4, 5], fillColor: '#f5f0ff' },
-                {}, {}, {}, {}, {}, {},
-                { text: '$' + formatCurrency(acc.lineTotal), fontSize: 9, alignment: 'right', color: '#2a2d2c', margin: [4, 5, 4, 5], fillColor: '#f5f0ff' }
+                { text: acc.name + (acc.quantity > 1 ? ' (x' + acc.quantity + ')' : ''), colSpan: accSpanCols, fontSize: 9, italics: true, color: '#4d4d4d', margin: [4, 5, 4, 5], fillColor: '#f5f0ff' }
             ];
-            if (hasComparison) {
-                accRow.push({ text: '$' + formatCurrency(acc.lineTotal), fontSize: 9, alignment: 'right', color: '#0071bc', margin: [4, 5, 4, 5], fillColor: '#f5f0ff' });
-            }
+            // Add empty cells for colspan (colSpan - 1 empties)
+            for (var i = 1; i < accSpanCols; i++) accRow.push({});
+            accRow.push({ text: '$' + formatCurrency(acc.lineTotal), fontSize: 9, alignment: 'right', color: '#2a2d2c', margin: [4, 5, 4, 5], fillColor: '#f5f0ff' });
             body.push(accRow);
         });
 
@@ -244,25 +257,17 @@ function generateQuotePDF(data) {
             hasComparison ? '$' + formatCurrency(data.comparisonPricing.materials2) : ''
         );
 
-        // Build itemized installation label
-        var installLabel = 'Professional Installation:';
-        if (data.pricing.installation > 0 && data.screens.length > 1) {
-            var perScreenPrices = data.screens
-                .filter(function(s) { return s.installPrice > 0; })
-                .map(function(s) { return '$' + formatCurrency(s.installPrice); });
-            if (perScreenPrices.length > 1) {
-                installLabel = 'Professional Installation (' + perScreenPrices.join(', ') + '):';
-            }
+        if (data.pricing.installation > 0) {
+            addRow(
+                'Installation Subtotal:',
+                '$' + formatCurrency(data.pricing.installation),
+                hasComparison ? '$' + formatCurrency(data.pricing.installation) : ''
+            );
         }
-        addRow(
-            installLabel,
-            '$' + formatCurrency(data.pricing.installation),
-            hasComparison ? '$' + formatCurrency(data.pricing.installation) : ''
-        );
 
         if (data.pricing.wiring > 0) {
             addRow(
-                'Electrical Wiring:',
+                'Wiring Subtotal:',
                 '$' + formatCurrency(data.pricing.wiring),
                 hasComparison ? '$' + formatCurrency(data.pricing.wiring) : ''
             );

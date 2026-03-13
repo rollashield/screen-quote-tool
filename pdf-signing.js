@@ -43,7 +43,9 @@ function mapOrderDataToTemplate(orderData) {
         height: screen.actualHeightDisplay || '',
         price1: (screen.customerPrice || 0) - (screen.installationPrice || 0) - (screen.wiringPrice || 0),
         price2: screen.comparisonMaterialPrice != null ? screen.comparisonMaterialPrice : null,
-        installPrice: screen.installationPrice || 0
+        installPrice: screen.installationPrice || 0,
+        wiringPrice: screen.wiringPrice || 0,
+        includeInstallation: screen.includeInstallation || false
     }));
 
     const materialsPrice = orderData.orderTotalMaterialsPrice || 0;
@@ -449,8 +451,8 @@ async function finalizeProjectDetails() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            // Navigate to finalize page with orderId
-            window.location.href = `finalize.html?orderId=${orderId}`;
+            // Navigate to finalize page with quoteId
+            window.location.href = `finalize.html?quoteId=${orderId}`;
         } else {
             alert('Failed to save quote before finalizing: ' + (result.error || 'Unknown error'));
         }
