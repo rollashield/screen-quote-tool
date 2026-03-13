@@ -267,6 +267,7 @@
         </div>
 
         <div id="stepNav"></div>
+        <div id="quoteHeaderBar"></div>
 
         <div class="content">
             <!-- Project Info -->
@@ -340,10 +341,14 @@
                     <div style="font-size: 1.5rem; margin-bottom: 8px;">&#10003;</div>
                     <strong style="color: #155724; font-size: 1.1rem;">Payment Recorded</strong>
                     <div id="paymentConfirmedDetails" style="color: #155724; margin-top: 6px;"></div>
+                    <div id="closeoutSection" style="margin-top: 12px;">
+                        <button class="complete-button" id="completeCloseoutButton" style="background: #28a745; font-size: 0.95rem; padding: 10px 24px; display: none;">Complete Close-Out (Send Confirmation & Sync Airtable)</button>
+                        <div id="closeoutCompleted" style="display: none; margin-top: 8px; color: #155724; font-size: 0.9rem;">&#10003; Close-out completed</div>
+                    </div>
                     <div style="margin-top: 12px;">
                         <button class="complete-button" id="sendProductionEmailButton" style="background: #0056A3; font-size: 0.95rem; padding: 10px 24px;">Send Production Order Email</button>
                     </div>
-                    <div id="productionEmailSent" style="display: none; margin-top: 8px; color: #155724; font-size: 0.9rem;">✓ Production email sent</div>
+                    <div id="productionEmailSent" style="display: none; margin-top: 8px; color: #155724; font-size: 0.9rem;">&#10003; Production email sent</div>
                 </div>
             </div>
 
@@ -387,13 +392,16 @@
 
         async function loadOrderData() {
             const urlParams = new URLSearchParams(window.location.search);
-            const orderId = urlParams.get('orderId');
+            const orderId = urlParams.get('quoteId') || urlParams.get('orderId') || sessionStorage.getItem('currentQuoteId');
 
             if (!orderId) {
-                alert('No order ID provided. Returning to quote page.');
-                window.location.href = 'index.html';
+                alert('No order ID provided. Returning to quotes page.');
+                window.location.href = 'quotes.html';
                 return;
             }
+
+            // Persist for cross-page navigation
+            sessionStorage.setItem('currentQuoteId', orderId);
 
             try {
                 const response = await fetch(`${WORKER_URL}/api/quote/${orderId}`);
@@ -1467,6 +1475,33 @@
             document.getElementById('paymentConfirmedDetails').textContent = details;
         }
 
+        // Complete Close-Out button (for webhook-confirmed payments)
+        document.getElementById('completeCloseoutButton').addEventListener('click', async function() {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+            try {
+                const response = await fetch(`${WORKER_URL}/api/quote/${orderId}/complete-closeout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    btn.style.display = 'none';
+                    document.getElementById('closeoutCompleted').style.display = 'block';
+                } else {
+                    alert('Close-out failed: ' + (result.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = 'Complete Close-Out (Send Confirmation & Sync Airtable)';
+                }
+            } catch (error) {
+                console.error('Close-out error:', error);
+                alert('Close-out failed. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Complete Close-Out (Send Confirmation & Sync Airtable)';
+            }
+        });
+
         // Standalone production email button (visible after payment already confirmed)
         document.getElementById('sendProductionEmailButton').addEventListener('click', async function() {
             const btn = this;
@@ -1490,7 +1525,23 @@
 
             if (orderData.payment_status === 'paid') {
                 const methodLabel = PAYMENT_METHOD_LABELS[orderData.payment_method] || orderData.payment_method || 'Unknown';
-                showPaymentConfirmed(methodLabel, orderData.payment_date);
+                const isWebhook = orderData.payment_source === 'stripe-webhook' || orderData.payment_source === 'clover-webhook';
+
+                if (isWebhook) {
+                    // Webhook-confirmed: show source and make fields read-only
+                    const sourceLabel = orderData.payment_source === 'stripe-webhook'
+                        ? 'Confirmed via Stripe eCheck'
+                        : 'Confirmed via Clover (Card)';
+                    showPaymentConfirmed(sourceLabel, orderData.payment_date);
+
+                    // Show Complete Close-Out button for webhook payments
+                    // (customer confirmation email + Airtable sync not yet done)
+                    const closeoutBtn = document.getElementById('completeCloseoutButton');
+                    if (closeoutBtn) closeoutBtn.style.display = 'inline-block';
+                } else {
+                    // Manual payment — already fully processed
+                    showPaymentConfirmed(methodLabel, orderData.payment_date);
+                }
                 statusDiv.innerHTML = '';
             } else {
                 const total = orderData.orderTotalPrice || 0;

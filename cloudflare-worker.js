@@ -254,6 +254,29 @@ export default {
       return await handleListLineItems(quoteId, env);
     }
 
+    // ─── Webhook Routes ───────────────────────────────────────────────────
+    // Stripe payment webhook
+    if (url.pathname === '/api/webhooks/stripe' && request.method === 'POST') {
+      return await handleStripeWebhook(request, env);
+    }
+
+    // Clover payment webhook
+    if (url.pathname === '/api/webhooks/clover' && request.method === 'POST') {
+      return await handleCloverWebhook(request, env);
+    }
+
+    // ─── Token Generation (for share links) ─────────────────────────────
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/generate-token$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleGenerateToken(quoteId, env);
+    }
+
+    // ─── Complete Close-Out (after webhook-confirmed payment) ────────────
+    if (url.pathname.match(/^\/api\/quote\/[^/]+\/complete-closeout$/) && request.method === 'POST') {
+      const quoteId = url.pathname.split('/')[3];
+      return await handleCompleteCloseout(quoteId, env);
+    }
+
     return new Response('Not Found', { status: 404 });
   }
 };
@@ -1117,7 +1140,9 @@ async function handleGetQuote(quoteId, env) {
     quoteData.quote_status = result.quote_status || 'draft';
     quoteData.payment_status = result.payment_status || 'unpaid';
     quoteData.payment_method = result.payment_method || null;
+    quoteData.payment_amount = result.payment_amount || null;
     quoteData.payment_date = result.payment_date || null;
+    quoteData.payment_source = result.payment_source || null;
     quoteData.selected_payment_method = result.selected_payment_method || null;
     quoteData.signed_contract_url = result.signed_contract_url || null;
 
@@ -2172,6 +2197,7 @@ async function handleMarkPaid(quoteId, request, env) {
         payment_method = ?,
         payment_amount = ?,
         payment_date = ?,
+        payment_source = 'manual',
         updated_at = ?
       WHERE id = ?
     `).bind(
@@ -2458,6 +2484,10 @@ async function handleCreateEcheckSession(quoteId, request, env) {
     params.append('payment_intent_data[description]', `${paymentLabel} for ${quoteNumber} — ${customerName}`);
     params.append('payment_intent_data[metadata][quoteId]', quoteId);
     params.append('payment_intent_data[metadata][quoteNumber]', quoteNumber);
+    params.append('payment_intent_data[metadata][paymentType]', reqPaymentType);
+    params.append('metadata[quoteId]', quoteId);
+    params.append('metadata[quoteNumber]', quoteNumber);
+    params.append('metadata[paymentType]', reqPaymentType);
 
     if (stripeCustomerId) {
       params.append('customer', stripeCustomerId);
@@ -2479,6 +2509,14 @@ async function handleCreateEcheckSession(quoteId, request, env) {
     if (!response.ok) {
       console.error('Stripe error:', JSON.stringify(session));
       return jsonResponse({ error: session.error?.message || 'Failed to create checkout session' }, 500);
+    }
+
+    // Store session ID for webhook correlation
+    try {
+      await env.DB.prepare('UPDATE quotes SET stripe_checkout_session_id = ? WHERE id = ?')
+        .bind(session.id, quoteId).run();
+    } catch (dbErr) {
+      console.error('Failed to store Stripe session ID (non-fatal):', dbErr);
     }
 
     return jsonResponse({
@@ -2960,6 +2998,387 @@ async function handleListLineItems(quoteId, env) {
     ).bind(quoteId).all();
     return jsonResponse({ success: true, lineItems: rows.results });
   } catch (error) {
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Stripe Webhook Handler ──────────────────────────────────────────────────
+async function handleStripeWebhook(request, env) {
+  try {
+    if (!env.STRIPE_WEBHOOK_SECRET) {
+      console.error('STRIPE_WEBHOOK_SECRET not configured');
+      return new Response('Webhook secret not configured', { status: 500 });
+    }
+
+    const rawBody = await request.text();
+    const sigHeader = request.headers.get('Stripe-Signature') || '';
+
+    // Parse Stripe-Signature header
+    const sigParts = {};
+    sigHeader.split(',').forEach(part => {
+      const [key, val] = part.split('=');
+      sigParts[key.trim()] = val;
+    });
+
+    const timestamp = sigParts['t'];
+    const signature = sigParts['v1'];
+
+    if (!timestamp || !signature) {
+      return new Response('Invalid signature header', { status: 400 });
+    }
+
+    // Reject if timestamp is too old (5 minutes)
+    const tolerance = 5 * 60;
+    const now = Math.floor(Date.now() / 1000);
+    if (Math.abs(now - parseInt(timestamp)) > tolerance) {
+      return new Response('Timestamp too old', { status: 400 });
+    }
+
+    // Verify HMAC-SHA256 signature
+    const signedPayload = `${timestamp}.${rawBody}`;
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(env.STRIPE_WEBHOOK_SECRET),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload));
+    const expectedSig = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    if (expectedSig !== signature) {
+      return new Response('Invalid signature', { status: 400 });
+    }
+
+    const event = JSON.parse(rawBody);
+
+    // Only handle checkout.session.completed
+    if (event.type !== 'checkout.session.completed') {
+      return new Response('Event type not handled', { status: 200 });
+    }
+
+    const session = event.data.object;
+    const quoteId = session.metadata?.quoteId;
+    if (!quoteId) {
+      console.error('Stripe webhook: no quoteId in session metadata');
+      return new Response('No quoteId in metadata', { status: 200 });
+    }
+
+    const amountTotal = session.amount_total ? session.amount_total / 100 : null;
+    const paymentType = session.metadata?.paymentType || 'deposit';
+    const timestamp_iso = new Date().toISOString();
+
+    // Update D1 — guard against double-processing
+    const result = await env.DB.prepare(`
+      UPDATE quotes SET
+        payment_status = 'paid',
+        payment_method = 'echeck',
+        payment_amount = ?,
+        payment_date = ?,
+        payment_source = 'stripe-webhook',
+        payment_confirmed_at = ?,
+        stripe_checkout_session_id = ?,
+        stripe_payment_intent_id = ?,
+        updated_at = ?
+      WHERE id = ? AND payment_status != 'paid'
+    `).bind(
+      amountTotal,
+      timestamp_iso,
+      timestamp_iso,
+      session.id,
+      session.payment_intent || null,
+      timestamp_iso,
+      quoteId
+    ).run();
+
+    if (result.meta.changes === 0) {
+      // Already paid — no action needed
+      return new Response('Already processed', { status: 200 });
+    }
+
+    // Send sales rep notification email (non-fatal)
+    try {
+      const quote = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+      if (quote) {
+        const quoteData = JSON.parse(quote.quote_data);
+        const salesRepEmail = quoteData.salesRepEmail;
+        const customerName = quoteData.customerName || 'Customer';
+        const quoteNumber = quote.quote_number || 'N/A';
+        const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        if (salesRepEmail || true) {
+          const recipients = [salesRepEmail, 'derek@rollashield.com'].filter(Boolean);
+          const emailBody = {
+            from: 'Roll-A-Shield <noreply@updates.rollashield.com>',
+            to: recipients,
+            subject: `Payment Received: ${customerName} — ${quoteNumber}`,
+            html: `
+              <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #2a2d2c;">
+                <div style="background: #004a95; padding: 20px 24px; text-align: center;">
+                  <h1 style="color: white; margin: 0; font-size: 20px;">Payment Received</h1>
+                </div>
+                <div style="padding: 24px;">
+                  <p><strong>${customerName}</strong> has made a payment for <strong>${quoteNumber}</strong>.</p>
+                  <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${fmt(amountTotal)}</td></tr>
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Method:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">eCheck / ACH (Stripe)</td></tr>
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Type:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${paymentType === 'full' ? 'Full Payment' : '50% Deposit'}</td></tr>
+                    <tr><td style="padding: 8px;"><strong>Date:</strong></td><td style="padding: 8px;">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+                  </table>
+                  <p style="margin-top: 16px;">Review and complete the close-out on the <a href="https://rollashield.github.io/screen-quote-tool/finalize.html?orderId=${quoteId}" style="color: #0071bc;">finalize page</a>.</p>
+                </div>
+              </div>
+            `
+          };
+
+          const emailResp = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(emailBody)
+          });
+          const emailResult = await emailResp.json();
+
+          await storeEmailRecord(env, quoteId, {
+            type: 'payment-webhook-notification',
+            to: recipients,
+            subject: emailBody.subject,
+            resendId: emailResult.id || null
+          });
+        }
+      }
+    } catch (emailErr) {
+      console.error('Stripe webhook: notification email failed (non-fatal):', emailErr);
+    }
+
+    return new Response('OK', { status: 200 });
+  } catch (error) {
+    console.error('Stripe webhook error:', error);
+    return new Response('Webhook processing error', { status: 500 });
+  }
+}
+
+// ─── Clover Webhook Handler ─────────────────────────────────────────────────
+async function handleCloverWebhook(request, env) {
+  try {
+    const rawBody = await request.text();
+    const event = JSON.parse(rawBody);
+
+    // Clover webhook verification
+    if (env.CLOVER_WEBHOOK_VERIFICATION_TOKEN) {
+      if (event.verificationCode && event.verificationCode !== env.CLOVER_WEBHOOK_VERIFICATION_TOKEN) {
+        return new Response('Invalid verification', { status: 400 });
+      }
+    }
+
+    // Handle payment-related event types
+    const paymentTypes = ['PAYMENT', 'CHARGE'];
+    if (!paymentTypes.some(t => (event.type || '').toUpperCase().includes(t))) {
+      return new Response('Event type not handled', { status: 200 });
+    }
+
+    // Look up quote by clover_checkout_id
+    const objectId = event.objectId || event.data?.id;
+    if (!objectId) {
+      return new Response('No objectId in event', { status: 200 });
+    }
+
+    const quote = await env.DB.prepare(
+      'SELECT * FROM quotes WHERE clover_checkout_id = ? AND payment_status != ?'
+    ).bind(objectId, 'paid').first();
+
+    if (!quote) {
+      // Try with merchant payment lookup if checkout ID doesn't match
+      console.log('Clover webhook: no matching quote for objectId:', objectId);
+      return new Response('No matching quote', { status: 200 });
+    }
+
+    // Fetch payment details from Clover API if needed
+    let paymentAmount = null;
+    if (env.CLOVER_API_KEY && env.CLOVER_MERCHANT_ID) {
+      try {
+        const payResp = await fetch(
+          `https://api.clover.com/v3/merchants/${env.CLOVER_MERCHANT_ID}/payments/${objectId}`,
+          { headers: { 'Authorization': `Bearer ${env.CLOVER_API_KEY}` } }
+        );
+        if (payResp.ok) {
+          const payData = await payResp.json();
+          paymentAmount = payData.amount ? payData.amount / 100 : null;
+        }
+      } catch (e) {
+        console.error('Clover: failed to fetch payment details:', e);
+      }
+    }
+
+    const timestamp_iso = new Date().toISOString();
+
+    await env.DB.prepare(`
+      UPDATE quotes SET
+        payment_status = 'paid',
+        payment_method = 'credit-card',
+        payment_amount = ?,
+        payment_date = ?,
+        payment_source = 'clover-webhook',
+        payment_confirmed_at = ?,
+        clover_checkout_id = ?,
+        updated_at = ?
+      WHERE id = ? AND payment_status != 'paid'
+    `).bind(
+      paymentAmount,
+      timestamp_iso,
+      timestamp_iso,
+      objectId,
+      timestamp_iso,
+      quote.id
+    ).run();
+
+    // Send sales rep notification email (non-fatal)
+    try {
+      const quoteData = JSON.parse(quote.quote_data);
+      const salesRepEmail = quoteData.salesRepEmail;
+      const customerName = quoteData.customerName || 'Customer';
+      const quoteNumber = quote.quote_number || 'N/A';
+      const fmt = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const recipients = [salesRepEmail, 'derek@rollashield.com'].filter(Boolean);
+      const emailBody = {
+        from: 'Roll-A-Shield <noreply@updates.rollashield.com>',
+        to: recipients,
+        subject: `Payment Received: ${customerName} — ${quoteNumber}`,
+        html: `
+          <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #2a2d2c;">
+            <div style="background: #004a95; padding: 20px 24px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 20px;">Payment Received</h1>
+            </div>
+            <div style="padding: 24px;">
+              <p><strong>${customerName}</strong> has made a card payment for <strong>${quoteNumber}</strong>.</p>
+              <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${paymentAmount ? fmt(paymentAmount) : 'Pending'}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Method:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">Credit/Debit Card (Clover)</td></tr>
+                <tr><td style="padding: 8px;"><strong>Date:</strong></td><td style="padding: 8px;">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+              </table>
+              <p style="margin-top: 16px;">Review and complete the close-out on the <a href="https://rollashield.github.io/screen-quote-tool/finalize.html?orderId=${quote.id}" style="color: #0071bc;">finalize page</a>.</p>
+            </div>
+          </div>
+        `
+      };
+
+      const emailResp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(emailBody)
+      });
+      const emailResult = await emailResp.json();
+
+      await storeEmailRecord(env, quote.id, {
+        type: 'payment-webhook-notification',
+        to: recipients,
+        subject: emailBody.subject,
+        resendId: emailResult.id || null
+      });
+    } catch (emailErr) {
+      console.error('Clover webhook: notification email failed (non-fatal):', emailErr);
+    }
+
+    return new Response('OK', { status: 200 });
+  } catch (error) {
+    console.error('Clover webhook error:', error);
+    return new Response('Webhook processing error', { status: 500 });
+  }
+}
+
+// ─── Generate Signing Token (without sending email) ─────────────────────────
+async function handleGenerateToken(quoteId, env) {
+  try {
+    const quote = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!quote) {
+      return jsonResponse({ success: false, error: 'Quote not found' }, 404);
+    }
+
+    const baseUrl = 'https://rollashield.github.io/screen-quote-tool';
+    let token = quote.signing_token;
+
+    // Check if existing token is still valid
+    if (token && quote.signing_token_expires_at) {
+      const expiresAt = new Date(quote.signing_token_expires_at);
+      if (expiresAt <= new Date()) {
+        token = null; // Expired, generate new one
+      }
+    }
+
+    // Generate new token if needed
+    if (!token) {
+      token = generateSigningToken();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await env.DB.prepare(`
+        UPDATE quotes SET signing_token = ?, signing_token_expires_at = ?, updated_at = ?
+        WHERE id = ?
+      `).bind(token, expiresAt, new Date().toISOString(), quoteId).run();
+    }
+
+    return jsonResponse({
+      success: true,
+      token: token,
+      signingUrl: `${baseUrl}/sign.html?token=${token}`,
+      paymentUrl: `${baseUrl}/pay.html?quoteId=${quoteId}`
+    });
+  } catch (error) {
+    console.error('Error generating token:', error);
+    return jsonResponse({ success: false, error: error.message }, 500);
+  }
+}
+
+// ─── Complete Close-Out (after webhook-confirmed payment) ───────────────────
+async function handleCompleteCloseout(quoteId, env) {
+  try {
+    const quote = await env.DB.prepare('SELECT * FROM quotes WHERE id = ?').bind(quoteId).first();
+    if (!quote) {
+      return jsonResponse({ success: false, error: 'Quote not found' }, 404);
+    }
+
+    if (quote.payment_status !== 'paid') {
+      return jsonResponse({ success: false, error: 'Quote is not marked as paid' }, 400);
+    }
+
+    const quoteData = JSON.parse(quote.quote_data);
+
+    // Send customer confirmation email (non-fatal)
+    let confirmationSent = false;
+    try {
+      if (quoteData.customerEmail) {
+        confirmationSent = await sendPaymentConfirmationEmail(
+          env, quoteId, quoteData, quote.quote_number,
+          quote.payment_amount, quote.payment_date
+        );
+      }
+    } catch (emailErr) {
+      console.error('Close-out confirmation email failed (non-fatal):', emailErr);
+    }
+
+    // Airtable close-out sync (non-fatal)
+    let airtableSync = false;
+    try {
+      if (quote.airtable_opportunity_id) {
+        airtableSync = await syncAirtableCloseOut(
+          env, quote, quoteData, quote.payment_amount, quote.payment_date
+        );
+      }
+    } catch (atErr) {
+      console.error('Close-out Airtable sync failed (non-fatal):', atErr);
+    }
+
+    return jsonResponse({
+      success: true,
+      confirmationSent,
+      airtableSync
+    });
+  } catch (error) {
+    console.error('Error completing close-out:', error);
     return jsonResponse({ success: false, error: error.message }, 500);
   }
 }
