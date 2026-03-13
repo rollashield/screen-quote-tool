@@ -11,6 +11,122 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        /* ── Base button styles (shared with index.html) ── */
+        button {
+            padding: 10px 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #0056A3 0%, #003D7A 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 86, 163, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        /* ── Opportunity Search (shared with index.html) ── */
+        .opp-search-container {
+            position: relative;
+        }
+
+        .opp-search-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 2px solid #0056A3;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+
+        .opp-search-input:focus {
+            outline: none;
+            border-color: #003D7A;
+            box-shadow: 0 0 0 3px rgba(0, 86, 163, 0.15);
+        }
+
+        .opp-search-results {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #0056A3;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .opp-search-result {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s;
+        }
+
+        .opp-search-result:hover {
+            background: #e8f4f8;
+        }
+
+        .opp-search-result:last-child {
+            border-bottom: none;
+        }
+
+        .opp-search-result .opp-name {
+            font-weight: 600;
+            color: #0056A3;
+            font-size: 0.9rem;
+        }
+
+        .opp-search-result .opp-details {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .opp-search-result.manual-entry {
+            background: #fff3cd;
+            border-bottom: none;
+            color: #856404;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .opp-search-result.manual-entry:hover {
+            background: #ffeeba;
+        }
+
+        .opp-search-loading {
+            padding: 10px 12px;
+            color: #666;
+            font-style: italic;
+            font-size: 0.85rem;
+        }
+
+        /* ── Page Layout ── */
         .quotes-page .content {
             max-width: 900px;
             margin: 0 auto;
@@ -21,9 +137,9 @@
         .new-quote-section {
             margin-bottom: 24px;
             padding: 20px;
-            border: 2px solid #004a95;
+            border: 1px solid #e0e0e0;
             border-radius: 8px;
-            background: #f8fafd;
+            background: #f9f9f9;
         }
 
         .new-quote-section h3 {
@@ -74,9 +190,9 @@
         .opp-search-section {
             margin-bottom: 24px;
             padding: 20px;
-            border: 1px solid #e0e0e0;
+            border: 2px solid #004a95;
             border-radius: 8px;
-            background: #f9f9f9;
+            background: #f8fafd;
         }
 
         .opp-search-section h3 {
