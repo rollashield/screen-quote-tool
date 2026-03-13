@@ -449,6 +449,7 @@ async function saveQuote() {
 
 async function loadSavedQuotes() {
     const savedQuotesList = document.getElementById('savedQuotesList');
+    if (!savedQuotesList) return; // Not on a page with saved quotes list
     savedQuotesList.innerHTML = '<p style="color: #666;">Loading quotes...</p>';
 
     try {

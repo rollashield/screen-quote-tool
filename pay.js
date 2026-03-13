@@ -34,8 +34,11 @@ document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
     const params = new URLSearchParams(window.location.search);
-    quoteId = params.get('quoteId');
+    quoteId = params.get('quoteId') || sessionStorage.getItem('currentQuoteId');
     paymentMode = params.get('mode');
+
+    // Persist for cross-page navigation
+    if (quoteId) sessionStorage.setItem('currentQuoteId', quoteId);
 
     if (!quoteId) {
         showError('No quote ID provided. Please use the link from your signing confirmation.');
@@ -113,7 +116,7 @@ function populatePage(quoteResult, paymentInfo) {
         if (navButtons) {
             navButtons.style.display = 'block';
             document.getElementById('payBackLink').href = `sign.html?quoteId=${quoteId}&mode=in-person`;
-            document.getElementById('payNextLink').href = `finalize.html?orderId=${quoteId}`;
+            document.getElementById('payNextLink').href = `finalize.html?quoteId=${quoteId}`;
         }
     }
 

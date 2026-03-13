@@ -15,8 +15,11 @@ let cachedQuoteNumber = null; // Cached for signed PDF generation
 document.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
     signingToken = params.get('token');
-    quoteId = params.get('quoteId');
+    quoteId = params.get('quoteId') || sessionStorage.getItem('currentQuoteId');
     signingMode = params.get('mode') || 'remote';
+
+    // Persist for cross-page navigation
+    if (quoteId) sessionStorage.setItem('currentQuoteId', quoteId);
 
     if (!signingToken && !quoteId) {
         showError('Invalid link. No quote identifier provided.');
@@ -295,7 +298,7 @@ function handleSignedState(data) {
             if (signingMode === 'in-person') {
                 const linksDiv = document.getElementById('signedConfirmationLinks');
                 linksDiv.style.display = 'flex';
-                document.getElementById('signedFinalizeLink').href = `finalize.html?orderId=${quoteId}`;
+                document.getElementById('signedFinalizeLink').href = `finalize.html?quoteId=${quoteId}`;
             }
         }
     }

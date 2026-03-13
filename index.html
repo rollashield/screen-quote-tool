@@ -6,6 +6,7 @@
     <meta name="robots" content="noindex, nofollow">
     <title>Roll-A-Shield Screen Quote Tool</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="nav-steps.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
@@ -723,6 +724,11 @@
 </head>
 <body>
     <div class="container">
+        <!-- Step Nav -->
+        <div id="stepNav"></div>
+        <!-- Quote Header Bar (rendered by nav-steps.js) -->
+        <div id="quoteHeaderBar"></div>
+
         <div class="header">
             <h1>Roll-A-Shield Screen Quote Tool</h1>
             <p>Custom Rolling Screen Pricing Calculator</p>
@@ -731,14 +737,8 @@
         <div class="content">
             <!-- Customer Information -->
             <div class="form-section" id="customerInfoSection">
-                <!-- Opportunity Search Bar -->
-                <div id="opportunitySearchBar" style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; flex-wrap: wrap;">
                     <h2 style="flex-shrink: 0; margin: 0; border: none; padding: 0;">Customer Information</h2>
-                    <div class="opp-search-container">
-                        <input type="text" id="opportunitySearch" class="opp-search-input"
-                               placeholder="Search opportunities by name..." autocomplete="off">
-                        <div id="opportunitySearchResults" class="opp-search-results"></div>
-                    </div>
                     <div class="form-group" style="flex-shrink: 0; margin: 0; min-width: 180px;">
                         <label for="salesRepSelect" style="font-size: 0.8rem; margin-bottom: 2px;">Sales Rep</label>
                         <select id="salesRepSelect" style="padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;">
@@ -1286,11 +1286,6 @@
                 </div>
             </div>
 
-            <!-- Saved Quotes -->
-            <div class="saved-quotes">
-                <h3>Saved Quotes</h3>
-                <div id="savedQuotesList"></div>
-            </div>
         </div>
     </div>
 
@@ -1310,6 +1305,7 @@
     <script src="pdf-signing.js"></script>
     <script src="order-calculator.js"></script>
     <script src="pdf-template.js"></script>
+    <script src="nav-steps.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

@@ -76,6 +76,38 @@ var currentQuoteId = null; // Persists across recalculate/re-save to prevent dup
 var currentContactId = null; // Entity ID for the contact record
 var currentPropertyId = null; // Entity ID for the property record
 
+// ─── Quote Context (workspace pattern) ──────────────────────────────────────
+/**
+ * Read quoteId from URL param or sessionStorage. If found, load the quote.
+ * If neither, redirect to quotes.html (the home page).
+ */
+function initQuoteContext() {
+    var params = new URLSearchParams(window.location.search);
+    var quoteId = params.get('quoteId') || sessionStorage.getItem('currentQuoteId');
+
+    if (quoteId) {
+        sessionStorage.setItem('currentQuoteId', quoteId);
+        loadQuote(quoteId);
+    } else {
+        // No quote context — redirect to quotes home page
+        window.location.href = 'quotes.html';
+    }
+}
+
+/**
+ * Save current state and navigate back to quotes.html.
+ */
+async function saveAndExit() {
+    // Auto-save if there's order data
+    if (window.currentOrderData) {
+        try { await saveQuote(); } catch (e) { console.error('Save failed:', e); }
+    } else if (screensInOrder.length > 0 && currentQuoteId) {
+        try { await saveDraft(); } catch (e) { console.error('Draft save failed:', e); }
+    }
+    sessionStorage.removeItem('currentQuoteId');
+    window.location.href = 'quotes.html';
+}
+
 // ─── Shared Helpers ─────────────────────────────────────────────────────────
 // Pure functions moved to pricing-engine.js:
 //   getTrackTypeOptions, getTrackTypeName, getOperatorOptionsForTrack, getOperatorTypeName,
@@ -143,7 +175,7 @@ function initQuickConfig() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    loadSavedQuotes();
+    initQuoteContext();
     loadSalesReps();
 
     // Sales rep dropdown change handler
@@ -267,28 +299,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Comparison type radio toggle
     document.querySelectorAll('input[name="comparisonType"]').forEach(radio => {
         radio.addEventListener('change', updateComparisonUI);
-    });
-
-    // ── Airtable Opportunity Search ──
-    let oppSearchTimeout = null;
-    document.getElementById('opportunitySearch').addEventListener('input', function() {
-        const query = this.value.trim();
-        clearTimeout(oppSearchTimeout);
-
-        if (query.length < 2) {
-            document.getElementById('opportunitySearchResults').style.display = 'none';
-            return;
-        }
-
-        oppSearchTimeout = setTimeout(() => searchOpportunities(query), 300);
-    });
-
-    // Close search results when clicking outside
-    document.addEventListener('click', function(e) {
-        const searchBar = document.getElementById('opportunitySearchBar');
-        if (searchBar && !searchBar.contains(e.target)) {
-            document.getElementById('opportunitySearchResults').style.display = 'none';
-        }
     });
 
     // Set initial wiring field visibility based on default checkbox state

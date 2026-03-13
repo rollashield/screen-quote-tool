@@ -1,5 +1,5 @@
 /* ─── Step Navigation Bar ─────────────────────────────────────────────────── */
-/* Shared across sign.html, pay.html, finalize.html                           */
+/* Shared across all pages: quotes, index, sign, pay, finalize               */
 
 .step-nav {
     display: flex;
@@ -103,6 +103,149 @@
     color: #d1d5db;
 }
 
+/* ─── Quote Header Bar ─── */
+.quote-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: #f8fafd;
+    border-bottom: 1px solid #e0e0e0;
+    font-family: 'Open Sans', sans-serif;
+    gap: 12px;
+}
+
+.quote-header-bar__info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.quote-header-bar__name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quote-header-bar__number {
+    font-size: 0.85rem;
+    color: #666;
+    white-space: nowrap;
+}
+
+.header-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 8px;
+    color: white;
+    white-space: nowrap;
+}
+
+.header-badge--draft { background: #e67e22; }
+.header-badge--sent { background: #0071bc; }
+.header-badge--signed { background: #28a745; }
+.header-badge--paid { background: #6f42c1; }
+
+.quote-header-bar__actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.header-share-btn {
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    border: 1px solid #0071bc;
+    background: white;
+    color: #0071bc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.header-share-btn:hover {
+    background: #0071bc;
+    color: white;
+}
+
+.header-exit-btn {
+    padding: 5px 14px;
+    font-size: 0.8rem;
+    border: none;
+    background: #6c757d;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.header-exit-btn:hover {
+    background: #5a6268;
+}
+
+/* ─── Share Links Dropdown ─── */
+.share-links-dropdown {
+    padding: 12px 20px;
+    background: #f0f4f8;
+    border-bottom: 1px solid #e0e0e0;
+    font-family: 'Open Sans', sans-serif;
+}
+
+.share-links-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.share-links-row:last-child {
+    margin-bottom: 0;
+}
+
+.share-links-row label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #333;
+    min-width: 100px;
+    flex-shrink: 0;
+}
+
+.share-links-row input[type="text"] {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    background: white;
+    color: #333;
+    min-width: 0;
+}
+
+.copy-btn {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    border: none;
+    background: #004a95;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+
+.copy-btn:hover {
+    background: #003d7a;
+}
+
 /* ─── Responsive ─── */
 @media (max-width: 640px) {
     .step-nav {
@@ -122,5 +265,33 @@
         width: 32px;
         height: 32px;
         font-size: 14px;
+    }
+
+    .quote-header-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px 14px;
+    }
+
+    .quote-header-bar__actions {
+        width: 100%;
+    }
+
+    .header-share-btn,
+    .header-exit-btn {
+        flex: 1;
+    }
+
+    .share-links-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .share-links-row label {
+        min-width: auto;
+    }
+
+    .share-links-row input[type="text"] {
+        width: 100%;
     }
 }

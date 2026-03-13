@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Quotes - Roll-A-Shield Screen Quote Tool</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="nav-steps.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        .quotes-page .content {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ── New Quote Form ── */
+        .new-quote-section {
+            margin-bottom: 24px;
+            padding: 20px;
+            border: 2px solid #004a95;
+            border-radius: 8px;
+            background: #f8fafd;
+        }
+
+        .new-quote-section h3 {
+            color: #004a95;
+            font-family: 'Montserrat', sans-serif;
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+        }
+
+        .new-quote-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .new-quote-form .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .new-quote-form .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .new-quote-form label {
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            color: #333;
+        }
+
+        .new-quote-form input,
+        .new-quote-form select {
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .new-quote-actions {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        /* ── Opportunity Search ── */
+        .opp-search-section {
+            margin-bottom: 24px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+
+        .opp-search-section h3 {
+            color: #004a95;
+            font-family: 'Montserrat', sans-serif;
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+        }
+
+        .opp-search-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .opp-search-row .opp-search-container {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .opp-search-row .form-group {
+            min-width: 180px;
+        }
+
+        /* ── Saved Quotes Grid ── */
+        .quotes-list-section {
+            margin-top: 24px;
+        }
+
+        .quotes-list-section h3 {
+            color: #004a95;
+            font-family: 'Montserrat', sans-serif;
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+        }
+
+        .quotes-filter-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 5px 14px;
+            border: 1px solid #ccc;
+            border-radius: 16px;
+            background: white;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover {
+            border-color: #004a95;
+            color: #004a95;
+        }
+
+        .filter-btn.active {
+            background: #004a95;
+            color: white;
+            border-color: #004a95;
+        }
+
+        #quotesGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        .quote-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 14px;
+            background: white;
+            transition: box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .quote-card:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .quote-card h4 {
+            margin: 0 0 6px 0;
+            font-size: 1rem;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .quote-card p {
+            margin: 2px 0;
+            font-size: 0.85rem;
+            color: #555;
+        }
+
+        .quote-card-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .quote-card-actions button {
+            padding: 5px 12px;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+            border: none;
+        }
+
+        .status-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 8px;
+            color: white;
+            white-space: nowrap;
+        }
+
+        .status-badge--draft { background: #e67e22; }
+        .status-badge--sent { background: #0071bc; }
+        .status-badge--signed { background: #28a745; }
+        .status-badge--paid { background: #6f42c1; }
+
+        /* Linked Opportunity Banner (reused from index.html) */
+        .linked-opp-banner {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            background: #e7f3ff;
+            border: 1px solid #0071bc;
+            border-radius: 6px;
+            padding: 8px 14px;
+            margin-bottom: 12px;
+            font-size: 0.85rem;
+            color: #004a95;
+        }
+
+        .linked-opp-banner .linked-text { flex: 1; font-weight: 600; }
+        .linked-opp-banner .unlink-btn {
+            background: none; border: 1px solid #0071bc; color: #0071bc;
+            padding: 3px 10px; border-radius: 4px; font-size: 0.8rem; cursor: pointer;
+        }
+
+        @media (max-width: 640px) {
+            .new-quote-form {
+                grid-template-columns: 1fr;
+            }
+            .opp-search-row {
+                flex-direction: column;
+            }
+            #quotesGrid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container quotes-page">
+        <!-- Step Nav -->
+        <div id="stepNav"></div>
+
+        <div class="header">
+            <h1>Roll-A-Shield Screen Quote Tool</h1>
+            <p>Create and manage screen quotes</p>
+        </div>
+
+        <div class="content">
+            <!-- Airtable Opportunity Search -->
+            <div class="opp-search-section">
+                <h3>Start from Airtable Opportunity</h3>
+                <div class="opp-search-row">
+                    <div class="opp-search-container">
+                        <input type="text" id="opportunitySearch" class="opp-search-input"
+                               placeholder="Search opportunities by name..." autocomplete="off">
+                        <div id="opportunitySearchResults" class="opp-search-results"></div>
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label for="salesRepSelect" style="font-size: 0.8rem; margin-bottom: 2px;">Sales Rep</label>
+                        <select id="salesRepSelect" style="padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;">
+                            <option value="">-- Select Sales Rep --</option>
+                        </select>
+                        <div id="salesRepInfo" style="display: none; font-size: 0.75rem; color: #4d4d4d; margin-top: 2px;"></div>
+                    </div>
+                </div>
+
+                <!-- Linked Opportunity Banner -->
+                <div id="linkedOpportunityBanner" class="linked-opp-banner hidden" style="display: none; margin-top: 10px;">
+                    <span id="linkedOpportunityText" class="linked-text"></span>
+                    <button type="button" class="unlink-btn" onclick="unlinkOpportunity()">Unlink</button>
+                </div>
+
+                <!-- Hidden fields for Airtable IDs -->
+                <input type="hidden" id="airtableOpportunityId">
+                <input type="hidden" id="airtableContactId">
+                <input type="hidden" id="airtableOpportunityName">
+
+                <div style="margin-top: 10px;">
+                    <button class="btn-primary" id="createFromOppBtn" onclick="createQuoteFromOpportunity()" disabled style="opacity: 0.5;">
+                        Create Quote from Opportunity
+                    </button>
+                </div>
+            </div>
+
+            <!-- New Quote (Manual Entry) -->
+            <div class="new-quote-section">
+                <h3>New Quote (Manual Entry)</h3>
+                <div class="new-quote-form">
+                    <div class="form-group">
+                        <label for="newCustomerName">Customer Name *</label>
+                        <input type="text" id="newCustomerName" required placeholder="e.g., John Smith">
+                    </div>
+                    <div class="form-group">
+                        <label for="newCustomerEmail">Email *</label>
+                        <input type="email" id="newCustomerEmail" required placeholder="e.g., john@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="newCustomerPhone">Phone</label>
+                        <input type="tel" id="newCustomerPhone" placeholder="e.g., (480) 555-1234">
+                    </div>
+                    <div class="form-group">
+                        <label for="newZipCode">ZIP Code *</label>
+                        <input type="text" id="newZipCode" required placeholder="e.g., 85281" maxlength="10">
+                    </div>
+                    <div class="new-quote-actions">
+                        <button class="btn-primary" onclick="createNewQuote()">Create Quote</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Saved Quotes List -->
+            <div class="quotes-list-section">
+                <h3>Saved Quotes</h3>
+                <div class="quotes-filter-bar">
+                    <button class="filter-btn active" data-filter="all" onclick="filterQuotes('all', this)">All</button>
+                    <button class="filter-btn" data-filter="draft" onclick="filterQuotes('draft', this)">Draft</button>
+                    <button class="filter-btn" data-filter="sent" onclick="filterQuotes('sent', this)">Sent</button>
+                    <button class="filter-btn" data-filter="signed" onclick="filterQuotes('signed', this)">Signed</button>
+                    <button class="filter-btn" data-filter="paid" onclick="filterQuotes('paid', this)">Paid</button>
+                </div>
+                <div id="quotesGrid">
+                    <p style="color: #666;">Loading quotes...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const WORKER_URL = 'https://rollashield-quote-worker.derek-44b.workers.dev';
+    </script>
+    <script src="pricing-data.js"></script>
+    <script src="pricing-engine.js"></script>
+    <script src="airtable-search.js"></script>
+    <script src="nav-steps.js"></script>
+    <script src="quotes.js"></script>
+</body>
+</html>
