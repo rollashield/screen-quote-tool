@@ -83,13 +83,13 @@ var currentPropertyId = null; // Entity ID for the property record
  */
 function initQuoteContext() {
     var params = new URLSearchParams(window.location.search);
-    var quoteId = params.get('quoteId') || sessionStorage.getItem('currentQuoteId');
+    var quoteId = params.get('quoteId');
 
     if (quoteId) {
         sessionStorage.setItem('currentQuoteId', quoteId);
         loadQuote(quoteId);
     } else {
-        // No quote context — redirect to quotes home page
+        // No quoteId in URL — redirect to quotes home page
         window.location.href = 'quotes.html';
     }
 }
